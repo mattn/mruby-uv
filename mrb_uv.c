@@ -93,15 +93,9 @@ mrb_uv_timer_stop(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
-int
-main()
-{
-  int n;
-  mrb_state* mrb;
-  struct mrb_parser_state* st;
+void
+mrb_uv_init(mrb_state* mrb) {
   struct RClass *uv, *uv_timer;
-
-  mrb = mrb_open();
 
   uv = mrb_define_module(mrb, "UV");
   mrb_define_class_method(mrb, uv, "run", mrb_uv_run, ARGS_REQ(1));
@@ -110,20 +104,6 @@ main()
   mrb_define_method(mrb, uv_timer, "initialize", mrb_uv_timer_init, ARGS_ANY());
   mrb_define_method(mrb, uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(3));
   mrb_define_method(mrb, uv_timer, "stop", mrb_uv_timer_stop, ARGS_REQ(1));
-
-  {
-    char* code =
-"require 'UV'             \n"
-"t = UV::Timer.new()      \n"
-"t.start(1000, 1000) {|x| \n"
-"  p x                    \n"
-"}                        \n"
-"p UV.run()               \n";
-    st = mrb_parse_string(mrb, code);
-    n = mrb_generate_code(mrb, st->tree);
-    mrb_pool_close(st->pool);
-    mrb_run(mrb, mrb_proc_new(mrb, mrb->irep[n]), mrb_nil_value());
-  }
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */
