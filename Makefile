@@ -23,3 +23,6 @@ mrb_uv.o : mrb_uv.c mrb_uv.h
 
 libmrb_uv.a : mrb_uv.o
 	$(AR) r libmrb_uv.a mrb_uv.o
+
+clean :
+	rm -f *.o example
