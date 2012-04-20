@@ -18,7 +18,7 @@ all : example
 example : main.c libmrb_uv.a
 	gcc $(INCLUDES) -o example main.c libmrb_uv.a $(LIB) -luv
 
-mrb_uv.o : mrb_uv.c
+mrb_uv.o : mrb_uv.c mrb_uv.h
 	gcc -c $(INCLUDES) mrb_uv.c
 
 libmrb_uv.a : mrb_uv.o
