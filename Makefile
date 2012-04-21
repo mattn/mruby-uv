@@ -1,28 +1,37 @@
 MRUBY_ROOT = ..
 TARGET := ../lib/ritevm
 ifeq ($(OS),Windows_NT)
-LIB := $(TARGET).lib
+MRUBY_LIB := $(TARGET).lib
+LIB = $(MRUBY_LIB) -luv
 else
-LIB := $(TARGET).a
+MRUBY_LIB := $(TARGET).a
+LIB = $(MRUBY_LIB) -luv -lpthread -ldl -lrt -lm
 endif
 
 INCLUDES = -I$(MRUBY_ROOT)/include -I$(MRUBY_ROOT)/src -I.
+CFLAGS = $(INCLUDES) -O3 -g -Wall -Werror-implicit-function-declaration
 
 CC = gcc
 LL = gcc
 AR = ar
 
-all : example
+all : timer idle loop
 	@echo done
 
-example : main.c libmrb_uv.a
-	gcc $(INCLUDES) -o example main.c libmrb_uv.a $(LIB) -luv
+timer : timer.c libmrb_uv.a
+	gcc $(CFLAGS) -o timer timer.c libmrb_uv.a $(LIB)
+
+idle : idle.c libmrb_uv.a
+	gcc $(CFLAGS) -o idle idle.c libmrb_uv.a $(LIB)
+
+loop : loop.c libmrb_uv.a
+	gcc $(CFLAGS) -o loop loop.c libmrb_uv.a $(LIB)
 
 mrb_uv.o : mrb_uv.c mrb_uv.h
-	gcc -c $(INCLUDES) mrb_uv.c
+	gcc -c $(CFLAGS) mrb_uv.c
 
 libmrb_uv.a : mrb_uv.o
 	$(AR) r libmrb_uv.a mrb_uv.o
 
 clean :
-	rm -f *.o example
+	rm -f *.o timer idle loop
