@@ -32,7 +32,7 @@ uv_data_free(mrb_state *mrb, void *p)
 }
 
 static const struct mrb_data_type uv_data_type = {
-  "uv_handle", uv_data_free,
+  "uv_data", uv_data_free,
 };
 
 /*********************************************************
@@ -95,11 +95,11 @@ static mrb_value
 mrb_uv_loop_init(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_data* uvdata = uv_data_alloc(mrb, sizeof(uv_loop_t));
-  struct RClass *c = mrb_class_new(mrb, mrb_class_obj_get(mrb, "UV::Loop"));
-  mrb_iv_set(mrb, mrb_obj_value(c), mrb_intern(mrb, "data"), mrb_obj_value(
+  uvdata->pv = (void *) uv_loop_new();
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "data"), mrb_obj_value(
     Data_Wrap_Struct(mrb, (struct RClass*) &self,
     &uv_data_type, (void*) uvdata)));
-  return mrb_obj_value(c);
+  return self;
 }
 
 static mrb_value
@@ -154,14 +154,44 @@ mrb_uv_loop_unref(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value
+mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value;
+  mrb_uv_data* uvdata;
+
+  value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
+  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
+  uv_loop_delete((uv_loop_t*) uvdata->pv);
+  return mrb_nil_value();
+}
+
 /*********************************************************
  * timer
  *********************************************************/
 static mrb_value
 mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_data* uvdata = uv_data_alloc(mrb, sizeof(uv_timer_t));
-  if (uv_timer_init(uv_default_loop(), (uv_timer_t*) uvdata->pv) != 0) {
+  mrb_value value;
+  mrb_uv_data* uvdata;
+  mrb_uv_data* loop_uvdata;
+  uv_loop_t* loop;
+  mrb_value arg;
+
+  mrb_get_args(mrb, "o", &arg);
+  if (!mrb_nil_p(arg)) {
+    if (strcmp(mrb_obj_classname(mrb, arg), "UV::Loop")) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+    }
+    value = mrb_iv_get(mrb, arg, mrb_intern(mrb, "data"));
+    Data_Get_Struct(mrb, value, &uv_data_type, loop_uvdata);
+    loop = (uv_loop_t*) loop_uvdata->pv;
+  } else {
+    loop = uv_default_loop();
+  }
+
+  uvdata = uv_data_alloc(mrb, sizeof(uv_timer_t));
+  if (uv_timer_init(loop, (uv_timer_t*) uvdata->pv) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "data"), mrb_obj_value(
@@ -280,24 +310,25 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_class_method(mrb, uv, "run", mrb_uv_run, ARGS_REQ(1));
   mrb_define_class_method(mrb, uv, "default_loop", mrb_uv_default_loop, ARGS_REQ(1));
 
-  uv_loop = mrb_define_class_under(mrb, uv, "Loop", mrb_class_obj_get(mrb, "Object"));
-  mrb_define_method(mrb, uv_loop, "initialize", mrb_uv_loop_init, ARGS_ANY());
+  uv_loop = mrb_define_class_under(mrb, uv, "Loop", mrb->object_class);
+  mrb_define_method(mrb, uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
   mrb_define_method(mrb, uv_loop, "run", mrb_uv_loop_run, ARGS_REQ(1));
   mrb_define_method(mrb, uv_loop, "run_once", mrb_uv_loop_run_once, ARGS_REQ(1));
   mrb_define_method(mrb, uv_loop, "ref", mrb_uv_loop_ref, ARGS_REQ(1));
   mrb_define_method(mrb, uv_loop, "unref", mrb_uv_loop_unref, ARGS_REQ(1));
+  mrb_define_method(mrb, uv_loop, "delete", mrb_uv_loop_delete, ARGS_REQ(1));
 
-  uv_timer = mrb_define_class_under(mrb, uv, "Timer", mrb_class_obj_get(mrb, "Object"));
-  mrb_define_method(mrb, uv_timer, "initialize", mrb_uv_timer_init, ARGS_ANY());
+  uv_timer = mrb_define_class_under(mrb, uv, "Timer", mrb->object_class);
+  mrb_define_method(mrb, uv_timer, "initialize", mrb_uv_timer_init, ARGS_OPT(1));
   mrb_define_method(mrb, uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(3));
   mrb_define_method(mrb, uv_timer, "stop", mrb_uv_timer_stop, ARGS_REQ(1));
-  mrb_define_method(mrb, uv_timer, "close", mrb_uv_close, ARGS_REQ(1));
+  mrb_define_method(mrb, uv_timer, "close", mrb_uv_close, ARGS_OPT(1));
 
-  uv_idle = mrb_define_class_under(mrb, uv, "Idle", mrb_class_obj_get(mrb, "Object"));
-  mrb_define_method(mrb, uv_idle, "initialize", mrb_uv_idle_init, ARGS_ANY());
+  uv_idle = mrb_define_class_under(mrb, uv, "Idle", mrb->object_class);
+  mrb_define_method(mrb, uv_idle, "initialize", mrb_uv_idle_init, ARGS_OPT(1));
   mrb_define_method(mrb, uv_idle, "start", mrb_uv_idle_start, ARGS_REQ(2));
   mrb_define_method(mrb, uv_idle, "stop", mrb_uv_idle_stop, ARGS_REQ(1));
-  mrb_define_method(mrb, uv_idle, "close", mrb_uv_close, ARGS_REQ(1));
+  mrb_define_method(mrb, uv_idle, "close", mrb_uv_close, ARGS_OPT(1));
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */
