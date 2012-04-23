@@ -8,7 +8,7 @@ MRUBY_LIB := $(TARGET).a
 LIB = $(MRUBY_LIB) -luv -lpthread -ldl -lrt -lm
 endif
 
-INCLUDES = -I$(MRUBY_ROOT)/include -I$(MRUBY_ROOT)/src -I.
+INCLUDES = -I$(MRUBY_ROOT)/include -I$(MRUBY_ROOT)/src -I..
 CFLAGS = $(INCLUDES) -O3 -g -Wall -Werror-implicit-function-declaration
 
 CC = gcc
