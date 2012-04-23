@@ -15,7 +15,7 @@ CC = gcc
 LL = gcc
 AR = ar
 
-all : timer idle loop
+all : timer idle loop tcp
 	@echo done
 
 timer : timer.c
@@ -27,5 +27,8 @@ idle : idle.c
 loop : loop.c
 	gcc $(CFLAGS) -o loop loop.c ../libmrb_uv.a $(LIB)
 
+tcp : tcp.c
+	gcc $(CFLAGS) -o tcp tcp.c ../libmrb_uv.a $(LIB)
+
 clean :
-	rm -f *.o timer idle loop
+	rm -f *.o timer idle loop tcp
