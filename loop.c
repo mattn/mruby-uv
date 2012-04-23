@@ -23,7 +23,6 @@ _(   p i                                     )
 _(   i -= 1                                  )
 _(   if i < 0                                )
 _(     t.close()                             )
-_(     l.delete()                            )
 _(   end                                     )
 _( }                                         )
 _( l.run()                                   );
