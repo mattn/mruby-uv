@@ -43,13 +43,13 @@ static const struct mrb_data_type uv_data_type = {
 };
 
 static void
-uv_ip4_addr_free(mrb_state *mrb, void *p)
+uv_ip4addr_free(mrb_state *mrb, void *p)
 {
   free(p);
 }
 
-static const struct mrb_data_type uv_ip4_addr_type = {
-  "uv_ip4addr", uv_ip4_addr_free,
+static const struct mrb_data_type uv_ip4addr_type = {
+  "uv_ip4addr", uv_ip4addr_free,
 };
 
 /*********************************************************
@@ -354,7 +354,7 @@ mrb_uv_ip4_addr(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_uv_ip4_addr_init(mrb_state *mrb, mrb_value self)
+mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg1, arg2;
   struct sockaddr_in vaddr;
@@ -365,7 +365,7 @@ mrb_uv_ip4_addr_init(mrb_state *mrb, mrb_value self)
   memcpy(addr, &vaddr, sizeof(vaddr));
   mrb_iv_set(mrb, self, mrb_intern(mrb, "data"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_ip4_addr_type, (void*) addr)));
+    &uv_ip4addr_type, (void*) addr)));
   return self;
 }
 
@@ -426,7 +426,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
   value1 = mrb_iv_get(mrb, argv[0], mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value1, &uv_ip4_addr_type, addr);
+  Data_Get_Struct(mrb, value1, &uv_ip4addr_type, addr);
 
   value2 = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
   Data_Get_Struct(mrb, value2, &uv_data_type, uvdata);
@@ -472,9 +472,40 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static void
+_uv_write_cb(uv_write_t* req, int status)
+{
+  mrb_uv_data* uvdata = (mrb_uv_data*) req->handle->data;
+  mrb_yield(uvdata->mrb, uvdata->proc, mrb_fixnum_value(status));
+}
+
+static mrb_value
+mrb_uv_write(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value;
+  mrb_uv_data* uvdata;
+  struct RProc *b;
+  uv_write_cb write_cb = _uv_write_cb;
+  mrb_value arg;
+  static uv_write_t req = {0};
+  static uv_buf_t buf;
+
+  mrb_get_args(mrb, "bs", &b, &arg);
+  value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
+  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
+  if (b) uvdata->proc = mrb_obj_value(b);
+  else write_cb = NULL;
+
+  buf = uv_buf_init((char*) RSTRING_PTR(arg), RSTRING_CAPA(arg));
+  if (uv_write(&req, (uv_stream_t*) &uvdata->uv.tcp, &buf, 1, write_cb) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
+  }
+  return mrb_nil_value();
+}
+
 void
 mrb_uv_init(mrb_state* mrb) {
-  struct RClass *_uv, *_uv_loop, *_uv_timer, *_uv_idle, *_uv_tcp, *_uv_ip4_addr;
+  struct RClass *_uv, *_uv_loop, *_uv_timer, *_uv_idle, *_uv_tcp, *_uv_ip4addr;
 
   _uv = mrb_define_module(mrb, "UV");
   mrb_define_class_method(mrb, _uv, "run", mrb_uv_run, ARGS_NONE());
@@ -501,13 +532,14 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _uv_idle, "stop", mrb_uv_idle_stop, ARGS_NONE());
   mrb_define_method(mrb, _uv_idle, "close", mrb_uv_close, ARGS_OPT(1));
 
-  _uv_ip4_addr = mrb_define_class_under(mrb, _uv, "Ip4Addr", mrb->object_class);
-  mrb_define_method(mrb, _uv_ip4_addr, "initialize", mrb_uv_ip4_addr_init, ARGS_REQ(2));
+  _uv_ip4addr = mrb_define_class_under(mrb, _uv, "Ip4Addr", mrb->object_class);
+  mrb_define_method(mrb, _uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(2));
 
   _uv_tcp = mrb_define_class_under(mrb, _uv, "TCP", mrb->object_class);
   mrb_define_method(mrb, _uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_OPT(1));
   mrb_define_method(mrb, _uv_tcp, "connect", mrb_uv_tcp_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
+  mrb_define_method(mrb, _uv_tcp, "write", mrb_uv_write, ARGS_REQ(2));
   mrb_define_method(mrb, _uv_tcp, "close", mrb_uv_close, ARGS_OPT(1));
 }
 
