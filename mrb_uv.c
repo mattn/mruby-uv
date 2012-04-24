@@ -84,6 +84,8 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
   Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
   if (b) uvdata->proc = mrb_obj_value(b);
   else close_cb = NULL;
+  /* guard reference: avoid to free */
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "close_cb"), uvdata->proc);
 
   uv_close(&uvdata->uv.handle, close_cb);
   return mrb_nil_value();
@@ -96,16 +98,12 @@ static mrb_value
 mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
 {
   mrb_value c;
-  static int initialized = FALSE;
-  if (!initialized) {
-    initialized = TRUE;
-    mrb_uv_data* uvdata = uv_data_alloc(mrb, sizeof(uv_loop_t));
-    uvdata->uv.loop = *uv_default_loop();
-    c = mrb_class_new_instance(mrb, 0, NULL, mrb_class_get(mrb, "UV::Loop"));
-    mrb_iv_set(mrb, c, mrb_intern(mrb, "data"), mrb_obj_value(
-      Data_Wrap_Struct(mrb, mrb->object_class,
-      &uv_data_type, (void*) uvdata)));
-  }
+  mrb_uv_data* uvdata = uv_data_alloc(mrb, sizeof(uv_loop_t));
+  uvdata->uv.loop = *uv_default_loop();
+  c = mrb_class_new_instance(mrb, 0, NULL, mrb_class_get(mrb, "UV::Loop"));
+  mrb_iv_set(mrb, c, mrb_intern(mrb, "data"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_data_type, (void*) uvdata)));
   return c;
 }
 
@@ -242,6 +240,8 @@ mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
   Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
   if (b) uvdata->proc = mrb_obj_value(b);
   else timer_cb = NULL;
+  /* guard reference: avoid to free */
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "timer_cb"), uvdata->proc);
 
   if (uv_timer_start(&uvdata->uv.timer, timer_cb,
       mrb_fixnum(arg1), mrb_fixnum(arg2)) != 0) {
@@ -320,6 +320,8 @@ mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
   Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
   if (b) uvdata->proc = mrb_obj_value(b);
   else idle_cb = NULL;
+  /* guard reference: avoid to free */
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "idle_cb"), uvdata->proc);
 
   if (uv_idle_start(&uvdata->uv.idle, idle_cb) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
@@ -432,6 +434,8 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   Data_Get_Struct(mrb, value2, &uv_data_type, uvdata);
   if (b) uvdata->proc = mrb_obj_value(b);
   else connect_cb = NULL;
+  /* guard reference: avoid to free */
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), uvdata->proc);
 
   if (uv_tcp_connect(&req, &uvdata->uv.tcp, *addr, connect_cb) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
@@ -465,6 +469,8 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
   Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
   if (b) uvdata->proc = mrb_obj_value(b);
   else read_cb = NULL;
+  /* guard reference: avoid to free */
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "read_cb"), uvdata->proc);
 
   if (uv_read_start((uv_stream_t*) &uvdata->uv.tcp, _uv_alloc_cb, read_cb) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
@@ -495,6 +501,8 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
   if (b) uvdata->proc = mrb_obj_value(b);
   else write_cb = NULL;
+  /* guard reference: avoid to free */
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), uvdata->proc);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg), RSTRING_CAPA(arg));
   if (uv_write(&req, (uv_stream_t*) &uvdata->uv.tcp, &buf, 1, write_cb) != 0) {
