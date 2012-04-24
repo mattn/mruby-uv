@@ -419,7 +419,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   int argc;
   mrb_value *argv;
   uv_connect_cb connect_cb = _uv_connect_cb;
-  uv_connect_t req;
+  static uv_connect_t req;
   struct sockaddr_in* addr = NULL;
 
   mrb_get_args(mrb, "b*", &b, &argv, &argc);
