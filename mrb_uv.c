@@ -4,8 +4,7 @@
 #include <mruby/data.h>
 #include <mruby/string.h>
 #include <mruby/class.h>
-#include <compile.h>
-#include <variable.h>
+#include <mruby/variable.h>
 #include <uv.h>
 
 typedef struct {
