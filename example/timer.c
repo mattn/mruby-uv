@@ -14,7 +14,8 @@ main()
   mrb_state* mrb;
   struct mrb_parser_state* st;
   char* code =
- _( require 'UV'
+ _(
+)_( require 'UV'
 )_( t = UV::Timer.new()
 )_( c = 3
 )_( t.start(1000, 1000) {|x|
