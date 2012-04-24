@@ -18,7 +18,9 @@ _( require 'UV'                              )
 _( addr = UV::Ip4Addr.new('127.0.0.1', 80)   )
 _( tcp = UV::TCP.new()                       )
 _( tcp.connect(addr) {|x|                    )
-_(   p x                                     )
+_(   tcp.read_start {|b|                     )
+_(     p b.to_s                              )
+_(   }                                       )
 _( }                                         )
 _( UV.run()                                  );
 

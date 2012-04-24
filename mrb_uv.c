@@ -405,9 +405,8 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
 static void
 _uv_connect_cb(uv_connect_t* req, int status)
 {
-    puts("foo");
-  //mrb_uv_data* uvdata = (mrb_uv_data*) req->handle->data;
-  //mrb_yield(uvdata->mrb, uvdata->proc, mrb_fixnum_value(status));
+  mrb_uv_data* uvdata = (mrb_uv_data*) req->handle->data;
+  mrb_yield(uvdata->mrb, uvdata->proc, mrb_fixnum_value(status));
 }
 
 static mrb_value
@@ -449,8 +448,8 @@ _uv_alloc_cb(uv_handle_t* handle, size_t suggested_size)
 static void
 _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
-  //mrb_uv_data* uvdata = (mrb_uv_data*) stream->data;
-  //mrb_yield(uvdata->mrb, uvdata->proc, mrb_fixnum_value(status));
+  mrb_uv_data* uvdata = (mrb_uv_data*) stream->data;
+  mrb_yield(uvdata->mrb, uvdata->proc, mrb_str_new(uvdata->mrb, buf.base, nread));
 }
 
 static mrb_value
