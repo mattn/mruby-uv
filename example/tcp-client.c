@@ -16,9 +16,9 @@ main()
   char* code =
  _(
 )_( require 'UV'
-)_( addr = UV::Ip4Addr.new('127.0.0.1', 80)
 )_( tcp = UV::TCP.new()
-)_( tcp.connect(UV.ip4_addr('127.0.0.1', 80)) {|x|
+)_( tcp.connect(UV.ip4_addr('127.0.0.1', 8888)) {|x|
+)_(   return if x
 )_(   tcp.read_start {|b|
 )_(     p b.to_s
 )_(   }

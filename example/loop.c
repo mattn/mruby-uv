@@ -20,7 +20,7 @@ main()
 )_( t = UV::Timer.new(l)
 )_( i = 3
 )_( t.start(1000, 1000) {|x|
-)_(   p i
+)_(   puts i
 )_(   i -= 1
 )_(   if i < 0
 )_(     t.close()

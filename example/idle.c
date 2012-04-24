@@ -18,7 +18,7 @@ main()
 )_( require 'UV'
 )_( i = UV::Idle.new()
 )_( i.start {|x|
-)_(   p "idle"
+)_(   puts "idle"
 )_( }
 )_( UV.run()
 );
