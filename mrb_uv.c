@@ -6,6 +6,7 @@
 #include <mruby/class.h>
 #include <mruby/variable.h>
 #include <uv.h>
+#include <stdio.h>
 
 typedef struct {
   mrb_state* mrb;
@@ -529,7 +530,10 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
   Data_Get_Struct(mrb, value, &uv_context_type, context);
 
-  mrb_get_args(mrb, "bs", &b, &arg);
+  mrb_get_args(mrb, "bo", &b, &arg);
+  if (mrb_nil_p(arg)) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
   if (b) context->proc = mrb_obj_value(b);
   else write_cb = NULL;
   /* guard reference: avoid to free */
@@ -668,11 +672,11 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
-  mrb_define_method(mrb, _class_uv_tcp, "write", mrb_uv_write, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_tcp, "write", mrb_uv_write, ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_tcp, "close", mrb_uv_close, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "listen", mrb_uv_tcp_listen, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_tcp, "accept", mrb_uv_tcp_accept, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_tcp, "accept", mrb_uv_tcp_accept, ARGS_NONE());
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */

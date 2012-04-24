@@ -15,15 +15,16 @@ main()
   char* code =
  _(
 )_( require 'UV'
-)_( t = UV::TCP.new()
-)_( t.bind(UV.ip4_addr('127.0.0.1', 8888))
-)_( t.listen(5) {|x|
+)_(
+)_( s = UV::TCP.new()
+)_( s.bind(UV.ip4_addr('127.0.0.1', 8888))
+)_( s.listen(5) {|x|
 )_(   return if x != 0
-)_(   c = t.accept()
+)_(   c = s.accept()
 )_(   puts "connected"
-)_(   c.write('helloworld') {|x|
-)_(     puts "sent data"
-)_(     c.close()
+)_(   t = UV::Timer.new()
+)_(   t.start(1000, 1000) {|x|
+)_(     c.write "helloworld\r\n"
 )_(   }
 )_( }
 )_( UV.run()
