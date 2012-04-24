@@ -14,18 +14,19 @@ main()
   mrb_state* mrb;
   struct mrb_parser_state* st;
   char* code =
-_( require 'UV'                              )
-_( l = UV::Loop.new()                        )
-_( t = UV::Timer.new(l)                      )
-_( i = 3                                     )
-_( t.start(1000, 1000) {|x|                  )
-_(   p i                                     )
-_(   i -= 1                                  )
-_(   if i < 0                                )
-_(     t.close()                             )
-_(   end                                     )
-_( }                                         )
-_( l.run()                                   );
+ _( require 'UV'
+)_( l = UV::Loop.new()
+)_( t = UV::Timer.new(l)
+)_( i = 3
+)_( t.start(1000, 1000) {|x|
+)_(   p i
+)_(   i -= 1
+)_(   if i < 0
+)_(     t.close()
+)_(   end
+)_( }
+)_( l.run()
+);
 
   mrb = mrb_open();
   mrb_uv_init(mrb);

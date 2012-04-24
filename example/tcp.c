@@ -14,15 +14,16 @@ main()
   mrb_state* mrb;
   struct mrb_parser_state* st;
   char* code =
-_( require 'UV'                              )
-_( addr = UV::Ip4Addr.new('127.0.0.1', 80)   )
-_( tcp = UV::TCP.new()                       )
-_( tcp.connect(addr) {|x|                    )
-_(   tcp.read_start {|b|                     )
-_(     p b.to_s                              )
-_(   }                                       )
-_( }                                         )
-_( UV.run()                                  );
+_( require 'UV'
+)_( addr = UV::Ip4Addr.new('127.0.0.1', 80)
+)_( tcp = UV::TCP.new()
+)_( tcp.connect(addr) {|x|
+)_(   tcp.read_start {|b|
+)_(     p b.to_s
+)_(   }
+)_( }
+)_( UV.run()
+);
 
   mrb = mrb_open();
   mrb_uv_init(mrb);
