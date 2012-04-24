@@ -19,27 +19,27 @@ typedef struct {
      uv_handle_t handle;
   } uv;
   mrb_value proc; /* callback   */
-} mrb_uv_data;
+} mrb_uv_callback;
 
-static mrb_uv_data*
-uv_data_alloc(mrb_state* mrb, size_t size)
+static mrb_uv_callback*
+uv_callback_alloc(mrb_state* mrb, size_t size)
 {
-  mrb_uv_data* uvdata = (mrb_uv_data*) malloc(sizeof(mrb_uv_data));
-  memset(uvdata, 0, sizeof(mrb_uv_data));
-  uvdata->loop = uv_default_loop();
-  uvdata->mrb = mrb;
-  uvdata->proc = mrb_nil_value();
-  return uvdata;
+  mrb_uv_callback* callback = (mrb_uv_callback*) malloc(sizeof(mrb_uv_callback));
+  memset(callback, 0, sizeof(mrb_uv_callback));
+  callback->loop = uv_default_loop();
+  callback->mrb = mrb;
+  callback->proc = mrb_nil_value();
+  return callback;
 }
 
 static void
-uv_data_free(mrb_state *mrb, void *p)
+uv_callback_free(mrb_state *mrb, void *p)
 {
   free(p);
 }
 
-static const struct mrb_data_type uv_data_type = {
-  "uv_data", uv_data_free,
+static const struct mrb_data_type uv_callback_type = {
+  "uv_callback", uv_callback_free,
 };
 
 static void
@@ -67,27 +67,27 @@ mrb_uv_run(mrb_state *mrb, mrb_value self)
 static void
 _uv_close_cb(uv_handle_t* handle)
 {
-  mrb_uv_data* uvdata = (mrb_uv_data*) handle->data;
-  mrb_yield_argv(uvdata->mrb, uvdata->proc, 0, NULL);
+  mrb_uv_callback* callback = (mrb_uv_callback*) handle->data;
+  mrb_yield_argv(callback->mrb, callback->proc, 0, NULL);
 }
 
 static mrb_value
 mrb_uv_close(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
   struct RProc *b = NULL;
   uv_close_cb close_cb = _uv_close_cb;
 
   mrb_get_args(mrb, "b", &b);
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  if (b) uvdata->proc = mrb_obj_value(b);
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  if (b) callback->proc = mrb_obj_value(b);
   else close_cb = NULL;
   /* guard reference: avoid to free */
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "close_cb"), uvdata->proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "close_cb"), callback->proc);
 
-  uv_close(&uvdata->uv.handle, close_cb);
+  uv_close(&callback->uv.handle, close_cb);
   return mrb_nil_value();
 }
 
@@ -98,24 +98,24 @@ static mrb_value
 mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
 {
   mrb_value c;
-  mrb_uv_data* uvdata = uv_data_alloc(mrb, sizeof(uv_loop_t));
-  uvdata->uv.loop = *uv_default_loop();
+  mrb_uv_callback* callback = uv_callback_alloc(mrb, sizeof(uv_loop_t));
+  callback->uv.loop = *uv_default_loop();
   c = mrb_class_new_instance(mrb, 0, NULL, mrb_class_get(mrb, "UV::Loop"));
   mrb_iv_set(mrb, c, mrb_intern(mrb, "data"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_data_type, (void*) uvdata)));
+    &uv_callback_type, (void*) callback)));
   return c;
 }
 
 static mrb_value
 mrb_uv_loop_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_data* uvdata = uv_data_alloc(mrb, sizeof(uv_loop_t));
-  uvdata->uv.loop = *uv_loop_new();
-  uvdata->uv.loop.data = uvdata;
+  mrb_uv_callback* callback = uv_callback_alloc(mrb, sizeof(uv_loop_t));
+  callback->uv.loop = *uv_loop_new();
+  callback->uv.loop.data = callback;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "data"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_data_type, (void*) uvdata)));
+    &uv_callback_type, (void*) callback)));
   return self;
 }
 
@@ -123,12 +123,12 @@ static mrb_value
 mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
 
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  if (uv_run(&uvdata->uv.loop) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(&uvdata->uv.loop)));
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  if (uv_run(&callback->uv.loop) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(&callback->uv.loop)));
   }
   return mrb_nil_value();
 }
@@ -137,12 +137,12 @@ static mrb_value
 mrb_uv_loop_run_once(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
 
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  if (uv_run_once(&uvdata->uv.loop) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(&uvdata->uv.loop)));
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  if (uv_run_once(&callback->uv.loop) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(&callback->uv.loop)));
   }
   return mrb_nil_value();
 }
@@ -151,11 +151,11 @@ static mrb_value
 mrb_uv_loop_ref(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
 
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  uv_ref(&uvdata->uv.loop);
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  uv_ref(&callback->uv.loop);
   return mrb_nil_value();
 }
 
@@ -163,11 +163,11 @@ static mrb_value
 mrb_uv_loop_unref(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
 
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  uv_unref(&uvdata->uv.loop);
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  uv_unref(&callback->uv.loop);
   return mrb_nil_value();
 }
 
@@ -175,11 +175,11 @@ static mrb_value
 mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
 
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  uv_loop_delete(&uvdata->uv.loop);
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  uv_loop_delete(&callback->uv.loop);
   return mrb_nil_value();
 }
 
@@ -190,8 +190,8 @@ static mrb_value
 mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
-  mrb_uv_data* loop_uvdata;
+  mrb_uv_callback* callback;
+  mrb_uv_callback* loop_uvdata;
   uv_loop_t* loop;
   mrb_value arg;
 
@@ -201,51 +201,51 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
     value = mrb_iv_get(mrb, arg, mrb_intern(mrb, "data"));
-    Data_Get_Struct(mrb, value, &uv_data_type, loop_uvdata);
+    Data_Get_Struct(mrb, value, &uv_callback_type, loop_uvdata);
     loop = &loop_uvdata->uv.loop;
   } else {
     loop = uv_default_loop();
   }
 
-  uvdata = uv_data_alloc(mrb, sizeof(uv_timer_t));
-  uvdata->loop = loop;
-  if (uv_timer_init(loop, &uvdata->uv.timer) != 0) {
+  callback = uv_callback_alloc(mrb, sizeof(uv_timer_t));
+  callback->loop = loop;
+  if (uv_timer_init(loop, &callback->uv.timer) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(loop)));
   }
-  uvdata->uv.timer.data = uvdata;
+  callback->uv.timer.data = callback;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "data"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_data_type, (void*) uvdata)));
+    &uv_callback_type, (void*) callback)));
   return self;
 }
 
 static void
 _uv_timer_cb(uv_timer_t* timer, int status)
 {
-  mrb_uv_data* uvdata = (mrb_uv_data*) timer->data;
-  mrb_yield(uvdata->mrb, uvdata->proc, mrb_fixnum_value(status));
+  mrb_uv_callback* callback = (mrb_uv_callback*) timer->data;
+  mrb_yield(callback->mrb, callback->proc, mrb_fixnum_value(status));
 }
 
 static mrb_value
 mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
   struct RProc *b;
   mrb_value arg1, arg2;
   uv_timer_cb timer_cb = _uv_timer_cb;
 
   mrb_get_args(mrb, "bii", &b, &arg1, &arg2);
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  if (b) uvdata->proc = mrb_obj_value(b);
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  if (b) callback->proc = mrb_obj_value(b);
   else timer_cb = NULL;
   /* guard reference: avoid to free */
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "timer_cb"), uvdata->proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "timer_cb"), callback->proc);
 
-  if (uv_timer_start(&uvdata->uv.timer, timer_cb,
+  if (uv_timer_start(&callback->uv.timer, timer_cb,
       mrb_fixnum(arg1), mrb_fixnum(arg2)) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(callback->loop)));
   }
   return mrb_nil_value();
 }
@@ -254,12 +254,12 @@ static mrb_value
 mrb_uv_timer_stop(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
 
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  if (uv_timer_stop(&uvdata->uv.timer) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  if (uv_timer_stop(&callback->uv.timer) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(callback->loop)));
   }
   return mrb_nil_value();
 }
@@ -271,8 +271,8 @@ static mrb_value
 mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
-  mrb_uv_data* loop_uvdata;
+  mrb_uv_callback* callback;
+  mrb_uv_callback* loop_uvdata;
   uv_loop_t* loop;
   mrb_value arg;
 
@@ -282,49 +282,49 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
     value = mrb_iv_get(mrb, arg, mrb_intern(mrb, "data"));
-    Data_Get_Struct(mrb, value, &uv_data_type, loop_uvdata);
+    Data_Get_Struct(mrb, value, &uv_callback_type, loop_uvdata);
     loop = &loop_uvdata->uv.loop;
   } else {
     loop = uv_default_loop();
   }
 
-  uvdata = uv_data_alloc(mrb, sizeof(uv_idle_t));
-  uvdata->loop = loop;
-  if (uv_idle_init(loop, &uvdata->uv.idle) != 0) {
+  callback = uv_callback_alloc(mrb, sizeof(uv_idle_t));
+  callback->loop = loop;
+  if (uv_idle_init(loop, &callback->uv.idle) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(loop)));
   }
-  uvdata->uv.idle.data = uvdata;
+  callback->uv.idle.data = callback;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "data"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_data_type, (void*) uvdata)));
+    &uv_callback_type, (void*) callback)));
   return self;
 }
 
 static void
 _uv_idle_cb(uv_idle_t* idle, int status)
 {
-  mrb_uv_data* uvdata = (mrb_uv_data*) idle->data;
-  mrb_yield(uvdata->mrb, uvdata->proc, mrb_fixnum_value(status));
+  mrb_uv_callback* callback = (mrb_uv_callback*) idle->data;
+  mrb_yield(callback->mrb, callback->proc, mrb_fixnum_value(status));
 }
 
 static mrb_value
 mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
   struct RProc *b;
   uv_idle_cb idle_cb = _uv_idle_cb;
 
   mrb_get_args(mrb, "b", &b);
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  if (b) uvdata->proc = mrb_obj_value(b);
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  if (b) callback->proc = mrb_obj_value(b);
   else idle_cb = NULL;
   /* guard reference: avoid to free */
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "idle_cb"), uvdata->proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "idle_cb"), callback->proc);
 
-  if (uv_idle_start(&uvdata->uv.idle, idle_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
+  if (uv_idle_start(&callback->uv.idle, idle_cb) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(callback->loop)));
   }
   return mrb_nil_value();
 }
@@ -333,12 +333,12 @@ static mrb_value
 mrb_uv_idle_stop(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
 
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  if (uv_idle_stop(&uvdata->uv.idle) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  if (uv_idle_stop(&callback->uv.idle) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(callback->loop)));
   }
   return mrb_nil_value();
 }
@@ -375,8 +375,8 @@ static mrb_value
 mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
-  mrb_uv_data* loop_uvdata;
+  mrb_uv_callback* callback;
+  mrb_uv_callback* loop_uvdata;
   uv_loop_t* loop;
   mrb_value arg;
 
@@ -386,36 +386,36 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
     value = mrb_iv_get(mrb, arg, mrb_intern(mrb, "data"));
-    Data_Get_Struct(mrb, value, &uv_data_type, loop_uvdata);
+    Data_Get_Struct(mrb, value, &uv_callback_type, loop_uvdata);
     loop = &loop_uvdata->uv.loop;
   } else {
     loop = uv_default_loop();
   }
 
-  uvdata = uv_data_alloc(mrb, sizeof(uv_tcp_t));
-  uvdata->loop = loop;
-  if (uv_tcp_init(loop, &uvdata->uv.tcp) != 0) {
+  callback = uv_callback_alloc(mrb, sizeof(uv_tcp_t));
+  callback->loop = loop;
+  if (uv_tcp_init(loop, &callback->uv.tcp) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(loop)));
   }
-  uvdata->uv.tcp.data = uvdata;
+  callback->uv.tcp.data = callback;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "data"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_data_type, (void*) uvdata)));
+    &uv_callback_type, (void*) callback)));
   return self;
 }
 
 static void
 _uv_connect_cb(uv_connect_t* req, int status)
 {
-  mrb_uv_data* uvdata = (mrb_uv_data*) req->handle->data;
-  mrb_yield(uvdata->mrb, uvdata->proc, mrb_fixnum_value(status));
+  mrb_uv_callback* callback = (mrb_uv_callback*) req->handle->data;
+  mrb_yield(callback->mrb, callback->proc, mrb_fixnum_value(status));
 }
 
 static mrb_value
 mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
 {
   mrb_value value1, value2;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
   struct RProc *b = NULL;
   int argc;
   mrb_value *argv;
@@ -431,14 +431,14 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   Data_Get_Struct(mrb, value1, &uv_ip4addr_type, addr);
 
   value2 = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value2, &uv_data_type, uvdata);
-  if (b) uvdata->proc = mrb_obj_value(b);
+  Data_Get_Struct(mrb, value2, &uv_callback_type, callback);
+  if (b) callback->proc = mrb_obj_value(b);
   else connect_cb = NULL;
   /* guard reference: avoid to free */
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), uvdata->proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), callback->proc);
 
-  if (uv_tcp_connect(&req, &uvdata->uv.tcp, *addr, connect_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
+  if (uv_tcp_connect(&req, &callback->uv.tcp, *addr, connect_cb) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(callback->loop)));
   }
   return mrb_nil_value();
 }
@@ -452,28 +452,28 @@ _uv_alloc_cb(uv_handle_t* handle, size_t suggested_size)
 static void
 _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
-  mrb_uv_data* uvdata = (mrb_uv_data*) stream->data;
-  mrb_yield(uvdata->mrb, uvdata->proc, mrb_str_new(uvdata->mrb, buf.base, nread));
+  mrb_uv_callback* callback = (mrb_uv_callback*) stream->data;
+  mrb_yield(callback->mrb, callback->proc, mrb_str_new(callback->mrb, buf.base, nread));
 }
 
 static mrb_value
 mrb_uv_read_start(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
   struct RProc *b;
   uv_read_cb read_cb = _uv_read_cb;
 
   mrb_get_args(mrb, "b", &b);
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  if (b) uvdata->proc = mrb_obj_value(b);
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  if (b) callback->proc = mrb_obj_value(b);
   else read_cb = NULL;
   /* guard reference: avoid to free */
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "read_cb"), uvdata->proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "read_cb"), callback->proc);
 
-  if (uv_read_start((uv_stream_t*) &uvdata->uv.tcp, _uv_alloc_cb, read_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
+  if (uv_read_start((uv_stream_t*) &callback->uv.tcp, _uv_alloc_cb, read_cb) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(callback->loop)));
   }
   return mrb_nil_value();
 }
@@ -481,15 +481,15 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
 static void
 _uv_write_cb(uv_write_t* req, int status)
 {
-  mrb_uv_data* uvdata = (mrb_uv_data*) req->handle->data;
-  mrb_yield(uvdata->mrb, uvdata->proc, mrb_fixnum_value(status));
+  mrb_uv_callback* callback = (mrb_uv_callback*) req->handle->data;
+  mrb_yield(callback->mrb, callback->proc, mrb_fixnum_value(status));
 }
 
 static mrb_value
 mrb_uv_write(mrb_state *mrb, mrb_value self)
 {
   mrb_value value;
-  mrb_uv_data* uvdata;
+  mrb_uv_callback* callback;
   struct RProc *b;
   uv_write_cb write_cb = _uv_write_cb;
   mrb_value arg;
@@ -498,15 +498,15 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "bs", &b, &arg);
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
-  Data_Get_Struct(mrb, value, &uv_data_type, uvdata);
-  if (b) uvdata->proc = mrb_obj_value(b);
+  Data_Get_Struct(mrb, value, &uv_callback_type, callback);
+  if (b) callback->proc = mrb_obj_value(b);
   else write_cb = NULL;
   /* guard reference: avoid to free */
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), uvdata->proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), callback->proc);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg), RSTRING_CAPA(arg));
-  if (uv_write(&req, (uv_stream_t*) &uvdata->uv.tcp, &buf, 1, write_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uvdata->loop)));
+  if (uv_write(&req, (uv_stream_t*) &callback->uv.tcp, &buf, 1, write_cb) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(callback->loop)));
   }
   return mrb_nil_value();
 }
