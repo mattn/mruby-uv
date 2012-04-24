@@ -2,7 +2,6 @@
 #include <mruby/proc.h>
 #include <mruby/data.h>
 #include <compile.h>
-#include <variable.h>
 #include <mrb_uv.h>
 
 #define _(...) #__VA_ARGS__ "\n"
