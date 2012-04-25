@@ -24,6 +24,7 @@ main()
 )_(   puts "connected"
 )_(   t = UV::Timer.new()
 )_(   t.start(1000, 1000) {|x|
+)_(     puts "helloworld\n"
 )_(     c.write "helloworld\r\n"
 )_(   }
 )_( }

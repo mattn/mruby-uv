@@ -15,12 +15,15 @@ main()
   char* code =
  _(
 )_( require 'UV'
-)_( tcp = UV::TCP.new()
-)_( tcp.connect(UV.ip4_addr('127.0.0.1', 8888)) {|x|
-)_(   return if x
-)_(   tcp.read_start {|b|
-)_(     p b.to_s
-)_(   }
+)_( c = UV::TCP.new()
+)_( c.connect(UV.ip4_addr('127.0.0.1', 8888)) {|x|
+)_(   if x == 0
+)_(     c.read_start {|b|
+)_(       p b.to_s
+)_(     }
+)_(   else
+)_(     c.close()
+)_(   end
 )_( }
 )_( UV.run()
 );
