@@ -15,7 +15,7 @@ CC = gcc
 LL = gcc
 AR = ar
 
-all : timer idle loop tcp-client tcp-server
+all : timer idle loop tcp-client tcp-server pipe-client pipe-server
 	@echo done
 
 timer : timer.c
@@ -32,6 +32,12 @@ tcp-client : tcp-client.c
 
 tcp-server : tcp-server.c
 	gcc $(CFLAGS) -o tcp-server tcp-server.c ../libmrb_uv.a $(LIB)
+
+pipe-client : pipe-client.c
+	gcc $(CFLAGS) -o pipe-client pipe-client.c ../libmrb_uv.a $(LIB)
+
+pipe-server : pipe-server.c
+	gcc $(CFLAGS) -o pipe-server pipe-server.c ../libmrb_uv.a $(LIB)
 
 clean :
 	rm -f *.o timer idle loop tcp-client tcp-server

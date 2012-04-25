@@ -760,9 +760,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   if (mrb_nil_p(arg) || mrb_type(arg) != MRB_TT_STRING) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
-  if (mrb_nil_p(arg)) {
-    name = RSTRING_PTR(arg);
-  }
+  name = RSTRING_PTR(arg);
 
   if (!b) connect_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
@@ -777,7 +775,7 @@ mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
   mrb_value arg;
   mrb_value value;
   mrb_uv_context* context = NULL;
-  char* name = NULL;
+  char* name = "";
 
   value = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
   Data_Get_Struct(mrb, value, &uv_context_type, context);
@@ -789,11 +787,10 @@ mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
   if (mrb_nil_p(arg) || mrb_type(arg) != MRB_TT_STRING) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
-  if (mrb_nil_p(arg)) {
-    name = RSTRING_PTR(arg);
-  }
+  name = RSTRING_PTR(arg);
+  printf("[%s]\n", name ? name : "NULL");
 
-  if (uv_pipe_bind(&context->uv.pipe, name) != 0) {
+  if (uv_pipe_bind(&context->uv.pipe, name ? name : "") != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
