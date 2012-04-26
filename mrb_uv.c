@@ -74,6 +74,15 @@ mrb_uv_run(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value
+mrb_uv_run_once(mrb_state *mrb, mrb_value self)
+{
+  if (uv_run_once(uv_default_loop()) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+  }
+  return mrb_nil_value();
+}
+
 static void
 _uv_close_cb(uv_handle_t* handle)
 {
@@ -117,7 +126,11 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   mrb_value proc;
   mrb_uv_context* context = (mrb_uv_context*) stream->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "read_cb"));
-  mrb_yield(context->mrb, proc, mrb_str_new(context->mrb, buf.base, nread));
+  if (nread == -1) {
+    mrb_yield(context->mrb, proc, mrb_nil_value());
+  } else {
+    mrb_yield(context->mrb, proc, mrb_str_new(context->mrb, buf.base, nread));
+  }
 }
 
 static mrb_value
@@ -861,6 +874,7 @@ void
 mrb_uv_init(mrb_state* mrb) {
   _class_uv = mrb_define_module(mrb, "UV");
   mrb_define_class_method(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
+  mrb_define_class_method(mrb, _class_uv, "run_once", mrb_uv_run_once, ARGS_NONE());
   mrb_define_class_method(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
   mrb_define_class_method(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
 
