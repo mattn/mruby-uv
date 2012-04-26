@@ -788,7 +788,6 @@ mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
   name = RSTRING_PTR(arg);
-  printf("[%s]\n", name ? name : "NULL");
 
   if (uv_pipe_bind(&context->uv.pipe, name ? name : "") != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
