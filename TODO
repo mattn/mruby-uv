@@ -1,6 +1,6 @@
-* tcp
-* udp
-* pipe
-* idle
-* process
-* loop
+* tcp (70%)
+* udp (70%)
+* pipe (70%)
+* idle (70%)
+* process (0%)
+* loop (70%)

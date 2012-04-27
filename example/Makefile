@@ -15,7 +15,7 @@ CC = gcc
 LL = gcc
 AR = ar
 
-all : timer idle loop tcp-client tcp-server pipe-client pipe-server
+all : timer idle loop tcp-client tcp-server udp-sender udp-reader pipe-client pipe-server
 	@echo done
 
 timer : timer.c
@@ -32,6 +32,12 @@ tcp-client : tcp-client.c
 
 tcp-server : tcp-server.c
 	gcc $(CFLAGS) -o tcp-server tcp-server.c ../libmrb_uv.a $(LIB)
+
+udp-sender : udp-sender.c
+	gcc $(CFLAGS) -o udp-sender udp-sender.c ../libmrb_uv.a $(LIB)
+
+udp-reader : udp-reader.c
+	gcc $(CFLAGS) -o udp-reader udp-reader.c ../libmrb_uv.a $(LIB)
 
 pipe-client : pipe-client.c
 	gcc $(CFLAGS) -o pipe-client pipe-client.c ../libmrb_uv.a $(LIB)
