@@ -160,6 +160,24 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value
+mrb_uv_read_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  if (uv_read_stop(&context->uv.stream) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+  }
+  return mrb_nil_value();
+}
+
 static void
 _uv_write_cb(uv_write_t* req, int status)
 {
@@ -878,6 +896,24 @@ mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value
+mrb_uv_udp_recv_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  if (uv_udp_recv_stop(&context->uv.udp) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+  }
+  return mrb_nil_value();
+}
+
 /*********************************************************
  * Pipe
  *********************************************************/
@@ -1074,6 +1110,7 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_tcp, "read_stop", mrb_uv_read_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "write", mrb_uv_write, ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_tcp, "close", mrb_uv_close, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind, ARGS_REQ(1));
@@ -1083,7 +1120,8 @@ mrb_uv_init(mrb_state* mrb) {
   _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_REQ(2));
-  mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send, ARGS_OPT(2));
+  mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send, ARGS_OPT(3));
   mrb_define_method(mrb, _class_uv_udp, "close", mrb_uv_close, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind, ARGS_REQ(1));
 
@@ -1091,6 +1129,7 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_pipe, "initialize", mrb_uv_pipe_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_pipe, "connect", mrb_uv_pipe_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_pipe, "read_start", mrb_uv_read_start, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_pipe, "read_stop", mrb_uv_read_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_pipe, "write", mrb_uv_write, ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_pipe, "close", mrb_uv_close, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_pipe, "bind", mrb_uv_pipe_bind, ARGS_REQ(1));
