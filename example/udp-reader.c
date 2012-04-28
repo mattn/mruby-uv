@@ -19,9 +19,9 @@ main()
 )_( r = UV::UDP.new()
 )_( r.bind(UV.ip4_addr('127.0.0.1', 8888))
 )_( r.recv_start {|data, addr, flags|
-)_(   puts data
-)_(   puts addr
-)_(   puts flags
+)_(   if data.size > 0
+)_(     puts data
+)_(   end
 )_( }
 )_( UV.run()
 );

@@ -16,7 +16,7 @@ main()
  _(
 )_( require 'UV'
 )_( c = UV::UDP.new()
-)_( c.send("helloworld\n", UV.ip4_addr('127.0.0.1', 8888)) {|x|
+)_( c.send("helloworld", UV.ip4_addr('127.0.0.1', 8888)) {|x|
 )_(   c.close()
 )_( }
 )_( UV.run()

@@ -558,16 +558,36 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_host, arg_port;
   struct sockaddr_in vaddr;
-  struct sockaddr_in *addr;
+  struct sockaddr_in *addr = NULL;
 
   mrb_get_args(mrb, "oi", &arg_host, &arg_port);
-  vaddr = uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port));
-  addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
-  memcpy(addr, &vaddr, sizeof(vaddr));
+  if (!mrb_nil_p(arg_host) && !mrb_nil_p(arg_port)) {
+    vaddr = uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port));
+    addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
+    memcpy(addr, &vaddr, sizeof(vaddr));
+  }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "data"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
     &uv_ip4addr_type, (void*) addr)));
   return self;
+}
+
+static mrb_value
+mrb_uv_ip4addr_to_s(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_addr;
+  struct sockaddr_in* addr = NULL;
+  char name[256];
+
+  value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
+  Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  if (!addr) {
+    return mrb_nil_value();
+  }
+  if (uv_ip4_name(addr, name, sizeof(name)) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+  }
+  return mrb_str_new(mrb, name, strlen(name));
 }
 
 /*********************************************************
@@ -856,20 +876,22 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
   mrb_value proc;
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "udp_recv_cb"));
-  if (nread == -1) {
-    mrb_yield(context->mrb, proc, mrb_nil_value());
-  } else {
+  mrb_value args[3];
+  if (nread != -1) {
     mrb_value c;
-    c = mrb_class_new_instance(context->mrb, 0, NULL, _class_uv_udp);
+    c = mrb_class_new_instance(context->mrb, 0, NULL, _class_uv_ip4addr);
     mrb_iv_set(context->mrb, c, mrb_intern(context->mrb, "data"), mrb_obj_value(
       Data_Wrap_Struct(context->mrb, context->mrb->object_class,
       &uv_ip4addr_type, (void*) addr)));
-    mrb_value args = mrb_ary_new(context->mrb);
-    mrb_ary_push(context->mrb, args, mrb_str_new(context->mrb, buf.base, nread));
-    mrb_ary_push(context->mrb, args, c);
-    mrb_ary_push(context->mrb, args, mrb_fixnum_value(flags));
-    mrb_yield_argv(context->mrb, proc, 3, &args);
+    args[0] = mrb_str_new(context->mrb, buf.base, nread);
+    args[1] = c;
+    args[2] = mrb_fixnum_value(flags);
+  } else {
+    args[0] = mrb_nil_value();
+    args[1] = mrb_nil_value();
+    args[2] = mrb_fixnum_value(flags);
   }
+  mrb_yield_argv(context->mrb, proc, 3, args);
 }
 
 static mrb_value
@@ -1105,6 +1127,7 @@ mrb_uv_init(mrb_state* mrb) {
 
   _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
   mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, ARGS_NONE());
 
   _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_OPT(1));
