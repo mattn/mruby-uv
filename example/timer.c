@@ -22,7 +22,6 @@ main()
 )_(   c -= 1
 )_(   if c < 0
 )_(     t.close()
-)_(     UV.default_loop().unref()
 )_(   end
 )_( }
 )_( UV.run()
