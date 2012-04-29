@@ -15,7 +15,7 @@ CC = gcc
 LL = gcc
 AR = ar
 
-PROGS = timer idle loop tcp-client tcp-server udp-sender udp-reader pipe-client pipe-server
+PROGS = timer idle loop tcp-client tcp-server udp-sender udp-reader pipe-client pipe-server runner
 
 all : $(PROGS)
 	@echo done
@@ -46,6 +46,9 @@ pipe-client : pipe-client.c
 
 pipe-server : pipe-server.c
 	gcc $(CFLAGS) -o pipe-server pipe-server.c $(LDFLAGS)
+
+runner : runner.c
+	gcc $(CFLAGS) -o runner runner.c $(LDFLAGS)
 
 clean :
 	rm -f *.o $(PROGS)
