@@ -1,10 +1,9 @@
 MRUBY_ROOT = ../..
-TARGET := $(MRUBY_ROOT)/lib/ritevm
 ifeq ($(OS),Windows_NT)
-MRUBY_LIB := $(TARGET).lib
+MRUBY_LIB := $(MRUBY_ROOT)/mrblib/mrblib.o $(MRUBY_ROOT)/lib/ritevm.lib
 LDFLAGS =$(MRUBY_LIB) ../libmrb_uv.a  -luv
 else
-MRUBY_LIB := $(TARGET).a
+MRUBY_LIB := $(MRUBY_ROOT)/mrblib/mrblib.o $(MRUBY_ROOT)/lib/ritevm.a
 LDFLAGS = $(MRUBY_LIB) ../libmrb_uv.a -luv -lpthread -ldl -lrt -lm
 endif
 
