@@ -237,6 +237,21 @@ _uv_connect_cb(uv_connect_t* req, int status)
   mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
 }
 
+static mrb_value
+mrb_uv_data_get(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, mrb_intern(mrb, "data"));
+}
+
+static mrb_value
+mrb_uv_data_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg;
+  mrb_get_args(mrb, "o", &arg);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "data"), arg);
+  return mrb_nil_value();
+}
+
 /*********************************************************
  * Loop
  *********************************************************/
@@ -1113,18 +1128,24 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_loop, "ref", mrb_uv_loop_ref, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "unref", mrb_uv_loop_unref, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_delete, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
 
   _class_uv_timer = mrb_define_class_under(mrb, _class_uv, "Timer", mrb->object_class);
   mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(3));
   mrb_define_method(mrb, _class_uv_timer, "stop", mrb_uv_timer_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "close", mrb_uv_close, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_timer, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_timer, "data", mrb_uv_data_get, ARGS_NONE());
 
   _class_uv_idle = mrb_define_class_under(mrb, _class_uv, "Idle", mrb->object_class);
   mrb_define_method(mrb, _class_uv_idle, "initialize", mrb_uv_idle_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_idle, "start", mrb_uv_idle_start, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_idle, "stop", mrb_uv_idle_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "close", mrb_uv_close, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_idle, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_idle, "data", mrb_uv_data_get, ARGS_NONE());
 
   _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
   mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(2));
@@ -1140,6 +1161,8 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "listen", mrb_uv_tcp_listen, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "accept", mrb_uv_tcp_accept, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_tcp, "data", mrb_uv_data_get, ARGS_NONE());
 
   _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_OPT(1));
@@ -1148,6 +1171,8 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send, ARGS_OPT(3));
   mrb_define_method(mrb, _class_uv_udp, "close", mrb_uv_close, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "data", mrb_uv_data_get, ARGS_NONE());
 
   _class_uv_pipe = mrb_define_class_under(mrb, _class_uv, "Pipe", mrb->object_class);
   mrb_define_method(mrb, _class_uv_pipe, "initialize", mrb_uv_pipe_init, ARGS_OPT(1));
@@ -1159,6 +1184,8 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_pipe, "bind", mrb_uv_pipe_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "listen", mrb_uv_pipe_listen, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_pipe, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_pipe, "data", mrb_uv_data_get, ARGS_NONE());
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */
