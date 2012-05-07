@@ -148,6 +148,9 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   req = (uv_shutdown_t*) malloc(sizeof(uv_shutdown_t));
+  if (!req) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
+  }
   memset(req, 0, sizeof(uv_shutdown_t));
   uv_shutdown(req, &context->uv.stream, shutdown_cb);
   return mrb_nil_value();
@@ -250,6 +253,9 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_CAPA(arg_data));
   req = (uv_write_t*) malloc(sizeof(uv_write_t));
+  if (!req) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
+  }
   memset(req, 0, sizeof(uv_write_t));
   if (uv_write(req, &context->uv.stream, &buf, 1, write_cb) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -785,6 +791,9 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  if (!req) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
+  }
   memset(req, 0, sizeof(uv_connect_t));
   if (uv_tcp_connect(req, &context->uv.tcp, *addr, connect_cb) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -1087,6 +1096,9 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_CAPA(arg_data));
   req = (uv_udp_send_t*) malloc(sizeof(uv_udp_send_t));
+  if (!req) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
+  }
   memset(req, 0, sizeof(uv_udp_send_t));
   if (uv_udp_send(req, &context->uv.udp, &buf, 1, *addr, udp_send_cb) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -1230,6 +1242,9 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  if (!req) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
+  }
   memset(req, 0, sizeof(uv_connect_t));
   uv_pipe_connect(req, &context->uv.pipe, name, connect_cb);
   return mrb_nil_value();
