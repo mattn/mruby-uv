@@ -1,7 +1,7 @@
 MRUBY_ROOT = ../..
 ifeq ($(OS),Windows_NT)
 MRUBY_LIB := $(MRUBY_ROOT)/lib/libmruby.a
-LDFLAGS =$(MRUBY_LIB) ../libmrb_uv.a  -luv
+LDFLAGS =$(MRUBY_LIB) ../libmrb_uv.a  -luv -lws2_32 -lpsapi -liphlpapi
 else
 MRUBY_LIB := $(MRUBY_ROOT)/lib/libmruby.a
 LDFLAGS = $(MRUBY_LIB) ../libmrb_uv.a -luv -lpthread -ldl -lrt -lm
