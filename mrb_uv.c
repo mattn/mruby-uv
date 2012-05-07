@@ -169,6 +169,8 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   mrb_value proc;
   mrb_uv_context* context = (mrb_uv_context*) stream->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "read_cb"));
+  if (!uv_is_active(&context->uv.handle))
+    return;
   if (nread == -1) {
     mrb_yield(context->mrb, proc, mrb_nil_value());
   } else {
