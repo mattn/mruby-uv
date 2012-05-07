@@ -117,6 +117,38 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static void
+_uv_shutdown_cb(uv_shutdown_t* req, int status)
+{
+  mrb_value proc;
+  mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
+  proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "shutdown_cb"));
+  mrb_yield_argv(context->mrb, proc, 0, NULL);
+}
+
+static mrb_value
+mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  struct RProc *b = NULL;
+  uv_shutdown_cb shutdown_cb = _uv_shutdown_cb;
+  static uv_shutdown_t req = {0};
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  mrb_get_args(mrb, "b", &b);
+  if (!b) shutdown_cb = NULL;
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
+
+  uv_shutdown(&req, &context->uv.stream, shutdown_cb);
+  return mrb_nil_value();
+}
+
 static uv_buf_t
 _uv_alloc_cb(uv_handle_t* handle, size_t suggested_size)
 {
@@ -1253,6 +1285,7 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_tcp, "read_stop", mrb_uv_read_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "write", mrb_uv_write, ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_tcp, "close", mrb_uv_close, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_tcp, "shutdown", mrb_uv_shutdown, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "listen", mrb_uv_tcp_listen, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "accept", mrb_uv_tcp_accept, ARGS_NONE());
@@ -1282,6 +1315,7 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_pipe, "read_stop", mrb_uv_read_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_pipe, "write", mrb_uv_write, ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_pipe, "close", mrb_uv_close, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_pipe, "shutdown", mrb_uv_shutdown, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_pipe, "bind", mrb_uv_pipe_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "listen", mrb_uv_pipe_listen, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, ARGS_NONE());
