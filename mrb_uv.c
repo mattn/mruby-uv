@@ -29,7 +29,7 @@ typedef struct {
 static mrb_uv_context*
 uv_context_alloc(mrb_state* mrb, mrb_value instance, size_t size)
 {
-  mrb_uv_context* context = (mrb_uv_context*) mrb_malloc(mrb, sizeof(mrb_uv_context));
+  mrb_uv_context* context = (mrb_uv_context*) malloc(sizeof(mrb_uv_context));
   memset(context, 0, sizeof(mrb_uv_context));
   context->loop = uv_default_loop();
   context->mrb = mrb;
@@ -40,7 +40,7 @@ uv_context_alloc(mrb_state* mrb, mrb_value instance, size_t size)
 static void
 uv_context_free(mrb_state *mrb, void *p)
 {
-  if (p) mrb_free(mrb, p);
+  if (p) free(p);
 }
 
 static const struct mrb_data_type uv_context_type = {
@@ -50,7 +50,7 @@ static const struct mrb_data_type uv_context_type = {
 static void
 uv_ip4addr_free(mrb_state *mrb, void *p)
 {
-  if (p) mrb_free(mrb, p);
+  if (p) free(p);
 }
 
 static const struct mrb_data_type uv_ip4addr_type = {
@@ -95,7 +95,6 @@ _uv_close_cb(uv_handle_t* handle)
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "close_cb"));
   mrb_yield_argv(context->mrb, proc, 0, NULL);
-  mrb_iv_set(context->mrb, context->instance, mrb_intern(context->mrb, "close_cb"), mrb_nil_value());
 }
 
 static mrb_value
@@ -128,7 +127,6 @@ _uv_shutdown_cb(uv_shutdown_t* req, int status)
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "shutdown_cb"));
   mrb_yield_argv(context->mrb, proc, 0, NULL);
   free(req);
-  mrb_iv_set(context->mrb, context->instance, mrb_intern(context->mrb, "shutdown_cb"), mrb_nil_value());
 }
 
 static mrb_value
@@ -162,8 +160,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
 static uv_buf_t
 _uv_alloc_cb(uv_handle_t* handle, size_t suggested_size)
 {
-  mrb_uv_context* context = (mrb_uv_context*) handle->data;
-  return uv_buf_init(mrb_malloc(context->mrb, suggested_size), suggested_size);
+  return uv_buf_init(malloc(suggested_size), suggested_size);
 }
 
 static void
@@ -229,7 +226,6 @@ _uv_write_cb(uv_write_t* req, int status)
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "write_cb"));
   mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
   free(req);
-  mrb_iv_set(context->mrb, context->instance, mrb_intern(context->mrb, "write_cb"), mrb_nil_value());
 }
 
 static mrb_value
@@ -285,7 +281,6 @@ _uv_connect_cb(uv_connect_t* req, int status)
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "connect_cb"));
   mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
   free(req);
-  mrb_iv_set(context->mrb, context->instance, mrb_intern(context->mrb, "connect_cb"), mrb_nil_value());
 }
 
 static mrb_value
@@ -701,7 +696,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "oi", &arg_host, &arg_port);
   if (!mrb_nil_p(arg_host) && !mrb_nil_p(arg_port)) {
     vaddr = uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port));
-    addr = (struct sockaddr_in*) mrb_malloc(mrb, sizeof(struct sockaddr_in));
+    addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(vaddr));
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -1071,7 +1066,6 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "udp_send_cb"));
   mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
   free(req);
-  mrb_iv_set(context->mrb, context->instance, mrb_intern(context->mrb, "udp_send_cb"), mrb_nil_value());
 }
 
 static mrb_value
