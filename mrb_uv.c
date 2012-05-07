@@ -126,6 +126,7 @@ _uv_shutdown_cb(uv_shutdown_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "shutdown_cb"));
   mrb_yield_argv(context->mrb, proc, 0, NULL);
+  free(req);
 }
 
 static mrb_value
@@ -225,6 +226,7 @@ _uv_write_cb(uv_write_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "write_cb"));
   mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+  free(req);
 }
 
 static mrb_value
@@ -279,6 +281,7 @@ _uv_connect_cb(uv_connect_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "connect_cb"));
   mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+  free(req);
 }
 
 static mrb_value
@@ -839,6 +842,7 @@ mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   struct RProc *b = NULL;
   uv_connection_cb connection_cb = _uv_connection_cb;
+  int backlog;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -849,8 +853,9 @@ mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "bi", &b, &arg_backlog);
   if (!b) connection_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
+  backlog = mrb_fixnum(arg_backlog);
 
-  if (uv_listen((uv_stream_t*) &context->uv.tcp, mrb_fixnum(arg_backlog), connection_cb) != 0) {
+  if (uv_listen((uv_stream_t*) &context->uv.tcp, backlog, connection_cb) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
@@ -1061,6 +1066,7 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "udp_send_cb"));
   mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+  free(req);
 }
 
 static mrb_value
