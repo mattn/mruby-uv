@@ -18,6 +18,7 @@ typedef struct {
      uv_pipe_t pipe;
      uv_idle_t idle;
      uv_timer_t timer;
+     uv_async_t async;
      uv_loop_t loop;
      uv_handle_t handle;
      uv_stream_t stream;
@@ -60,6 +61,7 @@ static struct RClass *_class_uv;
 static struct RClass *_class_uv_loop;
 static struct RClass *_class_uv_timer;
 static struct RClass *_class_uv_idle;
+static struct RClass *_class_uv_async;
 static struct RClass *_class_uv_tcp;
 static struct RClass *_class_uv_udp;
 static struct RClass *_class_uv_pipe;
@@ -580,6 +582,77 @@ mrb_uv_idle_stop(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_idle_stop(&context->uv.idle) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+  }
+  return mrb_nil_value();
+}
+
+/*********************************************************
+ * Async
+ *********************************************************/
+static void
+_uv_async_cb(uv_async_t* async, int status)
+{
+  mrb_value proc;
+  mrb_uv_context* context = (mrb_uv_context*) async->data;
+  proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "async_cb"));
+  mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+}
+
+static mrb_value
+mrb_uv_async_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_loop;
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  mrb_uv_context* loop_context = NULL;
+  uv_loop_t* loop;
+  struct RProc *b = NULL;
+  uv_async_cb async_cb = _uv_async_cb;
+
+  mrb_get_args(mrb, "bo", &b, &arg_loop);
+  if (b == NULL) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+  if (!mrb_nil_p(arg_loop)) {
+    if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+    }
+    value_context = mrb_iv_get(mrb, arg_loop, mrb_intern(mrb, "context"));
+    Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+    if (!loop_context) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+    }
+    loop = &loop_context->uv.loop;
+  } else {
+    loop = uv_default_loop();
+  }
+
+  context = uv_context_alloc(mrb, self, sizeof(uv_async_t));
+  context->loop = loop;
+  if (uv_async_init(loop, &context->uv.async, async_cb) != 0) {
+    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(loop)));
+  }
+  context->uv.async.data = context;
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_context_type, (void*) context)));
+  return self;
+}
+
+static mrb_value
+mrb_uv_async_send(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  if (uv_async_send(&context->uv.async) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
@@ -1273,6 +1346,12 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_idle, "close", mrb_uv_close, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_idle, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_idle, "data", mrb_uv_data_get, ARGS_NONE());
+
+  _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Async", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_async_init, ARGS_OPT(2));
+  mrb_define_method(mrb, _class_uv_async, "send", mrb_uv_async_send, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_async, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_async, "data", mrb_uv_data_get, ARGS_NONE());
 
   _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
   mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(2));
