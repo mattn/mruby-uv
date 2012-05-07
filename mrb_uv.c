@@ -135,7 +135,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   struct RProc *b = NULL;
   uv_shutdown_cb shutdown_cb = _uv_shutdown_cb;
-  static uv_shutdown_t req = {0};
+  uv_shutdown_t *req;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -147,7 +147,9 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   if (!b) shutdown_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
-  uv_shutdown(&req, &context->uv.stream, shutdown_cb);
+  req = (uv_shutdown_t*) malloc(sizeof(uv_shutdown_t));
+  memset(req, 0, sizeof(uv_shutdown_t));
+  uv_shutdown(req, &context->uv.stream, shutdown_cb);
   return mrb_nil_value();
 }
 
@@ -230,8 +232,8 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   struct RProc *b = NULL;
   uv_write_cb write_cb = _uv_write_cb;
-  static uv_write_t req = {0};
-  static uv_buf_t buf;
+  uv_write_t *req;
+  uv_buf_t buf;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -247,7 +249,9 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_CAPA(arg_data));
-  if (uv_write(&req, &context->uv.stream, &buf, 1, write_cb) != 0) {
+  req = (uv_write_t*) malloc(sizeof(uv_write_t));
+  memset(req, 0, sizeof(uv_write_t));
+  if (uv_write(req, &context->uv.stream, &buf, 1, write_cb) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
@@ -758,7 +762,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   struct RProc *b = NULL;
   uv_connect_cb connect_cb = _uv_connect_cb;
-  static uv_connect_t req;
+  uv_connect_t *req;
   struct sockaddr_in* addr = NULL;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -780,7 +784,9 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   if (!b) connect_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
-  if (uv_tcp_connect(&req, &context->uv.tcp, *addr, connect_cb) != 0) {
+  req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  memset(req, 0, sizeof(uv_connect_t));
+  if (uv_tcp_connect(req, &context->uv.tcp, *addr, connect_cb) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
@@ -1057,8 +1063,8 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   struct sockaddr_in* addr = NULL;
   struct RProc *b = NULL;
   uv_udp_send_cb udp_send_cb = _uv_udp_send_cb;
-  static uv_udp_send_t req = {0};
-  static uv_buf_t buf;
+  uv_udp_send_t *req;
+  uv_buf_t buf;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -1080,7 +1086,9 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_send_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_CAPA(arg_data));
-  if (uv_udp_send(&req, &context->uv.udp, &buf, 1, *addr, udp_send_cb) != 0) {
+  req = (uv_udp_send_t*) malloc(sizeof(uv_udp_send_t));
+  memset(req, 0, sizeof(uv_udp_send_t));
+  if (uv_udp_send(req, &context->uv.udp, &buf, 1, *addr, udp_send_cb) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
@@ -1203,7 +1211,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   struct RProc *b = NULL;
   uv_connect_cb connect_cb = _uv_connect_cb;
-  static uv_connect_t req;
+  uv_connect_t *req;
   char* name = NULL;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -1221,7 +1229,9 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   if (!b) connect_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
-  uv_pipe_connect(&req, &context->uv.pipe, name, connect_cb);
+  req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  memset(req, 0, sizeof(uv_connect_t));
+  uv_pipe_connect(req, &context->uv.pipe, name, connect_cb);
   return mrb_nil_value();
 }
 
