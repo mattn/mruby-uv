@@ -40,7 +40,7 @@ uv_context_alloc(mrb_state* mrb, mrb_value instance, size_t size)
 static void
 uv_context_free(mrb_state *mrb, void *p)
 {
-  mrb_free(mrb, p);
+  if (p) mrb_free(mrb, p);
 }
 
 static const struct mrb_data_type uv_context_type = {
@@ -50,7 +50,7 @@ static const struct mrb_data_type uv_context_type = {
 static void
 uv_ip4addr_free(mrb_state *mrb, void *p)
 {
-  mrb_free(mrb, p);
+  if (p) mrb_free(mrb, p);
 }
 
 static const struct mrb_data_type uv_ip4addr_type = {
