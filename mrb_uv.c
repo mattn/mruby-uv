@@ -766,6 +766,101 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   return c;
 }
 
+/*
+static mrb_value
+mrb_uv_tcp_simultaneous_accepts_get(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, mrb_intern(mrb, "simultaneous_accepts"));
+}
+*/
+
+static mrb_value
+mrb_uv_tcp_simultaneous_accepts_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_simultaneous_accepts;
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  int simultaneous_accepts;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  mrb_get_args(mrb, "i", &arg_simultaneous_accepts);
+  simultaneous_accepts = mrb_fixnum(arg_simultaneous_accepts);
+  /*
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "simultaneous_accepts"), mrb_fixnum_value(simultaneous_accepts));
+  */
+  uv_tcp_simultaneous_accepts(&context->uv.tcp, simultaneous_accepts);
+  return mrb_nil_value();
+}
+
+/*
+static mrb_value
+mrb_uv_tcp_keepalive_get(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, mrb_intern(mrb, "keepalive"));
+}
+*/
+
+static mrb_value
+mrb_uv_tcp_keepalive_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_keepalive, arg_delay;
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  int keepalive, delay;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  mrb_get_args(mrb, "ii", &arg_keepalive, &arg_delay);
+  keepalive = mrb_fixnum(arg_keepalive);
+  delay = mrb_fixnum(arg_delay);
+  /*
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "keepalive"), mrb_fixnum_value(keepalive));
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "delay"), mrb_fixnum_value(delay));
+  */
+  uv_tcp_keepalive(&context->uv.tcp, keepalive, delay);
+  return mrb_nil_value();
+}
+
+/*
+static mrb_value
+mrb_uv_tcp_nodelay_get(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, mrb_intern(mrb, "nodelay"));
+}
+*/
+
+static mrb_value
+mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_nodelay;
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  int nodelay;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  mrb_get_args(mrb, "i", &arg_nodelay);
+  nodelay = mrb_fixnum(arg_nodelay);
+  /*
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "nodelay"), mrb_fixnum_value(nodelay));
+  */
+  uv_tcp_nodelay(&context->uv.tcp, nodelay);
+  return mrb_nil_value();
+}
+
 /*********************************************************
  * UDP
  *********************************************************/
@@ -1161,6 +1256,12 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "listen", mrb_uv_tcp_listen, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "accept", mrb_uv_tcp_accept, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts=", mrb_uv_tcp_simultaneous_accepts_set, ARGS_REQ(1));
+  //mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts", mrb_uv_tcp_simultaneous_accepts_get, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "keepalive=", mrb_uv_tcp_keepalive_set, ARGS_REQ(1));
+  //mrb_define_method(mrb, _class_uv_tcp, "keepalive", mrb_uv_tcp_keepalive_get, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "nodelay=", mrb_uv_tcp_nodelay_set, ARGS_REQ(1));
+  //mrb_define_method(mrb, _class_uv_tcp, "nodelay", mrb_uv_tcp_nodelay_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "data", mrb_uv_data_get, ARGS_NONE());
 
