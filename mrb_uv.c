@@ -29,7 +29,7 @@ typedef struct {
 static mrb_uv_context*
 uv_context_alloc(mrb_state* mrb, mrb_value instance, size_t size)
 {
-  mrb_uv_context* context = (mrb_uv_context*) malloc(sizeof(mrb_uv_context));
+  mrb_uv_context* context = (mrb_uv_context*) mrb_malloc(mrb, sizeof(mrb_uv_context));
   memset(context, 0, sizeof(mrb_uv_context));
   context->loop = uv_default_loop();
   context->mrb = mrb;
@@ -40,7 +40,7 @@ uv_context_alloc(mrb_state* mrb, mrb_value instance, size_t size)
 static void
 uv_context_free(mrb_state *mrb, void *p)
 {
-  if (p) free(p);
+  if (p) mrb_free(mrb, p);
 }
 
 static const struct mrb_data_type uv_context_type = {
@@ -50,7 +50,7 @@ static const struct mrb_data_type uv_context_type = {
 static void
 uv_ip4addr_free(mrb_state *mrb, void *p)
 {
-  if (p) free(p);
+  if (p) mrb_free(mrb, p);
 }
 
 static const struct mrb_data_type uv_ip4addr_type = {
@@ -126,7 +126,7 @@ _uv_shutdown_cb(uv_shutdown_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "shutdown_cb"));
   mrb_yield_argv(context->mrb, proc, 0, NULL);
-  free(req);
+  mrb_free(context->mrb, req);
 }
 
 static mrb_value
@@ -148,7 +148,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   if (!b) shutdown_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
-  req = (uv_shutdown_t*) malloc(sizeof(uv_shutdown_t));
+  req = (uv_shutdown_t*) mrb_malloc(mrb, sizeof(uv_shutdown_t));
   if (!req) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
   }
@@ -160,7 +160,8 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
 static uv_buf_t
 _uv_alloc_cb(uv_handle_t* handle, size_t suggested_size)
 {
-  return uv_buf_init(malloc(suggested_size), suggested_size);
+  mrb_uv_context* context = (mrb_uv_context*) handle->data;
+  return uv_buf_init(mrb_malloc(context->mrb, suggested_size), suggested_size);
 }
 
 static void
@@ -225,9 +226,11 @@ _uv_write_cb(uv_write_t* req, int status)
 {
   mrb_value proc;
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
+  if (!uv_is_active(&context->uv.handle))
+    return;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "write_cb"));
   mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
-  free(req);
+  mrb_free(context->mrb, req);
 }
 
 static mrb_value
@@ -255,7 +258,7 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_CAPA(arg_data));
-  req = (uv_write_t*) malloc(sizeof(uv_write_t));
+  req = (uv_write_t*) mrb_malloc(mrb, sizeof(uv_write_t));
   if (!req) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
   }
@@ -282,7 +285,7 @@ _uv_connect_cb(uv_connect_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "connect_cb"));
   mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
-  free(req);
+  mrb_free(context->mrb, req);
 }
 
 static mrb_value
@@ -698,7 +701,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "oi", &arg_host, &arg_port);
   if (!mrb_nil_p(arg_host) && !mrb_nil_p(arg_port)) {
     vaddr = uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port));
-    addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
+    addr = (struct sockaddr_in*) mrb_malloc(mrb, sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(vaddr));
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -794,7 +797,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   if (!b) connect_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
-  req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  req = (uv_connect_t*) mrb_malloc(mrb, sizeof(uv_connect_t));
   if (!req) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
   }
@@ -888,6 +891,8 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   if (uv_accept((uv_stream_t*) &context->uv.tcp, (uv_stream_t*) &new_context->uv.tcp) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
+
+  mrb_iv_set(mrb, c, mrb_intern(mrb, "parent"), self);
 
   return c;
 }
@@ -1067,7 +1072,7 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "udp_send_cb"));
   mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
-  free(req);
+  mrb_free(context->mrb, req);
 }
 
 static mrb_value
@@ -1102,7 +1107,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_send_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_CAPA(arg_data));
-  req = (uv_udp_send_t*) malloc(sizeof(uv_udp_send_t));
+  req = (uv_udp_send_t*) mrb_malloc(mrb, sizeof(uv_udp_send_t));
   if (!req) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
   }
@@ -1248,7 +1253,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   if (!b) connect_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
-  req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  req = (uv_connect_t*) mrb_malloc(mrb, sizeof(uv_connect_t));
   if (!req) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
   }
