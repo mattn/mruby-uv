@@ -40,7 +40,8 @@ uv_context_alloc(mrb_state* mrb, mrb_value instance, size_t size)
 static void
 uv_context_free(mrb_state *mrb, void *p)
 {
-  if (p) mrb_free(mrb, p);
+  ((mrb_uv_context*) p)->mrb = NULL;
+  mrb_free(mrb, p);
 }
 
 static const struct mrb_data_type uv_context_type = {
@@ -50,7 +51,7 @@ static const struct mrb_data_type uv_context_type = {
 static void
 uv_ip4addr_free(mrb_state *mrb, void *p)
 {
-  if (p) mrb_free(mrb, p);
+  mrb_free(mrb, p);
 }
 
 static const struct mrb_data_type uv_ip4addr_type = {
@@ -891,8 +892,6 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   if (uv_accept((uv_stream_t*) &context->uv.tcp, (uv_stream_t*) &new_context->uv.tcp) != 0) {
     mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-
-  mrb_iv_set(mrb, c, mrb_intern(mrb, "parent"), self);
 
   return c;
 }
