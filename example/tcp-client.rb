@@ -1,8 +1,8 @@
 require 'UV'
 c = UV::TCP.new()
-c.connect(UV.ip4_addr('127.0.0.1', 8888)) {|x|
+c.connect(UV.ip4_addr('127.0.0.1', 8888)) {|c, x|
   if x == 0
-    c.read_start {|b|
+    c.read_start {|c, b|
       p b.to_s
     }
   else

@@ -1,7 +1,7 @@
 require 'UV'
 t = UV::Timer.new()
 c = 3
-t.start(1000, 1000) {|x|
+t.start(1000, 1000) {|t, x|
   puts c
   c -= 1
   if c < 0

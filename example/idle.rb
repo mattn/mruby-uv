@@ -1,6 +1,6 @@
 require 'UV'
 i = UV::Idle.new()
-i.start {|x|
+i.start {|i, x|
   puts "idle"
 }
 UV.run()

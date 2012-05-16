@@ -95,7 +95,7 @@ _uv_close_cb(uv_handle_t* handle)
   mrb_value proc;
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "close_cb"));
-  mrb_yield_argv(context->mrb, proc, 0, NULL);
+  mrb_yield(context->mrb, proc, context->instance);
 }
 
 static mrb_value
@@ -124,9 +124,12 @@ static void
 _uv_shutdown_cb(uv_shutdown_t* req, int status)
 {
   mrb_value proc;
+  mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "shutdown_cb"));
-  mrb_yield_argv(context->mrb, proc, 0, NULL);
+  args[0] = context->instance;
+  args[1] = mrb_fixnum_value(status);
+  mrb_yield_argv(context->mrb, proc, 2, args);
   mrb_free(context->mrb, req);
 }
 
@@ -174,9 +177,12 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   if (!uv_is_active(&context->uv.handle))
     return;
   if (nread == -1) {
-    mrb_yield(context->mrb, proc, mrb_nil_value());
+    mrb_yield(context->mrb, proc, context->instance);
   } else {
-    mrb_yield(context->mrb, proc, mrb_str_new(context->mrb, buf.base, nread));
+    mrb_value args[2];
+    args[0] = context->instance;
+    args[1] = mrb_str_new(context->mrb, buf.base, nread);
+    mrb_yield_argv(context->mrb, proc, 2, args);
   }
 }
 
@@ -226,11 +232,14 @@ static void
 _uv_write_cb(uv_write_t* req, int status)
 {
   mrb_value proc;
+  mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   if (!uv_is_active(&context->uv.handle))
     return;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "write_cb"));
-  mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+  args[0] = context->instance;
+  args[1] = mrb_fixnum_value(status);
+  mrb_yield_argv(context->mrb, proc, 2, args);
   mrb_free(context->mrb, req);
 }
 
@@ -274,18 +283,24 @@ static void
 _uv_connection_cb(uv_stream_t* handle, int status)
 {
   mrb_value proc;
+  mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "connection_cb"));
-  mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+  args[0] = context->instance;
+  args[1] = mrb_fixnum_value(status);
+  mrb_yield_argv(context->mrb, proc, 2, args);
 }
 
 static void
 _uv_connect_cb(uv_connect_t* req, int status)
 {
   mrb_value proc;
+  mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "connect_cb"));
-  mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+  args[0] = context->instance;
+  args[1] = mrb_fixnum_value(status);
+  mrb_yield_argv(context->mrb, proc, 2, args);
   mrb_free(context->mrb, req);
 }
 
@@ -466,9 +481,12 @@ static void
 _uv_timer_cb(uv_timer_t* timer, int status)
 {
   mrb_value proc;
+  mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) timer->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "timer_cb"));
-  mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+  args[0] = context->instance;
+  args[1] = mrb_fixnum_value(status);
+  mrb_yield_argv(context->mrb, proc, 2, args);
 }
 
 static mrb_value
@@ -558,9 +576,12 @@ static void
 _uv_idle_cb(uv_idle_t* idle, int status)
 {
   mrb_value proc;
+  mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) idle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "idle_cb"));
-  mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+  args[0] = context->instance;
+  args[1] = mrb_fixnum_value(status);
+  mrb_yield_argv(context->mrb, proc, 2, args);
 }
 
 static mrb_value
@@ -612,9 +633,12 @@ static void
 _uv_async_cb(uv_async_t* async, int status)
 {
   mrb_value proc;
+  mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) async->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "async_cb"));
-  mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+  args[0] = context->instance;
+  args[1] = mrb_fixnum_value(status);
+  mrb_yield_argv(context->mrb, proc, 2, args);
 }
 
 static mrb_value
@@ -1068,9 +1092,12 @@ static void
 _uv_udp_send_cb(uv_udp_send_t* req, int status)
 {
   mrb_value proc;
+  mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "udp_send_cb"));
-  mrb_yield(context->mrb, proc, mrb_fixnum_value(status));
+  args[0] = context->instance;
+  args[1] = mrb_fixnum_value(status);
+  mrb_yield_argv(context->mrb, proc, 2, args);
   mrb_free(context->mrb, req);
 }
 
@@ -1123,22 +1150,22 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
   mrb_value proc;
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "udp_recv_cb"));
-  mrb_value args[3];
+  mrb_value args[4];
+  args[0] = context->instance;
   if (nread != -1) {
     mrb_value c;
     c = mrb_class_new_instance(context->mrb, 0, NULL, _class_uv_ip4addr);
     mrb_iv_set(context->mrb, c, mrb_intern(context->mrb, "context"), mrb_obj_value(
       Data_Wrap_Struct(context->mrb, context->mrb->object_class,
       &uv_ip4addr_type, (void*) addr)));
-    args[0] = mrb_str_new(context->mrb, buf.base, nread);
-    args[1] = c;
-    args[2] = mrb_fixnum_value(flags);
+    args[1] = mrb_str_new(context->mrb, buf.base, nread);
+    args[2] = c;
   } else {
-    args[0] = mrb_nil_value();
     args[1] = mrb_nil_value();
-    args[2] = mrb_fixnum_value(flags);
+    args[2] = mrb_nil_value();
   }
-  mrb_yield_argv(context->mrb, proc, 3, args);
+  args[3] = mrb_fixnum_value(flags);
+  mrb_yield_argv(context->mrb, proc, 4, args);
 }
 
 static mrb_value
