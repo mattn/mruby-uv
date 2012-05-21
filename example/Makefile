@@ -7,7 +7,7 @@ MRUBY_LIB := $(MRUBY_ROOT)/lib/libmruby.a
 LDFLAGS = $(MRUBY_LIB) ../libmrb_uv.a -luv -lpthread -ldl -lrt -lm
 endif
 
-INCLUDES = -I$(MRUBY_ROOT)/include -I$(MRUBY_ROOT)/src -I..
+INCLUDES = -I$(MRUBY_ROOT)/include -I..
 CFLAGS = $(INCLUDES) -O3 -g -Wall -Werror-implicit-function-declaration
 
 CC = gcc
