@@ -53,7 +53,7 @@ int main(int argc, char **argv)
   mrb_state* mrb = mrb_open();
   mrb_uv_init(mrb);
 
-  struct mrb_parser_state* st = mrb_parse_string(mrb, code);
+  struct mrb_parser_state* st = mrb_parse_string(mrb, code, NULL);
   free(code);
 
   int n = mrb_generate_code(mrb, st->tree);
