@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <memory.h>
 #include <mruby.h>
 #include <mruby/proc.h>
@@ -75,7 +76,7 @@ static mrb_value
 mrb_uv_run(mrb_state *mrb, mrb_value self)
 {
   if (uv_run(uv_default_loop()) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
   }
   return mrb_nil_value();
 }
@@ -84,7 +85,7 @@ static mrb_value
 mrb_uv_run_once(mrb_state *mrb, mrb_value self)
 {
   if (uv_run_once(uv_default_loop()) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
   }
   return mrb_nil_value();
 }
@@ -154,7 +155,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
 
   req = (uv_shutdown_t*) mrb_malloc(mrb, sizeof(uv_shutdown_t));
   if (!req) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
+    mrb_raise(mrb, E_RUNTIME_ERROR, "allocation failure");
   }
   memset(req, 0, sizeof(uv_shutdown_t));
   uv_shutdown(req, &context->uv.stream, shutdown_cb);
@@ -205,7 +206,7 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "read_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   if (uv_read_start(&context->uv.stream, _uv_alloc_cb, read_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -223,7 +224,7 @@ mrb_uv_read_stop(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_read_stop(&context->uv.stream) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -270,11 +271,11 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_CAPA(arg_data));
   req = (uv_write_t*) mrb_malloc(mrb, sizeof(uv_write_t));
   if (!req) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
+    mrb_raise(mrb, E_RUNTIME_ERROR, "allocation failure");
   }
   memset(req, 0, sizeof(uv_write_t));
   if (uv_write(req, &context->uv.stream, &buf, 1, write_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -366,7 +367,7 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_run(&context->uv.loop) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(&context->uv.loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(&context->uv.loop)));
   }
   return mrb_nil_value();
 }
@@ -384,7 +385,7 @@ mrb_uv_loop_run_once(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_run_once(&context->uv.loop) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(&context->uv.loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(&context->uv.loop)));
   }
   return mrb_nil_value();
 }
@@ -468,7 +469,7 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
   context = uv_context_alloc(mrb, self, sizeof(uv_timer_t));
   context->loop = loop;
   if (uv_timer_init(loop, &context->uv.timer) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
   context->uv.timer.data = context;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -510,7 +511,7 @@ mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
 
   if (uv_timer_start(&context->uv.timer, timer_cb,
       mrb_fixnum(arg_timeout), mrb_fixnum(arg_repeat)) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -528,7 +529,7 @@ mrb_uv_timer_stop(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_timer_stop(&context->uv.timer) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -563,7 +564,7 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
   context = uv_context_alloc(mrb, self, sizeof(uv_idle_t));
   context->loop = loop;
   if (uv_idle_init(loop, &context->uv.idle) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
   context->uv.idle.data = context;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -603,7 +604,7 @@ mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "idle_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   if (uv_idle_start(&context->uv.idle, idle_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -621,7 +622,7 @@ mrb_uv_idle_stop(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_idle_stop(&context->uv.idle) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -673,7 +674,7 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   context = uv_context_alloc(mrb, self, sizeof(uv_async_t));
   context->loop = loop;
   if (uv_async_init(loop, &context->uv.async, async_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
   context->uv.async.data = context;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -695,7 +696,7 @@ mrb_uv_async_send(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_async_send(&context->uv.async) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -748,7 +749,7 @@ mrb_uv_ip4addr_to_s(mrb_state *mrb, mrb_value self)
     return mrb_nil_value();
   }
   if (uv_ip4_name(addr, name, sizeof(name)) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
   }
   return mrb_str_new(mrb, name, strlen(name));
 }
@@ -783,7 +784,7 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
   context = uv_context_alloc(mrb, self, sizeof(uv_tcp_t));
   context->loop = loop;
   if (uv_tcp_init(loop, &context->uv.tcp) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
   context->uv.tcp.data = context;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -824,11 +825,11 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
 
   req = (uv_connect_t*) mrb_malloc(mrb, sizeof(uv_connect_t));
   if (!req) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
+    mrb_raise(mrb, E_RUNTIME_ERROR, "allocation failure");
   }
   memset(req, 0, sizeof(uv_connect_t));
   if (uv_tcp_connect(req, &context->uv.tcp, *addr, connect_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -858,7 +859,7 @@ mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_tcp_bind(&context->uv.tcp, *addr) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -885,7 +886,7 @@ mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
   backlog = mrb_fixnum(arg_backlog);
 
   if (uv_listen((uv_stream_t*) &context->uv.tcp, backlog, connection_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -914,7 +915,7 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   new_context->loop = context->loop;
 
   if (uv_accept((uv_stream_t*) &context->uv.tcp, (uv_stream_t*) &new_context->uv.tcp) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
 
   return c;
@@ -1045,7 +1046,7 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
   context = uv_context_alloc(mrb, self, sizeof(uv_udp_t));
   context->loop = loop;
   if (uv_udp_init(loop, &context->uv.udp) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
   context->uv.udp.data = context;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -1083,7 +1084,7 @@ mrb_uv_udp_bind(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_udp_bind(&context->uv.udp, *addr, flags) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -1135,11 +1136,11 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_CAPA(arg_data));
   req = (uv_udp_send_t*) mrb_malloc(mrb, sizeof(uv_udp_send_t));
   if (!req) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
+    mrb_raise(mrb, E_RUNTIME_ERROR, "allocation failure");
   }
   memset(req, 0, sizeof(uv_udp_send_t));
   if (uv_udp_send(req, &context->uv.udp, &buf, 1, *addr, udp_send_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -1187,7 +1188,7 @@ mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_recv_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   if (uv_udp_recv_start(&context->uv.udp, _uv_alloc_cb, udp_recv_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -1205,7 +1206,7 @@ mrb_uv_udp_recv_stop(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_udp_recv_stop(&context->uv.udp) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -1244,7 +1245,7 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
   context = uv_context_alloc(mrb, self, sizeof(uv_pipe_t));
   context->loop = loop;
   if (uv_pipe_init(loop, &context->uv.pipe, ipc) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
   context->uv.pipe.data = context;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -1281,7 +1282,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
 
   req = (uv_connect_t*) mrb_malloc(mrb, sizeof(uv_connect_t));
   if (!req) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, "allocation failure");
+    mrb_raise(mrb, E_RUNTIME_ERROR, "allocation failure");
   }
   memset(req, 0, sizeof(uv_connect_t));
   uv_pipe_connect(req, &context->uv.pipe, name, connect_cb);
@@ -1309,7 +1310,7 @@ mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
   name = RSTRING_PTR(arg_name);
 
   if (uv_pipe_bind(&context->uv.pipe, name ? name : "") != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -1334,7 +1335,7 @@ mrb_uv_pipe_listen(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   if (uv_listen((uv_stream_t*) &context->uv.pipe, mrb_fixnum(arg_backlog), connection_cb) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
 }
@@ -1366,7 +1367,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
   new_context->loop = context->loop;
 
   if (uv_accept((uv_stream_t*) &context->uv.pipe, (uv_stream_t*) &new_context->uv.pipe) != 0) {
-    mrb_raise(mrb, E_SYSTEMCALL_ERROR, uv_strerror(uv_last_error(context->loop)));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
 
   return c;
