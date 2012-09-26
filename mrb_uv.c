@@ -21,6 +21,7 @@ typedef struct {
     uv_prepare_t prepare;
     uv_handle_t handle;
     uv_stream_t stream;
+    uv_mutex_t mutex;
   } any;
   mrb_value instance; /* callback */
   uv_loop_t* loop;
@@ -69,6 +70,8 @@ static struct RClass *_class_uv_tcp;
 static struct RClass *_class_uv_udp;
 static struct RClass *_class_uv_pipe;
 static struct RClass *_class_uv_ip4addr;
+static struct RClass *_class_uv_prepare;
+static struct RClass *_class_uv_mutex;
 
 /*********************************************************
  * main
@@ -762,6 +765,87 @@ mrb_uv_prepare_stop(mrb_state *mrb, mrb_value self)
   if (uv_prepare_stop(&context->any.prepare) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
+  return mrb_nil_value();
+}
+
+/*********************************************************
+ * Mutex
+ *********************************************************/
+static mrb_value
+mrb_uv_mutex_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_context* context = NULL;
+  context = uv_context_alloc(mrb, self);
+  context->loop = uv_default_loop();
+  if (uv_mutex_init(&context->any.mutex) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+  }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_context_type, (void*) context)));
+  return self;
+}
+
+static mrb_value
+mrb_uv_mutex_lock(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  uv_mutex_lock(&context->any.mutex);
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_mutex_unlock(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  uv_mutex_unlock(&context->any.mutex);
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_mutex_trylock(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  return mrb_fixnum_value(uv_mutex_trylock(&context->any.mutex));
+}
+
+static mrb_value
+mrb_uv_mutex_destroy(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  uv_mutex_destroy(&context->any.mutex);
   return mrb_nil_value();
 }
 
@@ -1492,12 +1576,12 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_async, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_async, "data", mrb_uv_data_get, ARGS_NONE());
 
-  _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Prepare", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_prepare_init, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_async, "start", mrb_uv_prepare_start, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_async, "stop", mrb_uv_prepare_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_async, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_async, "data", mrb_uv_data_get, ARGS_NONE());
+  _class_uv_prepare = mrb_define_class_under(mrb, _class_uv, "Prepare", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_prepare, "initialize", mrb_uv_prepare_init, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_prepare, "start", mrb_uv_prepare_start, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_prepare, "stop", mrb_uv_prepare_stop, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_prepare, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_prepare, "data", mrb_uv_data_get, ARGS_NONE());
 
   _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
   mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(2));
@@ -1546,6 +1630,15 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_pipe, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "data", mrb_uv_data_get, ARGS_NONE());
+
+  _class_uv_mutex = mrb_define_class_under(mrb, _class_uv, "Mutex", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_mutex, "initialize", mrb_uv_mutex_init, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_mutex, "lock", mrb_uv_mutex_lock, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_mutex, "trylock", mrb_uv_mutex_trylock, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_mutex, "unlock", mrb_uv_mutex_unlock, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_mutex, "destroy", mrb_uv_mutex_destroy, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_mutex, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_mutex, "data", mrb_uv_data_get, ARGS_NONE());
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */
