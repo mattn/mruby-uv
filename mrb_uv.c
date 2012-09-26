@@ -113,7 +113,7 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "b", &b);
+  mrb_get_args(mrb, "|&", &b);
   if (!b) close_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "close_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
@@ -149,7 +149,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "b", &b);
+  mrb_get_args(mrb, "|&", &b);
   if (!b) shutdown_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
@@ -201,7 +201,7 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "b", &b);
+  mrb_get_args(mrb, "&", &b);
   if (!b) read_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "read_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
@@ -247,7 +247,7 @@ _uv_write_cb(uv_write_t* req, int status)
 static mrb_value
 mrb_uv_write(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_data;
+  mrb_value arg_data = mrb_nil_value();
   mrb_value value_context;
   mrb_uv_context* context = NULL;
   struct RProc *b = NULL;
@@ -261,7 +261,7 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "bo", &b, &arg_data);
+  mrb_get_args(mrb, "|&o", &b, &arg_data);
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -444,13 +444,13 @@ mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_loop;
+  mrb_value arg_loop = mrb_nil_value();
   mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
 
-  mrb_get_args(mrb, "o", &arg_loop);
+  mrb_get_args(mrb, "|o", &arg_loop);
   if (!mrb_nil_p(arg_loop)) {
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -505,7 +505,7 @@ mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "bii", &b, &arg_timeout, &arg_repeat);
+  mrb_get_args(mrb, "&ii", &b, &arg_timeout, &arg_repeat);
   if (!b) timer_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "timer_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
@@ -540,13 +540,13 @@ mrb_uv_timer_stop(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_loop;
+  mrb_value arg_loop = mrb_nil_value();
   mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
 
-  mrb_get_args(mrb, "o", &arg_loop);
+  mrb_get_args(mrb, "|o", &arg_loop);
   if (!mrb_nil_p(arg_loop)) {
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -599,7 +599,7 @@ mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "b", &b);
+  mrb_get_args(mrb, "&", &b);
   if (!b) idle_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "idle_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
@@ -645,7 +645,7 @@ _uv_async_cb(uv_async_t* async, int status)
 static mrb_value
 mrb_uv_async_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_loop;
+  mrb_value arg_loop = mrb_nil_value();
   mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
@@ -653,7 +653,7 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   struct RProc *b = NULL;
   uv_async_cb async_cb = _uv_async_cb;
 
-  mrb_get_args(mrb, "bo", &b, &arg_loop);
+  mrb_get_args(mrb, "|&o", &b, &arg_loop);
   if (b == NULL) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -760,13 +760,13 @@ mrb_uv_ip4addr_to_s(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_loop;
+  mrb_value arg_loop = mrb_nil_value();
   mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
 
-  mrb_get_args(mrb, "o", &arg_loop);
+  mrb_get_args(mrb, "|o", &arg_loop);
   if (!mrb_nil_p(arg_loop)) {
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -810,7 +810,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "bo", &b, &arg_addr);
+  mrb_get_args(mrb, "&o", &b, &arg_addr);
   if (mrb_nil_p(arg_addr) || strcmp(mrb_obj_classname(mrb, arg_addr), "UV::Ip4Addr")) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -880,7 +880,7 @@ mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "bi", &b, &arg_backlog);
+  mrb_get_args(mrb, "&i", &b, &arg_backlog);
   if (!b) connection_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
   backlog = mrb_fixnum(arg_backlog);
@@ -1022,13 +1022,13 @@ mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_loop;
+  mrb_value arg_loop = mrb_nil_value();
   mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
 
-  mrb_get_args(mrb, "o", &arg_loop);
+  mrb_get_args(mrb, "|o", &arg_loop);
   if (!mrb_nil_p(arg_loop)) {
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1105,7 +1105,7 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
 static mrb_value
 mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_data, arg_addr;
+  mrb_value arg_data = mrb_nil_value(), arg_addr = mrb_nil_value();
   mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
   struct sockaddr_in* addr = NULL;
@@ -1120,7 +1120,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "boo", &b, &arg_data, &arg_addr);
+  mrb_get_args(mrb, "|&oo", &b, &arg_data, &arg_addr);
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1183,7 +1183,7 @@ mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "b", &b);
+  mrb_get_args(mrb, "&", &b);
   if (!b) udp_recv_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_recv_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
@@ -1217,14 +1217,14 @@ mrb_uv_udp_recv_stop(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_loop, arg_ipc;
+  mrb_value arg_loop = mrb_nil_value(), arg_ipc = mrb_nil_value();
   mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
   int ipc = 1;
 
-  mrb_get_args(mrb, "oi", &arg_loop, &arg_ipc);
+  mrb_get_args(mrb, "|oi", &arg_loop, &arg_ipc);
   if (!mrb_nil_p(arg_loop)) {
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1271,7 +1271,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "bo", &b, &arg_name);
+  mrb_get_args(mrb, "&o", &b, &arg_name);
   if (mrb_nil_p(arg_name) || mrb_type(arg_name) != MRB_TT_STRING) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1330,7 +1330,7 @@ mrb_uv_pipe_listen(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "bi", &b, &arg_backlog);
+  mrb_get_args(mrb, "&i", &b, &arg_backlog);
   if (!b) connection_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 

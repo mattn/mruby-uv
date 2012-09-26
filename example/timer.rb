@@ -1,4 +1,3 @@
-require 'UV'
 t = UV::Timer.new()
 c = 3
 t.start(1000, 1000) {|t, x|

@@ -1,4 +1,3 @@
-require 'UV'
 c = UV::Pipe.new()
 c.connect('/tmp/mrub-yuv') {|c, x|
   if x == 0

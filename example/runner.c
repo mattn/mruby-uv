@@ -6,60 +6,42 @@
 #include <mruby/proc.h>
 #include <mruby/data.h>
 #include <mruby/compile.h>
+#include <mruby/string.h>
 #include <mrb_uv.h>
 
-void print_usage()
+static void
+p(mrb_state *mrb, mrb_value obj)
 {
-  fprintf(stdout, "Usage: runner inputfile\n");
+  obj = mrb_funcall(mrb, obj, "inspect", 0);
+  fwrite(RSTRING_PTR(obj), RSTRING_LEN(obj), 1, stdout);
+  putc('\n', stdout);
 }
 
-int main(int argc, char **argv)
-{
-  if(argc != 2)
-  {
-    print_usage();
+int
+main(int argc, char **argv) {
+  if(argc != 2) {
+    fprintf(stdout, "Usage: runner inputfile\n");
     exit(1);
   }
 
   char *input_file = argv[1];
-
   FILE *fp = fopen(input_file, "r");
-  if(fp == NULL)
-  {
+  if(fp == NULL) {
     fprintf(stderr, "Error opening file: '%s' - %s\n", input_file, strerror(errno));
     exit(2);
   }
 
-  char *code = NULL;
-  char buffer[1024];
-  int code_size = 0;
-  do
-  {
-    int read_bytes = fread(buffer, sizeof(char), 1024, fp);
-    code = realloc(code, code_size + read_bytes);
-    memcpy(code+code_size, buffer, read_bytes);
-    code_size += read_bytes;
-  } while(!feof(fp));
-
-  code = realloc(code, code_size + 1);
-  code[code_size] = 0;
-
-  if(fclose(fp) != 0)
-  {
-    fprintf(stderr, "Error closing file: '%s' - %s\n", input_file, strerror(errno));
-    exit(3);
-  }
-
   mrb_state* mrb = mrb_open();
   mrb_uv_init(mrb);
-
-  struct mrb_parser_state* st = mrb_parse_string(mrb, code, NULL);
-  free(code);
-
-  int n = mrb_generate_code(mrb, st->tree);
-
-  mrb_pool_close(st->pool);
-  mrb_run(mrb, mrb_proc_new(mrb, mrb->irep[n]), mrb_nil_value());
-
+  mrbc_context *c = mrbc_context_new(mrb);
+  mrbc_filename(mrb, c, input_file);
+  mrb_value v = mrb_load_file_cxt(mrb, fp, c);
+  mrbc_context_free(mrb, c);
+  if (mrb->exc) {
+    if (!mrb_undef_p(v)) {
+      p(mrb, mrb_obj_value(mrb->exc));
+    }
+  }
+  fclose(fp);
   return 0;
 }

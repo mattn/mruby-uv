@@ -1,4 +1,3 @@
-require 'UV'
 l = UV::Loop.new()
 t = UV::Timer.new(l)
 i = 3
