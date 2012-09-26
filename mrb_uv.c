@@ -18,6 +18,7 @@ typedef struct {
     uv_idle_t idle;
     uv_timer_t timer;
     uv_async_t async;
+    uv_prepare_t prepare;
     uv_handle_t handle;
     uv_stream_t stream;
   } any;
@@ -621,11 +622,10 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   struct RProc *b = NULL;
   uv_async_cb async_cb = _uv_async_cb;
 
-  mrb_get_args(mrb, "|&o", &b, &arg_loop);
-  if (b == NULL) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-  }
-  if (!mrb_nil_p(arg_loop)) {
+  if (mrb_get_args(mrb, "&|o", &b, &arg_loop) == 1) {
+    mrb_value obj = mrb_funcall(mrb, arg_loop, "inspect", 0);
+    fwrite(RSTRING_PTR(obj), RSTRING_LEN(obj), 1, stdout);
+
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
@@ -638,6 +638,9 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   } else {
     loop = uv_default_loop();
   }
+
+  if (!b) async_cb = NULL;
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "async_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   context = uv_context_alloc(mrb, self);
   context->loop = loop;
@@ -664,6 +667,99 @@ mrb_uv_async_send(mrb_state *mrb, mrb_value self)
   }
 
   if (uv_async_send(&context->any.async) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
+  }
+  return mrb_nil_value();
+}
+
+/*********************************************************
+ * Prepare
+ *********************************************************/
+static void
+_uv_prepare_cb(uv_prepare_t* prepare, int status)
+{
+  mrb_value proc;
+  mrb_value args[2];
+  mrb_uv_context* context = (mrb_uv_context*) prepare->data;
+  proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "prepare_cb"));
+  args[0] = context->instance;
+  args[1] = mrb_fixnum_value(status);
+  mrb_yield_argv(context->mrb, proc, 2, args);
+}
+
+static mrb_value
+mrb_uv_prepare_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_loop = mrb_nil_value();
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  mrb_uv_context* loop_context = NULL;
+  uv_loop_t* loop;
+
+  mrb_get_args(mrb, "|o", &arg_loop);
+  if (!mrb_nil_p(arg_loop)) {
+    if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+    }
+    value_context = mrb_iv_get(mrb, arg_loop, mrb_intern(mrb, "context"));
+    Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+    if (!loop_context) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+    }
+    loop = loop_context->loop;
+  } else {
+    loop = uv_default_loop();
+  }
+
+  context = uv_context_alloc(mrb, self);
+  context->loop = loop;
+  if (uv_prepare_init(loop, &context->any.prepare) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
+  }
+  context->any.prepare.data = context;
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_context_type, (void*) context)));
+  return self;
+}
+
+static mrb_value
+mrb_uv_prepare_start(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  struct RProc *b = NULL;
+  uv_prepare_cb prepare_cb = _uv_prepare_cb;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  mrb_get_args(mrb, "&", &b);
+  if (!b) prepare_cb = NULL;
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "prepare_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
+
+  if (uv_prepare_start(&context->any.prepare, prepare_cb) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
+  }
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_prepare_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  if (uv_prepare_stop(&context->any.prepare) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
@@ -1391,8 +1487,15 @@ mrb_uv_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_idle, "data", mrb_uv_data_get, ARGS_NONE());
 
   _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Async", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_async_init, ARGS_OPT(2));
-  mrb_define_method(mrb, _class_uv_async, "send", mrb_uv_async_send, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_async_init, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_async, "send", mrb_uv_async_send, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_async, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_async, "data", mrb_uv_data_get, ARGS_NONE());
+
+  _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Prepare", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_prepare_init, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_async, "start", mrb_uv_prepare_start, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_async, "stop", mrb_uv_prepare_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_async, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_async, "data", mrb_uv_data_get, ARGS_NONE());
 
