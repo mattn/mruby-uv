@@ -31,7 +31,6 @@ typedef struct {
 static mrb_uv_context*
 uv_context_alloc(mrb_state* mrb, mrb_value instance)
 {
-  //mrb_uv_context* context = (mrb_uv_context*) mrb_malloc(mrb, sizeof(mrb_uv_context));
   mrb_uv_context* context = (mrb_uv_context*) malloc(sizeof(mrb_uv_context));
   memset(context, 0, sizeof(mrb_uv_context));
   context->loop = uv_default_loop();
@@ -44,7 +43,7 @@ static void
 uv_context_free(mrb_state *mrb, void *p)
 {
   ((mrb_uv_context*) p)->mrb = NULL;
-  mrb_free(mrb, p);
+  free(p);
 }
 
 static const struct mrb_data_type uv_context_type = {
@@ -79,19 +78,13 @@ static struct RClass *_class_uv_mutex;
 static mrb_value
 mrb_uv_run(mrb_state *mrb, mrb_value self)
 {
-  if (uv_run(uv_default_loop()) != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
-  }
-  return mrb_nil_value();
+  return mrb_fixnum_value(uv_run(uv_default_loop()));
 }
 
 static mrb_value
 mrb_uv_run_once(mrb_state *mrb, mrb_value self)
 {
-  if (uv_run_once(uv_default_loop()) != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
-  }
-  return mrb_nil_value();
+  return mrb_fixnum_value(uv_run_once(uv_default_loop()));
 }
 
 static void
