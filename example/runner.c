@@ -10,8 +10,7 @@
 #include <mrb_uv.h>
 
 static void
-p(mrb_state *mrb, mrb_value obj)
-{
+p(mrb_state *mrb, mrb_value obj) {
   obj = mrb_funcall(mrb, obj, "inspect", 0);
   fwrite(RSTRING_PTR(obj), RSTRING_LEN(obj), 1, stdout);
   putc('\n', stdout);
