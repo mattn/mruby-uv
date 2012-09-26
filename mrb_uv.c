@@ -1127,7 +1127,7 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
     mrb_value c;
     mrb_value addr_args[2];
     if (uv_ip4_name((struct sockaddr_in*) addr, name, sizeof(name)) != 0) {
-      mrb_raise(NULL, E_ARGUMENT_ERROR, "invalid argument");
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
     addr_args[0] = mrb_str_new(mrb, name, strlen(name));
     addr_args[1] = mrb_fixnum_value(ntohs(((struct sockaddr_in*)addr)->sin_port));
