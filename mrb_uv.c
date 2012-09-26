@@ -1026,7 +1026,7 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_udp_bind(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_addr, arg_flags;
+  mrb_value arg_addr = mrb_nil_value(), arg_flags = mrb_nil_value();
   mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
   struct sockaddr_in* addr = NULL;
@@ -1038,7 +1038,7 @@ mrb_uv_udp_bind(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "oi", &arg_addr, &arg_flags);
+  mrb_get_args(mrb, "o|i", &arg_addr, &arg_flags);
   if (mrb_nil_p(arg_addr) || strcmp(mrb_obj_classname(mrb, arg_addr), "UV::Ip4Addr")) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1101,7 +1101,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   if (!b) udp_send_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_send_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
-  buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_CAPA(arg_data));
+  buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
   req = (uv_udp_send_t*) mrb_malloc(mrb, sizeof(uv_udp_send_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "allocation failure");
@@ -1118,23 +1118,31 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
 {
   mrb_value proc;
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
-  proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "udp_recv_cb"));
+  mrb_state* mrb = context->mrb;
+  proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "udp_recv_cb"));
   mrb_value args[4];
   args[0] = context->instance;
   if (nread != -1) {
+    char name[256];
     mrb_value c;
-    c = mrb_class_new_instance(context->mrb, 0, NULL, _class_uv_ip4addr);
-    mrb_iv_set(context->mrb, c, mrb_intern(context->mrb, "context"), mrb_obj_value(
-      Data_Wrap_Struct(context->mrb, context->mrb->object_class,
+    mrb_value addr_args[2];
+    if (uv_ip4_name((struct sockaddr_in*) addr, name, sizeof(name)) != 0) {
+      mrb_raise(NULL, E_ARGUMENT_ERROR, "invalid argument");
+    }
+    addr_args[0] = mrb_str_new(mrb, name, strlen(name));
+    addr_args[1] = mrb_fixnum_value(ntohs(((struct sockaddr_in*)addr)->sin_port));
+    c = mrb_class_new_instance(mrb, 2, addr_args, _class_uv_ip4addr);
+    mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
+      Data_Wrap_Struct(mrb, mrb->object_class,
       &uv_ip4addr_type, (void*) addr)));
-    args[1] = mrb_str_new(context->mrb, buf.base, nread);
+    args[1] = mrb_str_new(mrb, buf.base, nread);
     args[2] = c;
   } else {
     args[1] = mrb_nil_value();
     args[2] = mrb_nil_value();
   }
   args[3] = mrb_fixnum_value(flags);
-  mrb_yield_argv(context->mrb, proc, 4, args);
+  mrb_yield_argv(mrb, proc, 4, args);
 }
 
 static mrb_value
