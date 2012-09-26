@@ -1194,15 +1194,18 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "|oi", &arg_loop, &arg_ipc);
   if (!mrb_nil_p(arg_loop)) {
-    if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
+    if (!strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+      value_context = mrb_iv_get(mrb, arg_loop, mrb_intern(mrb, "context"));
+      Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+      if (!loop_context) {
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+      }
+      loop = loop_context->loop;
+    } else {
+      loop = uv_default_loop();
+      arg_ipc = arg_loop;
     }
-    value_context = mrb_iv_get(mrb, arg_loop, mrb_intern(mrb, "context"));
-    Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
-    if (!loop_context) {
-      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-    }
-    loop = loop_context->loop;
   } else {
     loop = uv_default_loop();
   }
@@ -1321,10 +1324,12 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
+  mrb_value args[1];
+  args[0] = mrb_fixnum_value(0);
 #if 0
   c = mrb_class_new_instance(mrb, 0, NULL, mrb_class_get(mrb, "UV::Pipe"));
 #else
-  c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_pipe);
+  c = mrb_class_new_instance(mrb, 1, args, _class_uv_pipe);
 #endif
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
