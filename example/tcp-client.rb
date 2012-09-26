@@ -8,4 +8,4 @@ c.connect(UV.ip4_addr('127.0.0.1', 8888)) {|c, x|
     c.close()
   end
 }
-UV.run()
+UV::run()

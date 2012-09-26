@@ -8,4 +8,4 @@ t.start(1000, 1000) {|t, x|
     t.stop()
   end
 }
-UV.run()
+UV::run()
