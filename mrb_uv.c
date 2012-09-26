@@ -332,6 +332,9 @@ mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
   c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_loop);
 #endif
   context = uv_context_alloc(mrb, c);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't memory alloc");
+  }
   context->loop = uv_default_loop();
   mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
@@ -343,6 +346,9 @@ static mrb_value
 mrb_uv_loop_init(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_context* context = uv_context_alloc(mrb, self);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't memory alloc");
+  }
   context->loop = uv_loop_new();
   context->loop->data = context;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -432,6 +438,9 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
   }
 
   context = uv_context_alloc(mrb, self);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't memory alloc");
+  }
   context->loop = loop;
   if (uv_timer_init(loop, &context->any.timer) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
@@ -527,6 +536,9 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
   }
 
   context = uv_context_alloc(mrb, self);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't memory alloc");
+  }
   context->loop = loop;
   if (uv_idle_init(loop, &context->any.idle) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
@@ -639,6 +651,9 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "async_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   context = uv_context_alloc(mrb, self);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't memory alloc");
+  }
   context->loop = loop;
   if (uv_async_init(loop, &context->any.async, async_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
@@ -708,6 +723,9 @@ mrb_uv_prepare_init(mrb_state *mrb, mrb_value self)
   }
 
   context = uv_context_alloc(mrb, self);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't memory alloc");
+  }
   context->loop = loop;
   if (uv_prepare_init(loop, &context->any.prepare) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
@@ -769,6 +787,9 @@ mrb_uv_mutex_init(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_context* context = NULL;
   context = uv_context_alloc(mrb, self);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't memory alloc");
+  }
   context->loop = uv_default_loop();
   if (uv_mutex_init(&context->any.mutex) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
@@ -923,6 +944,9 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
   }
 
   context = uv_context_alloc(mrb, self);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't memory alloc");
+  }
   context->loop = loop;
   if (uv_tcp_init(loop, &(context->any.tcp)) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
@@ -1185,6 +1209,9 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
   }
 
   context = uv_context_alloc(mrb, self);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't memory alloc");
+  }
   context->loop = loop;
   if (uv_udp_init(loop, &context->any.udp) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
@@ -1395,6 +1422,9 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
   }
 
   context = uv_context_alloc(mrb, self);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't memory alloc");
+  }
   context->loop = loop;
   if (uv_pipe_init(loop, &context->any.pipe, ipc) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
