@@ -1190,7 +1190,7 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
-  int ipc = 1;
+  int ipc = 0;
 
   mrb_get_args(mrb, "|oi", &arg_loop, &arg_ipc);
   if (!mrb_nil_p(arg_loop)) {
@@ -1333,7 +1333,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
 #endif
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
-  if (!context) {
+  if (!new_context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
