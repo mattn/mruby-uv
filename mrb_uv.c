@@ -174,6 +174,7 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "read_cb"));
   if (!uv_is_active(&context->any.handle))
     return;
+  int ai = mrb_gc_arena_save(context->mrb);
   if (nread == -1) {
     mrb_yield(context->mrb, proc, context->instance);
   } else {
@@ -182,6 +183,7 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     args[1] = mrb_str_new(context->mrb, buf.base, nread);
     mrb_yield_argv(context->mrb, proc, 2, args);
   }
+  mrb_gc_arena_restore(context->mrb, ai);
 }
 
 static mrb_value
@@ -1322,6 +1324,7 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
   proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "udp_recv_cb"));
   mrb_value args[4];
   args[0] = context->instance;
+  int ai = mrb_gc_arena_save(context->mrb);
   if (nread != -1) {
     char name[256];
     mrb_value c;
@@ -1343,6 +1346,7 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
   }
   args[3] = mrb_fixnum_value(flags);
   mrb_yield_argv(mrb, proc, 4, args);
+  mrb_gc_arena_restore(context->mrb, ai);
 }
 
 static mrb_value
