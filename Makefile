@@ -1,20 +1,15 @@
-MRUBY_ROOT = ..
+GEM := mruby-uv
 
-INCLUDES = -I$(MRUBY_ROOT)/include -I$(MRUBY_ROOT)/src -I.
-CFLAGS = $(INCLUDES) -O3 -g -Wall -Werror-implicit-function-declaration
+include $(MAKEFILE_4_GEM)
 
-CC = gcc
-LL = gcc
-AR = ar
+CFLAGS += -I$(MRUBY_ROOT)/include
+LDFLAGS += -luv
+MRUBY_CFLAGS += -I$(MRUBY_ROOT)/include
+MRUBY_LDFLAGS += -luv
 
-all : libmrb_uv.a
-	@echo done
+GEM_C_FILES := $(wildcard $(SRC_DIR)/*.c)
+GEM_OBJECTS := $(patsubst %.c, %.o, $(GEM_C_FILES))
 
-mrb_uv.o : mrb_uv.c mrb_uv.h
-	gcc -c $(CFLAGS) mrb_uv.c
+gem-all : $(GEM_OBJECTS) gem-c-files
 
-libmrb_uv.a : mrb_uv.o
-	$(AR) r libmrb_uv.a mrb_uv.o
-
-clean :
-	rm -f *.o libmrb_uv.a
+gem-clean : gem-clean-c-files
