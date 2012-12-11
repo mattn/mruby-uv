@@ -1566,7 +1566,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
  *********************************************************/
 
 void
-mrb_init_mrbgems(mrb_state* mrb) {
+mrb_mruby_uv_gem_init(mrb_state* mrb) {
   _class_uv = mrb_define_module(mrb, "UV");
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "run_once", mrb_uv_run_once, ARGS_NONE());
