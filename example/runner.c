@@ -32,6 +32,7 @@ main(int argc, char **argv) {
 
   mrb_state* mrb = mrb_open();
   mrb_uv_init(mrb);
+  mrb_gc_arena_restore(mrb, 0);
   mrbc_context *c = mrbc_context_new(mrb);
   mrbc_filename(mrb, c, input_file);
   mrb_value v = mrb_load_file_cxt(mrb, fp, c);
