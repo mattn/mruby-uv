@@ -93,9 +93,8 @@ mrb_uv_run_once(mrb_state *mrb, mrb_value self)
 static void
 _uv_close_cb(uv_handle_t* handle)
 {
-  mrb_value proc;
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
-  proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "close_cb"));
+  mrb_value proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "close_cb"));
   mrb_yield(context->mrb, proc, context->instance);
 }
 
@@ -124,14 +123,15 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
 static void
 _uv_shutdown_cb(uv_shutdown_t* req, int status)
 {
-  mrb_value proc;
-  mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
-  proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "shutdown_cb"));
+  mrb_free(context->mrb, req);
+  int ai = mrb_gc_arena_save(context->mrb);
+  mrb_value proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "shutdown_cb"));
+  mrb_value args[2];
   args[0] = context->instance;
   args[1] = mrb_fixnum_value(status);
   mrb_yield_argv(context->mrb, proc, 2, args);
-  mrb_free(context->mrb, req);
+  mrb_gc_arena_restore(context->mrb, ai);
 }
 
 static mrb_value
@@ -152,8 +152,8 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   if (!b) shutdown_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
-  static uv_shutdown_t req;
-  uv_shutdown(&req, &context->any.stream, shutdown_cb);
+  uv_shutdown_t* req = (uv_shutdown_t*) malloc(sizeof(uv_shutdown_t));
+  uv_shutdown(req, &context->any.stream, shutdown_cb);
   return mrb_nil_value();
 }
 
@@ -170,8 +170,6 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   mrb_value proc;
   mrb_uv_context* context = (mrb_uv_context*) stream->data;
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "read_cb"));
-  if (!uv_is_active(&context->any.handle))
-    return;
   int ai = mrb_gc_arena_save(context->mrb);
   if (nread == -1) {
     mrb_yield(context->mrb, proc, context->instance);
@@ -232,12 +230,12 @@ _uv_write_cb(uv_write_t* req, int status)
   mrb_value proc;
   mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
-  if (!uv_is_active(&context->any.handle))
-    return;
+  int ai = mrb_gc_arena_save(context->mrb);
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "write_cb"));
   args[0] = context->instance;
   args[1] = mrb_fixnum_value(status);
   mrb_yield_argv(context->mrb, proc, 2, args);
+  mrb_gc_arena_restore(context->mrb, ai);
   mrb_free(context->mrb, req);
 }
 
@@ -265,8 +263,8 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
-  static uv_write_t req;
-  if (uv_write(&req, &context->any.stream, &buf, 1, write_cb) != 0) {
+  uv_write_t* req = (uv_write_t*) malloc(sizeof(uv_write_t));
+  if (uv_write(req, &context->any.stream, &buf, 1, write_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
@@ -290,10 +288,12 @@ _uv_connect_cb(uv_connect_t* req, int status)
   mrb_value proc;
   mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
+  int ai = mrb_gc_arena_save(context->mrb);
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "connect_cb"));
   args[0] = context->instance;
   args[1] = mrb_fixnum_value(status);
   mrb_yield_argv(context->mrb, proc, 2, args);
+  mrb_gc_arena_restore(context->mrb, ai);
   mrb_free(context->mrb, req);
 }
 
@@ -982,8 +982,8 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   if (!b) connect_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
-  static uv_connect_t req;
-  if (uv_tcp_connect(&req, &context->any.tcp, *addr, connect_cb) != 0) {
+  uv_connect_t* req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  if (uv_tcp_connect(req, &context->any.tcp, *addr, connect_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
@@ -1253,10 +1253,12 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
   mrb_value proc;
   mrb_value args[2];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
+  int ai = mrb_gc_arena_save(context->mrb);
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "udp_send_cb"));
   args[0] = context->instance;
   args[1] = mrb_fixnum_value(status);
   mrb_yield_argv(context->mrb, proc, 2, args);
+  mrb_gc_arena_restore(context->mrb, ai);
   mrb_free(context->mrb, req);
 }
 
@@ -1291,8 +1293,8 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_send_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
-  static uv_udp_send_t req;
-  if (uv_udp_send(&req, &context->any.udp, &buf, 1, *addr, udp_send_cb) != 0) {
+  uv_udp_send_t* req = (uv_udp_send_t*) malloc(sizeof(uv_udp_send_t));
+  if (uv_udp_send(req, &context->any.udp, &buf, 1, *addr, udp_send_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
@@ -1448,8 +1450,8 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   if (!b) connect_cb = NULL;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b ? mrb_obj_value(b) : mrb_nil_value());
 
-  static uv_connect_t req;
-  uv_pipe_connect(&req, &context->any.pipe, name, connect_cb);
+  uv_connect_t* req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  uv_pipe_connect(req, &context->any.pipe, name, connect_cb);
   return mrb_nil_value();
 }
 
@@ -1548,10 +1550,12 @@ _uv_fs_cb(uv_fs_t* req)
   mrb_value proc;
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->data;
+  int ai = mrb_gc_arena_save(context->mrb);
   proc = mrb_iv_get(context->mrb, context->instance, mrb_intern(context->mrb, "fs_cb"));
   args[0] = context->instance;
   mrb_yield_argv(context->mrb, proc, 1, args);
   mrb_free(context->mrb, req);
+  mrb_gc_arena_restore(context->mrb, ai);
 }
 
 static mrb_value
