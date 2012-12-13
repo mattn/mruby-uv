@@ -1,11 +1,12 @@
 GEM := mruby-uv
+MRUBY_ROOT := ../mruby
+MAKEFILE_4_GEM := ../mruby/mrbgems/Makefile4gem
 
 include $(MAKEFILE_4_GEM)
 
-CFLAGS += -I$(MRUBY_ROOT)/include
-LDFLAGS += -luv
-MRUBY_CFLAGS += -I$(MRUBY_ROOT)/include
-MRUBY_LDFLAGS += -luv
+INCLUDE += -I$(MRUBY_ROOT)/include
+INCLUDE += -I../libuv/include
+CFLAGS  += $(INCLUDE)
 
 GEM_C_FILES := $(wildcard $(SRC_DIR)/*.c)
 GEM_OBJECTS := $(patsubst %.c, %.o, $(GEM_C_FILES))
