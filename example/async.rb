@@ -1,12 +1,12 @@
 t = UV::Timer.new()
 
-a = UV::Async.new {|a, x|
+a = UV::Async.new {|x|
   puts "async!"
 }
 
 p = UV::Prepare.new()
-p.start {|p, x|
-  t.start(1000, 1000) {|t, x|
+p.start {|x|
+  t.start(1000, 1000) {|x|
     a.send
   }
 }

@@ -1,5 +1,5 @@
 i = UV::Idle.new()
-i.start {|i, x|
+i.start {|x|
   puts "idle"
 }
 UV::run()

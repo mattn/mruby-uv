@@ -1,5 +1,5 @@
 c = UV::Pipe.new()
-c.connect('/tmp/mrub-yuv') {|c, x|
+c.connect('/tmp/mrub-yuv') {|x|
   if x == 0
     c.read_start {|b|
       puts b.to_s
