@@ -201,7 +201,6 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     args[0] = mrb_nil_value();
   } else {
     args[0] = mrb_str_new(mrb, buf.base, nread);
-    args[0] = mrb_nil_value();
   }
   ARENA_RESTORE;
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
