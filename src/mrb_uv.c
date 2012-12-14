@@ -48,6 +48,7 @@ static mrb_uv_context*
 uv_context_alloc(mrb_state* mrb)
 {
   mrb_uv_context* context = (mrb_uv_context*) malloc(sizeof(mrb_uv_context));
+  if (!context) return NULL;
   memset(context, 0, sizeof(mrb_uv_context));
   context->loop = uv_default_loop();
   context->mrb = mrb;
