@@ -44,7 +44,6 @@ uv_context_alloc(mrb_state* mrb)
 static void
 uv_context_free(mrb_state *mrb, void *p)
 {
-  ((mrb_uv_context*) p)->mrb = NULL;
   free(p);
 }
 
@@ -94,7 +93,11 @@ static void
 _uv_close_cb(uv_handle_t* handle)
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 0, NULL);
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 0, NULL);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -125,11 +128,13 @@ static void
 _uv_shutdown_cb(uv_shutdown_t* req, int status)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
-  int ai = mrb_gc_arena_save(context->mrb);
+  mrb_state* mrb = mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   mrb_value args[1];
   args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
-  mrb_gc_arena_restore(context->mrb, ai);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -164,22 +169,25 @@ static uv_buf_t
 _uv_alloc_cb(uv_handle_t* handle, size_t suggested_size)
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
-  return uv_buf_init(mrb_malloc(context->mrb, suggested_size), suggested_size);
+  mrb_state* mrb = mrb;
+  return uv_buf_init(mrb_malloc(mrb, suggested_size), suggested_size);
 }
 
 static void
 _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
   mrb_uv_context* context = (mrb_uv_context*) stream->data;
-  int ai = mrb_gc_arena_save(context->mrb);
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   mrb_value args[1];
   if (nread == -1) {
     args[0] = mrb_nil_value();
   } else {
-    args[0] = mrb_str_new(context->mrb, buf.base, nread);
+    args[0] = mrb_str_new(mrb, buf.base, nread);
   }
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
-  mrb_gc_arena_restore(context->mrb, ai);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -229,10 +237,12 @@ _uv_write_cb(uv_write_t* req, int status)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
-  int ai = mrb_gc_arena_save(context->mrb);
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
-  mrb_gc_arena_restore(context->mrb, ai);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -277,8 +287,12 @@ _uv_connection_cb(uv_stream_t* handle, int status)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static void
@@ -286,10 +300,12 @@ _uv_connect_cb(uv_connect_t* req, int status)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
-  int ai = mrb_gc_arena_save(context->mrb);
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
-  mrb_gc_arena_restore(context->mrb, ai);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -447,8 +463,12 @@ _uv_timer_cb(uv_timer_t* timer, int status)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) timer->data;
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -542,8 +562,12 @@ _uv_idle_cb(uv_idle_t* idle, int status)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) idle->data;
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -596,8 +620,12 @@ _uv_async_cb(uv_async_t* async, int status)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) async->data;
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -673,8 +701,12 @@ _uv_prepare_cb(uv_prepare_t* prepare, int status)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) prepare->data;
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -1243,9 +1275,11 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
-  int ai = mrb_gc_arena_save(context->mrb);
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 0, args);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 0, args);
   mrb_gc_arena_restore(context->mrb, ai);
 }
 
@@ -1298,8 +1332,9 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
   mrb_value args[3];
-  int ai = mrb_gc_arena_save(context->mrb);
+  int ai = mrb_gc_arena_save(mrb);
   if (nread != -1) {
     char name[256];
     mrb_value c;
@@ -1320,8 +1355,8 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
     args[1] = mrb_nil_value();
   }
   args[2] = mrb_fixnum_value(flags);
-  mrb_yield_argv(mrb, mrb_obj_value(context->proc), 3, args);
-  mrb_gc_arena_restore(context->mrb, ai);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 3, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -1544,15 +1579,16 @@ _uv_fs_open_cb(uv_fs_t* req)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->data;
+  mrb_state* mrb = context->mrb;
   if (req->result == -1) {
-    mrb_state* mrb = context->mrb;
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
+  struct RProc* proc = context->proc;
   context->any.fs = req->result;
-  int ai = mrb_gc_arena_save(context->mrb);
+  int ai = mrb_gc_arena_save(mrb);
   args[0] = mrb_fixnum_value(req->result);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
-  mrb_gc_arena_restore(context->mrb, ai);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static void
@@ -1560,8 +1596,12 @@ _uv_fs_cb(uv_fs_t* req)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->data;
+  mrb_state* mrb = context->mrb;
+  struct RProc* proc = context->proc;
+  int ai = mrb_gc_arena_save(mrb);
   args[0] = mrb_fixnum_value(req->result);
-  mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
+  mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
+  mrb_gc_arena_restore(mrb, ai);
 }
 
 static mrb_value
@@ -1706,7 +1746,9 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
+  int ai = mrb_gc_arena_save(context->mrb);
   mrb_value str = mrb_str_new(mrb, buf, len);
+  mrb_gc_arena_restore(mrb, ai);
   free(buf);
   return str;
 }
