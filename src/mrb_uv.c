@@ -39,8 +39,7 @@ typedef struct {
     uv_mutex_t mutex;
     uv_file fs;
   } any;
-  mrb_value instance; /* callback */
-  mrb_value proc;
+  mrb_value instance;
   uv_loop_t* loop;
   mrb_state* mrb;
 } mrb_uv_context;
@@ -48,7 +47,7 @@ typedef struct {
 static mrb_uv_context*
 uv_context_alloc(mrb_state* mrb)
 {
-  mrb_uv_context* context = (mrb_uv_context*) mrb_malloc(mrb, sizeof(mrb_uv_context));
+  mrb_uv_context* context = (mrb_uv_context*) malloc(sizeof(mrb_uv_context));
   memset(context, 0, sizeof(mrb_uv_context));
   context->loop = uv_default_loop();
   context->mrb = mrb;
@@ -58,7 +57,7 @@ uv_context_alloc(mrb_state* mrb)
 static void
 uv_context_free(mrb_state *mrb, void *p)
 {
-  mrb_free(mrb, p);
+  free(p);
 }
 
 static const struct mrb_data_type uv_context_type = {
@@ -108,7 +107,10 @@ _uv_close_cb(uv_handle_t* handle)
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
-  mrb_yield_argv(mrb, context->proc, 0, NULL);
+  ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "close_cb"));
+  mrb_yield_argv(mrb, proc, 0, NULL);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -128,12 +130,13 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
   if (!uv_is_active(&context->any.handle)) return mrb_nil_value();
 
   mrb_get_args(mrb, "|&", &b);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     close_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "close_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "close_cb"), proc);
 
   uv_close(&context->any.handle, close_cb);
   return mrb_nil_value();
@@ -144,11 +147,9 @@ _uv_shutdown_cb(uv_shutdown_t* req, int status)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = mrb;
-  mrb_value proc = context->proc;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "shutdown_cb"));
   mrb_value args[1];
-  ARENA_SAVE;
   args[0] = mrb_fixnum_value(status);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
 }
 
@@ -167,12 +168,13 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "|&", &b);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     shutdown_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), proc);
 
   uv_shutdown_t* req = (uv_shutdown_t*) malloc(sizeof(uv_shutdown_t));
   if (!req) {
@@ -196,16 +198,16 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
   mrb_uv_context* context = (mrb_uv_context*) stream->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
   ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "read_cb"));
   mrb_value args[1];
   if (nread == -1) {
     args[0] = mrb_nil_value();
   } else {
     args[0] = mrb_str_new(mrb, buf.base, nread);
   }
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -223,12 +225,13 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&", &b);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     read_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "read_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "read_cb"), proc);
 
   if (uv_read_start(&context->any.stream, _uv_alloc_cb, read_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -260,11 +263,11 @@ _uv_write_cb(uv_write_t* req, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
   ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "write_cb"));
   args[0] = mrb_fixnum_value(status);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -288,12 +291,13 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     write_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), proc);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
   uv_write_t* req = (uv_write_t*) malloc(sizeof(uv_write_t));
@@ -315,11 +319,11 @@ _uv_connection_cb(uv_stream_t* handle, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
   ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "connection_cb"));
   args[0] = mrb_fixnum_value(status);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
+  ARENA_RESTORE;
 }
 
 static void
@@ -328,11 +332,11 @@ _uv_connect_cb(uv_connect_t* req, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
   ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "connect_cb"));
   args[0] = mrb_fixnum_value(status);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -368,6 +372,7 @@ mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
+  context->instance = c;
   context->loop = uv_default_loop();
   mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
@@ -382,6 +387,7 @@ mrb_uv_loop_init(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
+  context->instance = self;
   context->loop = uv_loop_new();
   context->loop->data = context;
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -474,7 +480,9 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
+  context->instance = self;
   context->loop = loop;
+
   if (uv_timer_init(loop, &context->any.timer) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
@@ -491,11 +499,11 @@ _uv_timer_cb(uv_timer_t* timer, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) timer->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
   ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "timer_cb"));
   args[0] = mrb_fixnum_value(status);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -514,12 +522,13 @@ mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&ii", &b, &arg_timeout, &arg_repeat);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     timer_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "timer_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "timer_cb"), proc);
 
   if (uv_timer_start(&context->any.timer, timer_cb,
       mrb_fixnum(arg_timeout), mrb_fixnum(arg_repeat)) != 0) {
@@ -577,11 +586,14 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
+  context->instance = self;
   context->loop = loop;
+
   if (uv_idle_init(loop, &context->any.idle) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
   context->any.idle.data = context;
+
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
     &uv_context_type, (void*) context)));
@@ -594,10 +606,8 @@ _uv_idle_cb(uv_idle_t* idle, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) idle->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
-  ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "idle_cb"));
   args[0] = mrb_fixnum_value(status);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
 }
 
@@ -616,12 +626,13 @@ mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&", &b);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     idle_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "idle_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "idle_cb"), proc);
 
   if (uv_idle_start(&context->any.idle, idle_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -656,11 +667,11 @@ _uv_async_cb(uv_async_t* async, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) async->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
   ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "async_cb"));
   args[0] = mrb_fixnum_value(status);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -695,14 +706,16 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
-
-  if (!b)
-    async_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "async_cb"), context->proc);
-  }
+  context->instance = self;
   context->loop = loop;
+
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
+    async_cb = NULL;
+  } else {
+    proc = mrb_obj_value(b);
+  }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "async_cb"), proc);
 
   if (uv_async_init(loop, &context->any.async, async_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
@@ -741,10 +754,8 @@ _uv_prepare_cb(uv_prepare_t* prepare, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) prepare->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
-  ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "prepare_cb"));
   args[0] = mrb_fixnum_value(status);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
 }
 
@@ -776,11 +787,13 @@ mrb_uv_prepare_init(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
+  context->instance = self;
   context->loop = loop;
   if (uv_prepare_init(loop, &context->any.prepare) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
   context->any.prepare.data = context;
+
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
     &uv_context_type, (void*) context)));
@@ -802,12 +815,13 @@ mrb_uv_prepare_start(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&", &b);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     prepare_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "prepare_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "prepare_cb"), proc);
 
   if (uv_prepare_start(&context->any.prepare, prepare_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -844,6 +858,7 @@ mrb_uv_mutex_init(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
+  context->instance = self;
   context->loop = uv_default_loop();
   if (uv_mutex_init(&context->any.mutex) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
@@ -1001,7 +1016,9 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
+  context->instance = self;
   context->loop = loop;
+
   if (uv_tcp_init(loop, &(context->any.tcp)) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
@@ -1038,12 +1055,13 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     connect_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), proc);
 
   uv_connect_t* req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
   if (!req) {
@@ -1105,12 +1123,13 @@ mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&i", &b, &arg_backlog);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     connection_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), proc);
 
   backlog = mrb_fixnum(arg_backlog);
 
@@ -1141,6 +1160,7 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
 
+  new_context->instance = c;
   new_context->loop = context->loop;
 
   if (uv_accept((uv_stream_t*) &context->any.tcp, (uv_stream_t*) &new_context->any.tcp) != 0) {
@@ -1276,11 +1296,14 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
+  context->instance = self;
   context->loop = loop;
+
   if (uv_udp_init(loop, &context->any.udp) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
   context->any.udp.data = context;
+
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
     Data_Wrap_Struct(mrb, mrb->object_class,
     &uv_context_type, (void*) context)));
@@ -1327,11 +1350,11 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
   ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "udp_send_cb"));
   args[0] = mrb_fixnum_value(status);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 0, args);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -1361,12 +1384,13 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     udp_send_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_send_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_send_cb"), proc);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
   uv_udp_send_t* req = (uv_udp_send_t*) malloc(sizeof(uv_udp_send_t));
@@ -1375,6 +1399,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   }
   memset(req, 0, sizeof(uv_udp_send_t));
   req->data = context;
+
   if (uv_udp_send(req, &context->any.udp, &buf, 1, *addr, udp_send_cb) != 0) {
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -1387,9 +1412,9 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
-  mrb_value args[3];
   ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "timer_cb"));
+  mrb_value args[3];
   if (nread != -1) {
     char name[256];
     mrb_value c;
@@ -1410,8 +1435,8 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
     args[1] = mrb_nil_value();
   }
   args[2] = mrb_fixnum_value(flags);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 3, args);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -1428,12 +1453,13 @@ mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     udp_recv_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_recv_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_recv_cb"), proc);
 
   if (uv_udp_recv_start(&context->any.udp, _uv_alloc_cb, udp_recv_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -1497,7 +1523,9 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
+  context->instance = self;
   context->loop = loop;
+
   if (uv_pipe_init(loop, &context->any.pipe, ipc) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
   }
@@ -1530,12 +1558,13 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   }
   name = RSTRING_PTR(arg_name);
 
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     connect_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), proc);
 
   uv_connect_t* req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
   if (!req) {
@@ -1589,12 +1618,13 @@ mrb_uv_pipe_listen(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&i", &b, &arg_backlog);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     connection_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), proc);
 
   if (uv_listen((uv_stream_t*) &context->any.pipe, mrb_fixnum(arg_backlog), connection_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -1628,6 +1658,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
+  new_context->instance = c;
   new_context->loop = context->loop;
 
   if (uv_accept((uv_stream_t*) &context->any.pipe, (uv_stream_t*) &new_context->any.pipe) != 0) {
@@ -1649,12 +1680,12 @@ _uv_fs_open_cb(uv_fs_t* req)
   if (req->result == -1) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-  mrb_value proc = context->proc;
-  context->any.fs = req->result;
   ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
+  context->any.fs = req->result;
   args[0] = mrb_fixnum_value(req->result);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
+  ARENA_RESTORE;
 }
 
 static void
@@ -1663,11 +1694,11 @@ _uv_fs_cb(uv_fs_t* req)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = context->proc;
   ARENA_SAVE;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
   args[0] = mrb_fixnum_value(req->result);
-  ARENA_RESTORE;
   mrb_yield_argv(mrb, proc, 1, args);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -1686,13 +1717,15 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     fs_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
 
+  context->instance = c;
   context->loop = uv_default_loop();
 
   mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -1728,12 +1761,13 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "|&", &b);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     fs_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
 
   uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
@@ -1765,12 +1799,13 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     fs_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
 
   uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
@@ -1804,12 +1839,13 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "|&ii", &b, &arg_length, &arg_offset);
 
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     fs_cb = NULL;
-  else {
-    context->proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), context->proc);
+  } else {
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
 
   size_t len = mrb_fixnum(arg_length);
   char* buf = malloc(len);
@@ -1845,15 +1881,16 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
 
   mrb_get_args(mrb, "|&o", &b, &arg_path);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     fs_cb = NULL;
-  else {
+  } else {
     memset(&context, 0, sizeof(mrb_uv_context));
     context.mrb = mrb;
     context.loop = uv_default_loop();
-    context.proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), context.proc);
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
 
   uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
@@ -1877,15 +1914,16 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
 
   mrb_get_args(mrb, "|&oi", &b, &arg_path, &arg_mode);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     fs_cb = NULL;
-  else {
+  } else {
     memset(&context, 0, sizeof(mrb_uv_context));
     context.mrb = mrb;
     context.loop = uv_default_loop();
-    context.proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), context.proc);
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
 
   uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
@@ -1909,15 +1947,16 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
 
   mrb_get_args(mrb, "|&o", &b, &arg_path);
-  if (!b)
+  mrb_value proc = mrb_nil_value();
+  if (!b) {
     fs_cb = NULL;
-  else {
+  } else {
     memset(&context, 0, sizeof(mrb_uv_context));
     context.mrb = mrb;
     context.loop = uv_default_loop();
-    context.proc = mrb_obj_value(b);
-    mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), context.proc);
+    proc = mrb_obj_value(b);
   }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
 
   uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
