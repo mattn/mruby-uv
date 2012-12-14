@@ -11,6 +11,16 @@
 #include <stdio.h>
 #include <fcntl.h>
 
+#if 1
+#define ARENA_SAVE \
+  int ai = mrb_gc_arena_save(mrb);
+#define ARENA_RESTORE \
+  mrb_gc_arena_restore(mrb, ai);
+#else
+#define ARENA_SAVE
+#define ARENA_RESTORE
+#endif
+
 typedef struct {
   union {
     uv_tcp_t tcp;
@@ -54,7 +64,7 @@ static const struct mrb_data_type uv_context_type = {
 static void
 uv_ip4addr_free(mrb_state *mrb, void *p)
 {
-  mrb_free(mrb, p);
+  free(p);
 }
 
 static const struct mrb_data_type uv_ip4addr_type = {
@@ -95,9 +105,9 @@ _uv_close_cb(uv_handle_t* handle)
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   mrb_yield_argv(mrb, mrb_obj_value(proc), 0, NULL);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -130,11 +140,11 @@ _uv_shutdown_cb(uv_shutdown_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   mrb_value args[1];
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -169,8 +179,7 @@ static uv_buf_t
 _uv_alloc_cb(uv_handle_t* handle, size_t suggested_size)
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
-  mrb_state* mrb = mrb;
-  return uv_buf_init(mrb_malloc(mrb, suggested_size), suggested_size);
+  return uv_buf_init(malloc(suggested_size), suggested_size);
 }
 
 static void
@@ -179,7 +188,7 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   mrb_uv_context* context = (mrb_uv_context*) stream->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   mrb_value args[1];
   if (nread == -1) {
     args[0] = mrb_nil_value();
@@ -187,7 +196,7 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     args[0] = mrb_str_new(mrb, buf.base, nread);
   }
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -239,10 +248,10 @@ _uv_write_cb(uv_write_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -289,10 +298,10 @@ _uv_connection_cb(uv_stream_t* handle, int status)
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static void
@@ -302,10 +311,10 @@ _uv_connect_cb(uv_connect_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -465,10 +474,10 @@ _uv_timer_cb(uv_timer_t* timer, int status)
   mrb_uv_context* context = (mrb_uv_context*) timer->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -564,10 +573,10 @@ _uv_idle_cb(uv_idle_t* idle, int status)
   mrb_uv_context* context = (mrb_uv_context*) idle->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -622,10 +631,10 @@ _uv_async_cb(uv_async_t* async, int status)
   mrb_uv_context* context = (mrb_uv_context*) async->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -703,10 +712,10 @@ _uv_prepare_cb(uv_prepare_t* prepare, int status)
   mrb_uv_context* context = (mrb_uv_context*) prepare->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -900,7 +909,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "oi", &arg_host, &arg_port);
   if (!mrb_nil_p(arg_host) && !mrb_nil_p(arg_port)) {
     vaddr = uv_ip4_addr((const char*) strdup(RSTRING_PTR(arg_host)), mrb_fixnum(arg_port));
-    addr = (struct sockaddr_in*) mrb_malloc(mrb, sizeof(struct sockaddr_in));
+    addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(vaddr));
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
@@ -1277,10 +1286,10 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 0, args);
-  mrb_gc_arena_restore(context->mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -1334,7 +1343,7 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
   mrb_value args[3];
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   if (nread != -1) {
     char name[256];
     mrb_value c;
@@ -1356,7 +1365,7 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
   }
   args[2] = mrb_fixnum_value(flags);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 3, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -1585,10 +1594,10 @@ _uv_fs_open_cb(uv_fs_t* req)
   }
   struct RProc* proc = context->proc;
   context->any.fs = req->result;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   args[0] = mrb_fixnum_value(req->result);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static void
@@ -1598,10 +1607,10 @@ _uv_fs_cb(uv_fs_t* req)
   mrb_uv_context* context = (mrb_uv_context*) req->data;
   mrb_state* mrb = context->mrb;
   struct RProc* proc = context->proc;
-  int ai = mrb_gc_arena_save(mrb);
+  ARENA_SAVE;
   args[0] = mrb_fixnum_value(req->result);
   mrb_yield_argv(mrb, mrb_obj_value(proc), 1, args);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -1746,9 +1755,9 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-  int ai = mrb_gc_arena_save(context->mrb);
+  ARENA_SAVE;
   mrb_value str = mrb_str_new(mrb, buf, len);
-  mrb_gc_arena_restore(mrb, ai);
+  ARENA_RESTORE;
   free(buf);
   return str;
 }
@@ -1842,177 +1851,200 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
 
 void
 mrb_mruby_uv_gem_init(mrb_state* mrb) {
-  int ai;
-
   _class_uv = mrb_define_module(mrb, "UV");
 
-  ai = mrb_gc_arena_save(mrb);
-  mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
-  mrb_define_module_function(mrb, _class_uv, "run_once", mrb_uv_run_once, ARGS_NONE());
-  mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
-  mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
-  mrb_gc_arena_restore(mrb, ai);
+  {
+    ARENA_SAVE;
+    mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
+    mrb_define_module_function(mrb, _class_uv, "run_once", mrb_uv_run_once, ARGS_NONE());
+    mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
+    mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_loop, "run_once", mrb_uv_loop_run_once, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_delete, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
-  mrb_gc_arena_restore(mrb, ai);
+  {
+    ARENA_SAVE;
+    _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
+    mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_loop, "run_once", mrb_uv_loop_run_once, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_delete, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_timer = mrb_define_class_under(mrb, _class_uv, "Timer", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(3));
-  mrb_define_method(mrb, _class_uv_timer, "stop", mrb_uv_timer_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_timer, "close", mrb_uv_close, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_timer, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_timer, "data", mrb_uv_data_get, ARGS_NONE());
-  mrb_gc_arena_restore(mrb, ai);
+  {
+    ARENA_SAVE;
+    _class_uv_timer = mrb_define_class_under(mrb, _class_uv, "Timer", mrb->object_class);
+    mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(3));
+    mrb_define_method(mrb, _class_uv_timer, "stop", mrb_uv_timer_stop, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_timer, "close", mrb_uv_close, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_timer, "data=", mrb_uv_data_set, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_timer, "data", mrb_uv_data_get, ARGS_NONE());
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_idle = mrb_define_class_under(mrb, _class_uv, "Idle", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_idle, "initialize", mrb_uv_idle_init, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_idle, "start", mrb_uv_idle_start, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_idle, "stop", mrb_uv_idle_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_idle, "close", mrb_uv_close, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_idle, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_idle, "data", mrb_uv_data_get, ARGS_NONE());
-  mrb_gc_arena_restore(mrb, ai);
+  {
+    ARENA_SAVE;
+    _class_uv_idle = mrb_define_class_under(mrb, _class_uv, "Idle", mrb->object_class);
+    mrb_define_method(mrb, _class_uv_idle, "initialize", mrb_uv_idle_init, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_idle, "start", mrb_uv_idle_start, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_idle, "stop", mrb_uv_idle_stop, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_idle, "close", mrb_uv_close, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_idle, "data=", mrb_uv_data_set, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_idle, "data", mrb_uv_data_get, ARGS_NONE());
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Async", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_async_init, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_async, "send", mrb_uv_async_send, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_async, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_async, "data", mrb_uv_data_get, ARGS_NONE());
-  mrb_gc_arena_restore(mrb, ai);
+  {
+    ARENA_SAVE;
+    _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Async", mrb->object_class);
+    mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_async_init, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_async, "send", mrb_uv_async_send, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_async, "data=", mrb_uv_data_set, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_async, "data", mrb_uv_data_get, ARGS_NONE());
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_prepare = mrb_define_class_under(mrb, _class_uv, "Prepare", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_prepare, "initialize", mrb_uv_prepare_init, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_prepare, "start", mrb_uv_prepare_start, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_prepare, "stop", mrb_uv_prepare_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_prepare, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_prepare, "data", mrb_uv_data_get, ARGS_NONE());
-  mrb_gc_arena_restore(mrb, ai);
+  {
+    ARENA_SAVE;
+    _class_uv_prepare = mrb_define_class_under(mrb, _class_uv, "Prepare", mrb->object_class);
+    mrb_define_method(mrb, _class_uv_prepare, "initialize", mrb_uv_prepare_init, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_prepare, "start", mrb_uv_prepare_start, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_prepare, "stop", mrb_uv_prepare_stop, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_prepare, "data=", mrb_uv_data_set, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_prepare, "data", mrb_uv_data_get, ARGS_NONE());
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(2));
-  mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, ARGS_NONE());
-  mrb_gc_arena_restore(mrb, ai);
+  {
+    ARENA_SAVE;
+    _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
+    mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(2));
+    mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, ARGS_NONE());
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect, ARGS_REQ(2));
-  mrb_define_method(mrb, _class_uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
-  mrb_define_method(mrb, _class_uv_tcp, "read_stop", mrb_uv_read_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_tcp, "write", mrb_uv_write, ARGS_OPT(2));
-  mrb_define_method(mrb, _class_uv_tcp, "close", mrb_uv_close, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_tcp, "shutdown", mrb_uv_shutdown, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_tcp, "listen", mrb_uv_tcp_listen, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_tcp, "accept", mrb_uv_tcp_accept, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts=", mrb_uv_tcp_simultaneous_accepts_set, ARGS_REQ(1));
-  //mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts", mrb_uv_tcp_simultaneous_accepts_get, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_tcp, "keepalive=", mrb_uv_tcp_keepalive_set, ARGS_REQ(1));
-  //mrb_define_method(mrb, _class_uv_tcp, "keepalive", mrb_uv_tcp_keepalive_get, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_tcp, "nodelay=", mrb_uv_tcp_nodelay_set, ARGS_REQ(1));
-  //mrb_define_method(mrb, _class_uv_tcp, "nodelay", mrb_uv_tcp_nodelay_get, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_tcp, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_tcp, "data", mrb_uv_data_get, ARGS_NONE());
-  mrb_gc_arena_restore(mrb, ai);
+  {
+    ARENA_SAVE;
+    _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
+    mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect, ARGS_REQ(2));
+    mrb_define_method(mrb, _class_uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
+    mrb_define_method(mrb, _class_uv_tcp, "read_stop", mrb_uv_read_stop, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_tcp, "write", mrb_uv_write, ARGS_OPT(2));
+    mrb_define_method(mrb, _class_uv_tcp, "close", mrb_uv_close, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_tcp, "shutdown", mrb_uv_shutdown, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_tcp, "listen", mrb_uv_tcp_listen, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_tcp, "accept", mrb_uv_tcp_accept, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts=", mrb_uv_tcp_simultaneous_accepts_set, ARGS_REQ(1));
+    //mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts", mrb_uv_tcp_simultaneous_accepts_get, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_tcp, "keepalive=", mrb_uv_tcp_keepalive_set, ARGS_REQ(1));
+    //mrb_define_method(mrb, _class_uv_tcp, "keepalive", mrb_uv_tcp_keepalive_get, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_tcp, "nodelay=", mrb_uv_tcp_nodelay_set, ARGS_REQ(1));
+    //mrb_define_method(mrb, _class_uv_tcp, "nodelay", mrb_uv_tcp_nodelay_get, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_tcp, "data=", mrb_uv_data_set, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_tcp, "data", mrb_uv_data_get, ARGS_NONE());
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_REQ(2));
-  mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send, ARGS_OPT(3));
-  mrb_define_method(mrb, _class_uv_udp, "close", mrb_uv_close, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_udp, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_udp, "data", mrb_uv_data_get, ARGS_NONE());
-  mrb_gc_arena_restore(mrb, ai);
+  {
+    ARENA_SAVE;
+    _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
+    mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_REQ(2));
+    mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send, ARGS_OPT(3));
+    mrb_define_method(mrb, _class_uv_udp, "close", mrb_uv_close, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_udp, "data=", mrb_uv_data_set, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_udp, "data", mrb_uv_data_get, ARGS_NONE());
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_pipe = mrb_define_class_under(mrb, _class_uv, "Pipe", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_pipe, "initialize", mrb_uv_pipe_init, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_pipe, "connect", mrb_uv_pipe_connect, ARGS_REQ(2));
-  mrb_define_method(mrb, _class_uv_pipe, "read_start", mrb_uv_read_start, ARGS_REQ(2));
-  mrb_define_method(mrb, _class_uv_pipe, "read_stop", mrb_uv_read_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_pipe, "write", mrb_uv_write, ARGS_OPT(2));
-  mrb_define_method(mrb, _class_uv_pipe, "close", mrb_uv_close, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_pipe, "shutdown", mrb_uv_shutdown, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_pipe, "bind", mrb_uv_pipe_bind, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_pipe, "listen", mrb_uv_pipe_listen, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_pipe, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_pipe, "data", mrb_uv_data_get, ARGS_NONE());
+  {
+    ARENA_SAVE;
+    _class_uv_pipe = mrb_define_class_under(mrb, _class_uv, "Pipe", mrb->object_class);
+    mrb_define_method(mrb, _class_uv_pipe, "initialize", mrb_uv_pipe_init, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_pipe, "connect", mrb_uv_pipe_connect, ARGS_REQ(2));
+    mrb_define_method(mrb, _class_uv_pipe, "read_start", mrb_uv_read_start, ARGS_REQ(2));
+    mrb_define_method(mrb, _class_uv_pipe, "read_stop", mrb_uv_read_stop, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_pipe, "write", mrb_uv_write, ARGS_OPT(2));
+    mrb_define_method(mrb, _class_uv_pipe, "close", mrb_uv_close, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_pipe, "shutdown", mrb_uv_shutdown, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_pipe, "bind", mrb_uv_pipe_bind, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_pipe, "listen", mrb_uv_pipe_listen, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_pipe, "data=", mrb_uv_data_set, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_pipe, "data", mrb_uv_data_get, ARGS_NONE());
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_mutex = mrb_define_class_under(mrb, _class_uv, "Mutex", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_mutex, "initialize", mrb_uv_mutex_init, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_mutex, "lock", mrb_uv_mutex_lock, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_mutex, "trylock", mrb_uv_mutex_trylock, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_mutex, "unlock", mrb_uv_mutex_unlock, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_mutex, "destroy", mrb_uv_mutex_destroy, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_mutex, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_mutex, "data", mrb_uv_data_get, ARGS_NONE());
-  mrb_gc_arena_restore(mrb, ai);
+  {
+    ARENA_SAVE;
+    _class_uv_mutex = mrb_define_class_under(mrb, _class_uv, "Mutex", mrb->object_class);
+    mrb_define_method(mrb, _class_uv_mutex, "initialize", mrb_uv_mutex_init, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_mutex, "lock", mrb_uv_mutex_lock, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_mutex, "trylock", mrb_uv_mutex_trylock, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_mutex, "unlock", mrb_uv_mutex_unlock, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_mutex, "destroy", mrb_uv_mutex_destroy, ARGS_NONE());
+    mrb_define_method(mrb, _class_uv_mutex, "data=", mrb_uv_data_set, ARGS_REQ(1));
+    mrb_define_method(mrb, _class_uv_mutex, "data", mrb_uv_data_get, ARGS_NONE());
+    ARENA_RESTORE;
+  }
 
-  ai = mrb_gc_arena_save(mrb);
-  _class_uv_fs = mrb_define_class_under(mrb, _class_uv, "FS", mrb->object_class);
-  mrb_define_const(mrb, _class_uv_fs, "O_RDONLY", mrb_fixnum_value(O_RDONLY));
-  mrb_define_const(mrb, _class_uv_fs, "O_WRONLY", mrb_fixnum_value(O_WRONLY));
-  mrb_define_const(mrb, _class_uv_fs, "O_RDWR", mrb_fixnum_value(O_RDWR));
-  mrb_define_const(mrb, _class_uv_fs, "O_CREAT", mrb_fixnum_value(O_CREAT));
-  mrb_define_const(mrb, _class_uv_fs, "O_TRUNC", mrb_fixnum_value(O_TRUNC));
-  mrb_define_const(mrb, _class_uv_fs, "O_APPEND", mrb_fixnum_value(O_APPEND));
+  {
+    ARENA_SAVE;
+    _class_uv_fs = mrb_define_class_under(mrb, _class_uv, "FS", mrb->object_class);
+    mrb_define_const(mrb, _class_uv_fs, "O_RDONLY", mrb_fixnum_value(O_RDONLY));
+    mrb_define_const(mrb, _class_uv_fs, "O_WRONLY", mrb_fixnum_value(O_WRONLY));
+    mrb_define_const(mrb, _class_uv_fs, "O_RDWR", mrb_fixnum_value(O_RDWR));
+    mrb_define_const(mrb, _class_uv_fs, "O_CREAT", mrb_fixnum_value(O_CREAT));
+    mrb_define_const(mrb, _class_uv_fs, "O_TRUNC", mrb_fixnum_value(O_TRUNC));
+    mrb_define_const(mrb, _class_uv_fs, "O_APPEND", mrb_fixnum_value(O_APPEND));
 #ifdef O_TEXT
-  mrb_define_const(mrb, _class_uv_fs, "O_TEXT", mrb_fixnum_value(O_TEXT));
+    mrb_define_const(mrb, _class_uv_fs, "O_TEXT", mrb_fixnum_value(O_TEXT));
 #endif
 #ifdef O_BINARY
-  mrb_define_const(mrb, _class_uv_fs, "O_BINARY", mrb_fixnum_value(O_BINARY));
+    mrb_define_const(mrb, _class_uv_fs, "O_BINARY", mrb_fixnum_value(O_BINARY));
 #endif
-  mrb_define_const(mrb, _class_uv_fs, "S_IWRITE", mrb_fixnum_value(S_IWRITE));
-  mrb_define_const(mrb, _class_uv_fs, "S_IREAD", mrb_fixnum_value(S_IREAD));
-  mrb_define_module_function(mrb, _class_uv_fs, "open", mrb_uv_fs_open, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_fs, "write", mrb_uv_fs_write, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_fs, "read", mrb_uv_fs_read, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_fs, "close", mrb_uv_fs_close, ARGS_OPT(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "unlink", mrb_uv_fs_unlink, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "mkdir", mrb_uv_fs_mkdir, ARGS_REQ(2));
-  mrb_define_module_function(mrb, _class_uv_fs, "rmdir", mrb_uv_fs_rmdir, ARGS_OPT(1));
-  /* TODO
-  uv_fs_readdir
-  uv_fs_stat
-  uv_fs_fstat
-  uv_fs_rename
-  uv_fs_fsync
-  uv_fs_fdatasync
-  uv_fs_ftruncate
-  uv_fs_sendfile
-  uv_fs_chmod
-  uv_fs_utime
-  uv_fs_futime
-  uv_fs_lstat
-  uv_fs_link
-  uv_fs_symlink
-  uv_fs_readlink
-  uv_fs_fchmod
-  uv_fs_chown
-  uv_fs_fchown
-  uv_fs_poll_init
-  uv_fs_poll_start
-  uv_fs_poll_stop
-  */
-  mrb_gc_arena_restore(mrb, ai);
+    mrb_define_const(mrb, _class_uv_fs, "S_IWRITE", mrb_fixnum_value(S_IWRITE));
+    mrb_define_const(mrb, _class_uv_fs, "S_IREAD", mrb_fixnum_value(S_IREAD));
+    mrb_define_module_function(mrb, _class_uv_fs, "open", mrb_uv_fs_open, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_fs, "write", mrb_uv_fs_write, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_fs, "read", mrb_uv_fs_read, ARGS_OPT(1));
+    mrb_define_method(mrb, _class_uv_fs, "close", mrb_uv_fs_close, ARGS_OPT(1));
+    mrb_define_module_function(mrb, _class_uv_fs, "unlink", mrb_uv_fs_unlink, ARGS_REQ(1));
+    mrb_define_module_function(mrb, _class_uv_fs, "mkdir", mrb_uv_fs_mkdir, ARGS_REQ(2));
+    mrb_define_module_function(mrb, _class_uv_fs, "rmdir", mrb_uv_fs_rmdir, ARGS_OPT(1));
+    /* TODO
+    uv_fs_readdir
+    uv_fs_stat
+    uv_fs_fstat
+    uv_fs_rename
+    uv_fs_fsync
+    uv_fs_fdatasync
+    uv_fs_ftruncate
+    uv_fs_sendfile
+    uv_fs_chmod
+    uv_fs_utime
+    uv_fs_futime
+    uv_fs_lstat
+    uv_fs_link
+    uv_fs_symlink
+    uv_fs_readlink
+    uv_fs_fchmod
+    uv_fs_chown
+    uv_fs_fchown
+    uv_fs_poll_init
+    uv_fs_poll_start
+    uv_fs_poll_stop
+    */
+    ARENA_RESTORE;
+  }
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */
