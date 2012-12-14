@@ -1734,6 +1734,7 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
   memset(req, 0, sizeof(uv_fs_t));
+  req->data = context;
   if (uv_fs_unlink(uv_default_loop(), req, RSTRING_PTR(arg_path), fs_cb) != 0) {
     uv_context_free(mrb, context);
     free(req);
@@ -1764,6 +1765,7 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
   memset(req, 0, sizeof(uv_fs_t));
+  req->data = context;
   if (uv_fs_mkdir(uv_default_loop(), req, RSTRING_PTR(arg_path), mrb_fixnum(arg_mode), fs_cb) != 0) {
     uv_context_free(mrb, context);
     free(req);
