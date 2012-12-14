@@ -1544,7 +1544,9 @@ _uv_fs_open_cb(uv_fs_t* req)
 {
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->data;
-  context->any.fs = req->result;
+  if (req->result == -1) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop));
+  }
   int ai = mrb_gc_arena_save(context->mrb);
   args[0] = context->instance;
   mrb_yield_argv(context->mrb, mrb_obj_value(context->proc), 1, args);
