@@ -119,7 +119,7 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_close_cb close_cb = _uv_close_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -131,13 +131,10 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
   if (!uv_is_active(&context->any.handle)) return mrb_nil_value();
 
   mrb_get_args(mrb, "|&", &b);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     close_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "close_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "close_cb"), b);
 
   uv_close(&context->any.handle, close_cb);
   return mrb_nil_value();
@@ -159,7 +156,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_shutdown_cb shutdown_cb = _uv_shutdown_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -169,13 +166,10 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "|&", &b);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     shutdown_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), b);
 
   uv_shutdown_t* req = (uv_shutdown_t*) malloc(sizeof(uv_shutdown_t));
   if (!req) {
@@ -216,7 +210,7 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_read_cb read_cb = _uv_read_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -226,13 +220,10 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&", &b);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     read_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "read_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "read_cb"), b);
 
   if (uv_read_start(&context->any.stream, _uv_alloc_cb, read_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -277,7 +268,7 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   mrb_value arg_data = mrb_nil_value();
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_write_cb write_cb = _uv_write_cb;
   uv_buf_t buf;
 
@@ -292,13 +283,10 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     write_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), b);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
   uv_write_t* req = (uv_write_t*) malloc(sizeof(uv_write_t));
@@ -510,10 +498,10 @@ _uv_timer_cb(uv_timer_t* timer, int status)
 static mrb_value
 mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_timeout, arg_repeat;
+  mrb_value arg_timeout = mrb_nil_value(), arg_repeat = mrb_nil_value();
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_timer_cb timer_cb = _uv_timer_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -523,13 +511,10 @@ mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&ii", &b, &arg_timeout, &arg_repeat);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     timer_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "timer_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "timer_cb"), b);
 
   if (uv_timer_start(&context->any.timer, timer_cb,
       mrb_fixnum(arg_timeout), mrb_fixnum(arg_repeat)) != 0) {
@@ -617,7 +602,7 @@ mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_idle_cb idle_cb = _uv_idle_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -627,13 +612,11 @@ mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&", &b);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     idle_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "idle_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "idle_cb"), b);
+  uv_idle_init(uv_default_loop(), &context->any.idle);
 
   if (uv_idle_start(&context->any.idle, idle_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -683,7 +666,7 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_async_cb async_cb = _uv_async_cb;
 
   if (mrb_get_args(mrb, "&|o", &b, &arg_loop) == 1) {
@@ -710,13 +693,10 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   context->instance = self;
   context->loop = loop;
 
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     async_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "async_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "async_cb"), b);
 
   if (uv_async_init(loop, &context->any.async, async_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
@@ -806,7 +786,7 @@ mrb_uv_prepare_start(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_prepare_cb prepare_cb = _uv_prepare_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -816,13 +796,10 @@ mrb_uv_prepare_start(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&", &b);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     prepare_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "prepare_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "prepare_cb"), b);
 
   if (uv_prepare_start(&context->any.prepare, prepare_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -1036,7 +1013,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   mrb_value arg_addr;
   mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_connect_cb connect_cb = _uv_connect_cb;
   struct sockaddr_in* addr = NULL;
 
@@ -1056,13 +1033,10 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     connect_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b);
 
   uv_connect_t* req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
   if (!req) {
@@ -1113,7 +1087,7 @@ mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
   mrb_value arg_backlog;
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_connection_cb connection_cb = _uv_connection_cb;
   int backlog;
 
@@ -1124,13 +1098,10 @@ mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&i", &b, &arg_backlog);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     connection_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), b);
 
   backlog = mrb_fixnum(arg_backlog);
 
@@ -1365,7 +1336,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
   struct sockaddr_in* addr = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_udp_send_cb udp_send_cb = _uv_udp_send_cb;
   uv_buf_t buf;
 
@@ -1385,13 +1356,10 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     udp_send_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_send_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_send_cb"), b);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
   uv_udp_send_t* req = (uv_udp_send_t*) malloc(sizeof(uv_udp_send_t));
@@ -1445,7 +1413,7 @@ mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_udp_recv_cb udp_recv_cb = _uv_udp_recv_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -1454,13 +1422,10 @@ mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     udp_recv_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_recv_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_recv_cb"), b);
 
   if (uv_udp_recv_start(&context->any.udp, _uv_alloc_cb, udp_recv_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -1543,7 +1508,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   mrb_value arg_name;
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_connect_cb connect_cb = _uv_connect_cb;
   char* name = NULL;
 
@@ -1559,13 +1524,10 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   }
   name = RSTRING_PTR(arg_name);
 
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     connect_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b);
 
   uv_connect_t* req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
   if (!req) {
@@ -1609,7 +1571,7 @@ mrb_uv_pipe_listen(mrb_state *mrb, mrb_value self)
   mrb_value arg_backlog;
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_connection_cb connection_cb = _uv_connection_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -1619,13 +1581,10 @@ mrb_uv_pipe_listen(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&i", &b, &arg_backlog);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     connection_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "connection_cb"), b);
 
   if (uv_listen((uv_stream_t*) &context->any.pipe, mrb_fixnum(arg_backlog), connection_cb) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -1675,7 +1634,6 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
 static void
 _uv_fs_open_cb(uv_fs_t* req)
 {
-  mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->data;
   mrb_state* mrb = context->mrb;
   if (req->result == -1) {
@@ -1683,34 +1641,39 @@ _uv_fs_open_cb(uv_fs_t* req)
   }
   ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
-  context->any.fs = req->result;
-  args[0] = mrb_fixnum_value(req->result);
-  mrb_yield_argv(mrb, proc, 1, args);
+  if (!mrb_nil_p(proc)) {
+    mrb_value args[1];
+    context->any.fs = req->result;
+    args[0] = mrb_fixnum_value(req->result);
+    mrb_yield_argv(mrb, proc, 1, args);
+  }
   ARENA_RESTORE;
 }
 
 static void
 _uv_fs_cb(uv_fs_t* req)
 {
-  mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->data;
   mrb_state* mrb = context->mrb;
   ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
-  args[0] = mrb_fixnum_value(req->result);
-  mrb_yield_argv(mrb, proc, 1, args);
+  if (!mrb_nil_p(proc)) {
+    mrb_value args[1];
+    args[0] = mrb_fixnum_value(req->result);
+    mrb_yield_argv(mrb, proc, 1, args);
+  }
   ARENA_RESTORE;
 }
 
 static mrb_value
 mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_filename = mrb_nil_value(), arg_mode = mrb_fixnum_value(0);
+  mrb_value arg_filename = mrb_nil_value(), arg_mode = mrb_nil_value();
   mrb_value arg_flags;
   uv_fs_cb fs_cb = _uv_fs_open_cb;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
 
-  mrb_get_args(mrb, "&oi|i", &b, &arg_filename, &arg_flags, &arg_mode);
+  mrb_get_args(mrb, "&oii", &b, &arg_filename, &arg_flags, &arg_mode);
 
   mrb_value c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_fs);
 
@@ -1718,13 +1681,10 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     fs_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
+  mrb_iv_set(mrb, c, mrb_intern(mrb, "fs_cb"), b);
 
   context->instance = c;
   context->loop = uv_default_loop();
@@ -1752,7 +1712,7 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -1762,13 +1722,10 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "|&", &b);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     fs_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
   uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
@@ -1786,7 +1743,7 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   mrb_value arg_data = mrb_nil_value(), arg_offset = mrb_fixnum_value(0);
   mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -1800,13 +1757,10 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     fs_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
   uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
@@ -1829,7 +1783,7 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   mrb_value arg_offset = mrb_fixnum_value(-1);
   mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -1840,13 +1794,10 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "|&ii", &b, &arg_length, &arg_offset);
 
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     fs_cb = NULL;
-  } else {
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
   size_t len = mrb_fixnum(arg_length);
   char* buf = malloc(len);
@@ -1877,21 +1828,20 @@ static mrb_value
 mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_path;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
 
   mrb_get_args(mrb, "|&o", &b, &arg_path);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
     memset(&context, 0, sizeof(mrb_uv_context));
     context.mrb = mrb;
+    context.instance = self;
     context.loop = uv_default_loop();
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
   uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
@@ -1910,21 +1860,20 @@ static mrb_value
 mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_path = mrb_nil_value(), arg_mode = mrb_fixnum_value(0755);
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
 
   mrb_get_args(mrb, "|&oi", &b, &arg_path, &arg_mode);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
     memset(&context, 0, sizeof(mrb_uv_context));
     context.mrb = mrb;
+    context.instance = self;
     context.loop = uv_default_loop();
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
   uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
@@ -1943,21 +1892,20 @@ static mrb_value
 mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_path;
-  struct RProc *b = NULL;
+  mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
 
   mrb_get_args(mrb, "|&o", &b, &arg_path);
-  mrb_value proc = mrb_nil_value();
-  if (!b) {
+  if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
     memset(&context, 0, sizeof(mrb_uv_context));
     context.mrb = mrb;
+    context.instance = self;
     context.loop = uv_default_loop();
-    proc = mrb_obj_value(b);
   }
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), proc);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
   uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
@@ -1999,7 +1947,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_timer = mrb_define_class_under(mrb, _class_uv, "Timer", mrb->object_class);
   mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(3));
+  mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_timer, "stop", mrb_uv_timer_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "close", mrb_uv_close, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_timer, "data=", mrb_uv_data_set, ARGS_REQ(1));
@@ -2008,7 +1956,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_idle = mrb_define_class_under(mrb, _class_uv, "Idle", mrb->object_class);
   mrb_define_method(mrb, _class_uv_idle, "initialize", mrb_uv_idle_init, ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_idle, "start", mrb_uv_idle_start, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_idle, "start", mrb_uv_idle_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "stop", mrb_uv_idle_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "close", mrb_uv_close, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_idle, "data=", mrb_uv_data_set, ARGS_REQ(1));
