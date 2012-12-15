@@ -14,7 +14,6 @@
 #if 1
 #define ARENA_SAVE \
   int ai = mrb_gc_arena_save(mrb); \
-  //printf("area %d\n", ai); \
   if (ai == MRB_ARENA_SIZE) { \
     mrb_raise(mrb, E_RUNTIME_ERROR, "arena overflow"); \
   }
@@ -195,14 +194,16 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   mrb_state* mrb = context->mrb;
   ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "read_cb"));
-  mrb_value args[1];
-  if (nread == -1) {
-    args[0] = mrb_nil_value();
-  } else {
-    args[0] = mrb_str_new(mrb, buf.base, nread);
-  }
-  mrb_yield_argv(mrb, proc, 1, args);
+  if (!mrb_nil_p(proc)) {
+    mrb_value args[1];
+    if (nread == -1) {
+      args[0] = mrb_nil_value();
+    } else {
+      args[0] = mrb_str_new(mrb, buf.base, nread);
+    }
   ARENA_RESTORE;
+    mrb_yield_argv(mrb, proc, 1, args);
+  }
 }
 
 static mrb_value
@@ -252,13 +253,15 @@ mrb_uv_read_stop(mrb_state *mrb, mrb_value self)
 static void
 _uv_write_cb(uv_write_t* req, int status)
 {
-  mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
   ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "write_cb"));
-  args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(mrb, proc, 1, args);
+  if (!mrb_nil_p(proc)) {
+    mrb_value args[1];
+    args[0] = mrb_fixnum_value(status);
+    mrb_yield_argv(mrb, proc, 1, args);
+  }
   ARENA_RESTORE;
 }
 
@@ -2020,7 +2023,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_pipe, "connect", mrb_uv_pipe_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_pipe, "read_start", mrb_uv_read_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_pipe, "read_stop", mrb_uv_read_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_pipe, "write", mrb_uv_write, ARGS_OPT(2));
+  mrb_define_method(mrb, _class_uv_pipe, "write", mrb_uv_write, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "close", mrb_uv_close, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_pipe, "shutdown", mrb_uv_shutdown, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_pipe, "bind", mrb_uv_pipe_bind, ARGS_REQ(1));
