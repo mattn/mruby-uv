@@ -107,10 +107,8 @@ _uv_close_cb(uv_handle_t* handle)
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "close_cb"));
   mrb_yield_argv(mrb, proc, 0, NULL);
-  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -192,16 +190,16 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
   mrb_uv_context* context = (mrb_uv_context*) stream->data;
   mrb_state* mrb = context->mrb;
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "read_cb"));
   if (!mrb_nil_p(proc)) {
     mrb_value args[1];
     if (nread == -1) {
       args[0] = mrb_nil_value();
     } else {
+      ARENA_SAVE;
       args[0] = mrb_str_new(mrb, buf.base, nread);
+      ARENA_RESTORE;
     }
-  ARENA_RESTORE;
     mrb_yield_argv(mrb, proc, 1, args);
   }
 }
@@ -255,14 +253,12 @@ _uv_write_cb(uv_write_t* req, int status)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "write_cb"));
   if (!mrb_nil_p(proc)) {
     mrb_value args[1];
     args[0] = mrb_fixnum_value(status);
     mrb_yield_argv(mrb, proc, 1, args);
   }
-  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -280,7 +276,6 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
-  mrb_gc_mark_value(mrb, self);
 
   mrb_get_args(mrb, "|&o", &b, &arg_data);
   if (mrb_nil_p(arg_data)) {
@@ -311,11 +306,9 @@ _uv_connection_cb(uv_stream_t* handle, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "connection_cb"));
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, proc, 1, args);
-  ARENA_RESTORE;
 }
 
 static void
@@ -324,11 +317,9 @@ _uv_connect_cb(uv_connect_t* req, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "connect_cb"));
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, proc, 1, args);
-  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -491,11 +482,9 @@ _uv_timer_cb(uv_timer_t* timer, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) timer->data;
   mrb_state* mrb = context->mrb;
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "timer_cb"));
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, proc, 1, args);
-  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -654,11 +643,9 @@ _uv_async_cb(uv_async_t* async, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) async->data;
   mrb_state* mrb = context->mrb;
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "async_cb"));
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, proc, 1, args);
-  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -1325,11 +1312,9 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
   mrb_value args[1];
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "udp_send_cb"));
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, proc, 0, args);
-  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -1384,9 +1369,9 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "timer_cb"));
   mrb_value args[3];
+  ARENA_SAVE;
   if (nread != -1) {
     char name[256];
     mrb_value c;
@@ -1406,9 +1391,9 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
     args[0] = mrb_nil_value();
     args[1] = mrb_nil_value();
   }
+  ARENA_RESTORE;
   args[2] = mrb_fixnum_value(flags);
   mrb_yield_argv(mrb, proc, 3, args);
-  ARENA_RESTORE;
 }
 
 static mrb_value
@@ -1642,7 +1627,6 @@ _uv_fs_open_cb(uv_fs_t* req)
   if (req->result == -1) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
   if (!mrb_nil_p(proc)) {
     mrb_value args[1];
@@ -1650,7 +1634,6 @@ _uv_fs_open_cb(uv_fs_t* req)
     args[0] = mrb_fixnum_value(req->result);
     mrb_yield_argv(mrb, proc, 1, args);
   }
-  ARENA_RESTORE;
 }
 
 static void
@@ -1658,14 +1641,12 @@ _uv_fs_cb(uv_fs_t* req)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->data;
   mrb_state* mrb = context->mrb;
-  ARENA_SAVE;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
   if (!mrb_nil_p(proc)) {
     mrb_value args[1];
     args[0] = mrb_fixnum_value(req->result);
     mrb_yield_argv(mrb, proc, 1, args);
   }
-  ARENA_RESTORE;
 }
 
 static mrb_value
