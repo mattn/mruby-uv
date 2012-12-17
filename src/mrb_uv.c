@@ -195,12 +195,14 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     mrb_value args[1];
     if (nread == -1) {
       args[0] = mrb_nil_value();
+      mrb_yield_argv(mrb, proc, 1, args);
     } else {
       ARENA_SAVE;
       args[0] = mrb_str_new(mrb, buf.base, nread);
       ARENA_RESTORE;
+      mrb_yield_argv(mrb, proc, 1, args);
+      free(buf.base);
     }
-    mrb_yield_argv(mrb, proc, 1, args);
   }
 }
 
@@ -255,10 +257,12 @@ _uv_write_cb(uv_write_t* req, int status)
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "write_cb"));
   if (!mrb_nil_p(proc)) {
+    mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "write_cb"), mrb_nil_value());
     mrb_value args[1];
     args[0] = mrb_fixnum_value(status);
     mrb_yield_argv(mrb, proc, 1, args);
   }
+  free(req);
 }
 
 static mrb_value
@@ -925,7 +929,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "oi", &arg_host, &arg_port);
   if (!mrb_nil_p(arg_host) && !mrb_nil_p(arg_port)) {
-    vaddr = uv_ip4_addr((const char*) strdup(RSTRING_PTR(arg_host)), mrb_fixnum(arg_port));
+    vaddr = uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port));
     addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(vaddr));
   }
