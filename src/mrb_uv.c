@@ -257,7 +257,6 @@ _uv_write_cb(uv_write_t* req, int status)
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "write_cb"));
   if (!mrb_nil_p(proc)) {
-    mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "write_cb"), mrb_nil_value());
     mrb_value args[1];
     args[0] = mrb_fixnum_value(status);
     mrb_yield_argv(mrb, proc, 1, args);
