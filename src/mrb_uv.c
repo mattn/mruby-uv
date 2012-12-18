@@ -59,6 +59,7 @@ static void
 uv_context_free(mrb_state *mrb, void *p)
 {
   mrb_uv_context* context = (mrb_uv_context*) p;
+  mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "context"), mrb_nil_value());
   context->instance = mrb_nil_value();
   context->mrb = NULL;
   context->loop = NULL;
@@ -99,6 +100,7 @@ static struct RClass *_class_uv_fs;
 static mrb_value
 mrb_uv_gc(mrb_state *mrb, mrb_value self)
 {
+  ARENA_SAVE;
   mrb_value keys;
   keys = mrb_hash_keys(mrb, uv_gc_hash);
   int i, l = RARRAY_LEN(keys);
@@ -107,9 +109,14 @@ mrb_uv_gc(mrb_state *mrb, mrb_value self)
     mrb_value obj = mrb_hash_get(mrb, uv_gc_hash, key);
     mrb_value ctx  = mrb_iv_get(mrb, obj, mrb_intern(mrb, "context"));
     if (!mrb_nil_p(ctx)) {
-      mrb_hash_delete_key(mrb, uv_gc_hash, key);
+      mrb_uv_context* context;
+      Data_Get_Struct(mrb, ctx, &uv_context_type, context);
+      if (context || context->mrb == NULL) {
+        //mrb_hash_delete_key(mrb, uv_gc_hash, key);
+      }
     }
   }
+  ARENA_RESTORE;
   return mrb_nil_value();
 }
 
@@ -130,6 +137,7 @@ _uv_close_cb(uv_handle_t* handle)
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
+  if (!mrb) return;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "close_cb"));
   mrb_yield_argv(mrb, proc, 0, NULL);
 }
@@ -212,6 +220,7 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
   mrb_uv_context* context = (mrb_uv_context*) stream->data;
   mrb_state* mrb = context->mrb;
+  if (!mrb) return;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "read_cb"));
   if (!mrb_nil_p(proc)) {
     mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "read_cb"), mrb_nil_value());
@@ -278,6 +287,7 @@ _uv_write_cb(uv_write_t* req, int status)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
+  if (!mrb) return;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "write_cb"));
   if (!mrb_nil_p(proc)) {
     mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "write_cb"), mrb_nil_value());
@@ -1135,7 +1145,6 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   }
 
   c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_tcp);
-  mrb_hash_set(mrb, uv_gc_hash, c, c);
 
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
@@ -1147,6 +1156,9 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
 
+  ARENA_SAVE;
+  mrb_hash_set(mrb, uv_gc_hash, c, c);
+  ARENA_RESTORE;
   return c;
 }
 
@@ -1614,7 +1626,6 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
   mrb_value args[1];
   args[0] = mrb_fixnum_value(0);
   c = mrb_class_new_instance(mrb, 1, args, _class_uv_pipe);
-  mrb_hash_set(mrb, uv_gc_hash, c, c);
 
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
@@ -1629,6 +1640,9 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
 
+  ARENA_SAVE;
+  mrb_hash_set(mrb, uv_gc_hash, c, c);
+  ARENA_RESTORE;
   return c;
 }
 
@@ -1676,7 +1690,6 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "&oii", &b, &arg_filename, &arg_flags, &arg_mode);
 
   mrb_value c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_fs);
-  mrb_hash_set(mrb, uv_gc_hash, c, c);
 
   mrb_uv_context* context = uv_context_alloc(mrb);
   if (!context) {
@@ -1705,6 +1718,10 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
   }
+
+  ARENA_SAVE;
+  mrb_hash_set(mrb, uv_gc_hash, c, c);
+  ARENA_RESTORE;
   return c;
 }
 
