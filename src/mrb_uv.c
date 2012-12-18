@@ -5,6 +5,7 @@
 #include <mruby/data.h>
 #include <mruby/string.h>
 #include <mruby/array.h>
+#include <mruby/hash.h>
 #include <mruby/class.h>
 #include <mruby/variable.h>
 #include <uv.h>
@@ -57,6 +58,10 @@ uv_context_alloc(mrb_state* mrb)
 static void
 uv_context_free(mrb_state *mrb, void *p)
 {
+  mrb_uv_context* context = (mrb_uv_context*) p;
+  context->instance = mrb_nil_value();
+  context->mrb = NULL;
+  context->loop = NULL;
   free(p);
 }
 
@@ -74,6 +79,7 @@ static const struct mrb_data_type uv_ip4addr_type = {
   "uv_ip4addr", uv_ip4addr_free,
 };
 
+static mrb_value uv_gc_hash;
 static struct RClass *_class_uv;
 static struct RClass *_class_uv_loop;
 static struct RClass *_class_uv_timer;
@@ -90,6 +96,23 @@ static struct RClass *_class_uv_fs;
 /*********************************************************
  * main
  *********************************************************/
+static mrb_value
+mrb_uv_gc(mrb_state *mrb, mrb_value self)
+{
+  mrb_value keys;
+  keys = mrb_hash_keys(mrb, uv_gc_hash);
+  int i, l = RARRAY_LEN(keys);
+  for (i = 0; i < l; i++) {
+    mrb_value key = mrb_ary_entry(keys, i);
+    mrb_value obj = mrb_hash_get(mrb, uv_gc_hash, key);
+    mrb_value ctx  = mrb_iv_get(mrb, obj, mrb_intern(mrb, "context"));
+    if (!mrb_nil_p(ctx)) {
+      mrb_hash_delete_key(mrb, uv_gc_hash, key);
+    }
+  }
+  return mrb_nil_value();
+}
+
 static mrb_value
 mrb_uv_run(mrb_state *mrb, mrb_value self)
 {
@@ -181,7 +204,6 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
 static uv_buf_t
 _uv_alloc_cb(uv_handle_t* handle, size_t suggested_size)
 {
-  mrb_uv_context* context = (mrb_uv_context*) handle->data;
   return uv_buf_init(malloc(suggested_size), suggested_size);
 }
 
@@ -192,6 +214,7 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "read_cb"));
   if (!mrb_nil_p(proc)) {
+    mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "read_cb"), mrb_nil_value());
     mrb_value args[1];
     if (nread == -1) {
       args[0] = mrb_nil_value();
@@ -257,6 +280,7 @@ _uv_write_cb(uv_write_t* req, int status)
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "write_cb"));
   if (!mrb_nil_p(proc)) {
+    mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "write_cb"), mrb_nil_value());
     mrb_value args[1];
     args[0] = mrb_fixnum_value(status);
     mrb_yield_argv(mrb, proc, 1, args);
@@ -349,11 +373,8 @@ mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
   mrb_value c;
   mrb_uv_context* context = NULL;
 
-#if 0
-  c = mrb_class_new_instance(mrb, 0, NULL, mrb_class_get(mrb, "UV::Loop"));
-#else
   c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_loop);
-#endif
+
   context = uv_context_alloc(mrb);
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
@@ -912,11 +933,7 @@ mrb_uv_ip4_addr(mrb_state *mrb, mrb_value self)
   int argc;
   mrb_value *argv;
   mrb_get_args(mrb, "*", &argv, &argc);
-#if 0
-  return mrb_class_new_instance(mrb, argc, argv, mrb_class_get(mrb, "UV::Ip4Addr"));
-#else
   return mrb_class_new_instance(mrb, argc, argv, _class_uv_ip4addr);
-#endif
 }
 
 static mrb_value
@@ -1117,11 +1134,9 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-#if 0
-  c = mrb_class_new_instance(mrb, 0, NULL, mrb_class_get(mrb, "UV::TCP"));
-#else
   c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_tcp);
-#endif
+  mrb_hash_set(mrb, uv_gc_hash, c, c);
+
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
 
@@ -1598,11 +1613,9 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
 
   mrb_value args[1];
   args[0] = mrb_fixnum_value(0);
-#if 0
-  c = mrb_class_new_instance(mrb, 0, NULL, mrb_class_get(mrb, "UV::Pipe"));
-#else
   c = mrb_class_new_instance(mrb, 1, args, _class_uv_pipe);
-#endif
+  mrb_hash_set(mrb, uv_gc_hash, c, c);
+
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
   if (!new_context) {
@@ -1663,6 +1676,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "&oii", &b, &arg_filename, &arg_flags, &arg_mode);
 
   mrb_value c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_fs);
+  mrb_hash_set(mrb, uv_gc_hash, c, c);
 
   mrb_uv_context* context = uv_context_alloc(mrb);
   if (!context) {
@@ -1728,7 +1742,7 @@ static mrb_value
 mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_data = mrb_nil_value(), arg_offset = mrb_fixnum_value(0);
-  mrb_value value_context, value_addr;
+  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
@@ -1768,7 +1782,7 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_length = mrb_fixnum_value(BUFSIZ);
   mrb_value arg_offset = mrb_fixnum_value(-1);
-  mrb_value value_context, value_addr;
+  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
@@ -1921,6 +1935,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "run_once", mrb_uv_run_once, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
+  mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
   ARENA_RESTORE;
 
   _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
@@ -2073,6 +2088,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_fs_poll_stop
   */
   ARENA_RESTORE;
+
+  uv_gc_hash = mrb_hash_new(mrb);
+  mrb_define_const(mrb, _class_uv, "$GC", uv_gc_hash);
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */
