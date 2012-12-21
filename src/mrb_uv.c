@@ -1854,6 +1854,20 @@ leave:
 }
 
 static mrb_value
+mrb_uv_fs_fd(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  return mrb_fixnum_value(context->any.fs);
+}
+
+static mrb_value
 mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_filename = mrb_nil_value(), arg_mode = mrb_nil_value();
@@ -2336,6 +2350,38 @@ mrb_uv_fs_ftruncate(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value
+mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_outfd, arg_infd, arg_offset, arg_length;
+  mrb_value b = mrb_nil_value();
+  uv_fs_cb fs_cb = _uv_fs_cb;
+  static mrb_uv_context context;
+
+  mrb_get_args(mrb, "|&iiii", &b, &arg_infd, &arg_outfd, &arg_offset, &arg_length);
+  if (mrb_nil_p(b)) {
+    fs_cb = NULL;
+  } else {
+    memset(&context, 0, sizeof(mrb_uv_context));
+    context.mrb = mrb;
+    context.instance = self;
+    context.loop = uv_default_loop();
+  }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
+
+  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  if (!req) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  memset(req, 0, sizeof(uv_fs_t));
+  req->data = &context;
+  if (uv_fs_sendfile(uv_default_loop(), req, mrb_fixnum(arg_infd), mrb_fixnum(arg_outfd), mrb_fixnum(arg_offset), mrb_fixnum(arg_length), fs_cb) != 0) {
+    free(req);
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+  }
+  return mrb_nil_value();
+}
+
 /*********************************************************
  * Signal
  *********************************************************/
@@ -2584,6 +2630,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 #endif
   mrb_define_const(mrb, _class_uv_fs, "S_IWRITE", mrb_fixnum_value(S_IWRITE));
   mrb_define_const(mrb, _class_uv_fs, "S_IREAD", mrb_fixnum_value(S_IREAD));
+  mrb_define_module_function(mrb, _class_uv_fs, "fd", mrb_uv_fs_fd, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv_fs, "open", mrb_uv_fs_open, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_fs, "write", mrb_uv_fs_write, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_fs, "read", mrb_uv_fs_read, ARGS_OPT(1));
@@ -2598,6 +2645,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv_fs, "fsync", mrb_uv_fs_fsync, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_fs, "fdatasync", mrb_uv_fs_fdatasync, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_fs, "ftruncate", mrb_uv_fs_ftruncate, ARGS_REQ(2));
+  mrb_define_module_function(mrb, _class_uv_fs, "sendfile", mrb_uv_fs_sendfile, ARGS_REQ(4));
   /* TODO
   uv_fs_sendfile
   uv_fs_chmod
@@ -2610,6 +2658,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_fs_fchmod
   uv_fs_chown
   uv_fs_fchown
+  */
+
+  /* TODO
   uv_fs_poll_init
   uv_fs_poll_start
   uv_fs_poll_stop
