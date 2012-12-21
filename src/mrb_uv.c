@@ -318,7 +318,7 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "|&o", &b, &arg_data);
+  mrb_get_args(mrb, "|&S", &b, &arg_data);
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1094,7 +1094,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
   struct sockaddr_in vaddr;
   struct sockaddr_in *addr = NULL;
 
-  mrb_get_args(mrb, "oi", &arg_host, &arg_port);
+  mrb_get_args(mrb, "Si", &arg_host, &arg_port);
   if (!mrb_nil_p(arg_host) && !mrb_nil_p(arg_port)) {
     vaddr = uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port));
     addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
@@ -1505,7 +1505,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "|&oo", &b, &arg_data, &arg_addr);
+  mrb_get_args(mrb, "|&So", &b, &arg_data, &arg_addr);
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1677,7 +1677,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "&o", &b, &arg_name);
+  mrb_get_args(mrb, "&S", &b, &arg_name);
   if (mrb_nil_p(arg_name) || mrb_type(arg_name) != MRB_TT_STRING) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1712,7 +1712,7 @@ mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "o", &arg_name);
+  mrb_get_args(mrb, "S", &arg_name);
   if (mrb_nil_p(arg_name) || mrb_type(arg_name) != MRB_TT_STRING) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1875,7 +1875,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   uv_fs_cb fs_cb = _uv_fs_open_cb;
   mrb_value b = mrb_nil_value();
 
-  mrb_get_args(mrb, "&oii", &b, &arg_filename, &arg_flags, &arg_mode);
+  mrb_get_args(mrb, "&Sii", &b, &arg_filename, &arg_flags, &arg_mode);
 
   mrb_value c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_fs);
 
@@ -1958,7 +1958,7 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "|&oi", &b, &arg_data, &arg_offset);
+  mrb_get_args(mrb, "|&Si", &b, &arg_data, &arg_offset);
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2038,7 +2038,7 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
 
-  mrb_get_args(mrb, "|&o", &b, &arg_path);
+  mrb_get_args(mrb, "|&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2070,7 +2070,7 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
 
-  mrb_get_args(mrb, "|&oi", &b, &arg_path, &arg_mode);
+  mrb_get_args(mrb, "|&Si", &b, &arg_path, &arg_mode);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2102,7 +2102,7 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
 
-  mrb_get_args(mrb, "|&o", &b, &arg_path);
+  mrb_get_args(mrb, "|&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2134,7 +2134,7 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
 
-  mrb_get_args(mrb, "|&oi", &b, &arg_path, &arg_flags);
+  mrb_get_args(mrb, "|&Si", &b, &arg_path, &arg_flags);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2166,7 +2166,7 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
 
-  mrb_get_args(mrb, "|&o", &b, &arg_path);
+  mrb_get_args(mrb, "|&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2377,6 +2377,38 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_fs_t));
   req->data = &context;
   if (uv_fs_sendfile(uv_default_loop(), req, mrb_fixnum(arg_infd), mrb_fixnum(arg_outfd), mrb_fixnum(arg_offset), mrb_fixnum(arg_length), fs_cb) != 0) {
+    free(req);
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+  }
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_fs_chmod(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_path, arg_mode;
+  mrb_value b = mrb_nil_value();
+  uv_fs_cb fs_cb = _uv_fs_cb;
+  static mrb_uv_context context;
+
+  mrb_get_args(mrb, "|&Si", &b, &arg_path, &arg_mode);
+  if (mrb_nil_p(b)) {
+    fs_cb = NULL;
+  } else {
+    memset(&context, 0, sizeof(mrb_uv_context));
+    context.mrb = mrb;
+    context.instance = self;
+    context.loop = uv_default_loop();
+  }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
+
+  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  if (!req) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  memset(req, 0, sizeof(uv_fs_t));
+  req->data = &context;
+  if (uv_fs_chmod(uv_default_loop(), req, RSTRING_PTR(arg_path), mrb_fixnum(arg_mode), fs_cb) != 0) {
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
   }
@@ -2647,9 +2679,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv_fs, "fdatasync", mrb_uv_fs_fdatasync, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_fs, "ftruncate", mrb_uv_fs_ftruncate, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv_fs, "sendfile", mrb_uv_fs_sendfile, ARGS_REQ(4));
+  mrb_define_module_function(mrb, _class_uv_fs, "chmod", mrb_uv_fs_chmod, ARGS_REQ(2));
   /* TODO
-  uv_fs_sendfile
-  uv_fs_chmod
   uv_fs_utime
   uv_fs_futime
   uv_fs_lstat
