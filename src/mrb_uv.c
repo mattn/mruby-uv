@@ -25,6 +25,15 @@
 #define ARENA_RESTORE
 #endif
 
+#define OBJECT_GET(mrb, instance, name) \
+  mrb_iv_get(mrb, instance, mrb_intern(mrb, name))
+
+#define OBJECT_SET(mrb, instance, name, value) \
+  mrb_iv_set(mrb, instance, mrb_intern(mrb, name), value)
+
+#define OBJECT_REMOVE(mrb, instance, name) \
+  mrb_iv_remove(mrb, instance, mrb_intern(mrb, name))
+
 typedef struct {
   union {
     uv_tcp_t tcp;
@@ -59,7 +68,7 @@ static void
 uv_context_free(mrb_state *mrb, void *p)
 {
   mrb_uv_context* context = (mrb_uv_context*) p;
-  mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "context"), mrb_nil_value());
+  OBJECT_REMOVE(mrb, context->instance, "context");
   context->instance = mrb_nil_value();
   context->mrb = NULL;
   context->loop = NULL;
@@ -68,16 +77,6 @@ uv_context_free(mrb_state *mrb, void *p)
 
 static const struct mrb_data_type uv_context_type = {
   "uv_context", uv_context_free,
-};
-
-static void
-uv_ip4addr_free(mrb_state *mrb, void *p)
-{
-  free(p);
-}
-
-static const struct mrb_data_type uv_ip4addr_type = {
-  "uv_ip4addr", uv_ip4addr_free,
 };
 
 static mrb_value uv_gc_hash;
@@ -90,6 +89,7 @@ static struct RClass *_class_uv_tcp;
 static struct RClass *_class_uv_udp;
 static struct RClass *_class_uv_pipe;
 static struct RClass *_class_uv_ip4addr;
+static struct RClass *_class_uv_addrinfo;
 static struct RClass *_class_uv_prepare;
 static struct RClass *_class_uv_mutex;
 static struct RClass *_class_uv_fs;
@@ -228,6 +228,8 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     if (nread == -1) {
       args[0] = mrb_nil_value();
       mrb_yield_argv(mrb, proc, 1, args);
+    } else if (nread == 0) {
+      uv_close(&context->any.handle, NULL);
     } else {
       ARENA_SAVE;
       args[0] = mrb_str_new(mrb, buf.base, nread);
@@ -935,8 +937,145 @@ mrb_uv_mutex_destroy(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
+ * Addrinfo
+ *********************************************************/
+typedef struct {
+  mrb_state* mrb;
+  struct addrinfo* addr;
+  mrb_value proc;
+} mrb_uv_addrinfo;
+
+static void
+uv_addrinfo_free(mrb_state *mrb, void *p)
+{
+  mrb_uv_addrinfo* addr = (mrb_uv_addrinfo*) p;
+  uv_freeaddrinfo(addr->addr);
+  free(p);
+}
+
+static const struct mrb_data_type uv_addrinfo_type = {
+  "uv_addrinfo", uv_addrinfo_free,
+};
+
+static void
+_uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
+{
+  mrb_value args[2];
+  mrb_uv_addrinfo* addr = (mrb_uv_addrinfo*) req->data;
+  mrb_state* mrb = addr->mrb;
+
+  mrb_value c = mrb_nil_value();
+  if (status != -1) {
+    c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_addrinfo);
+    OBJECT_SET(mrb, c, "flags", mrb_fixnum_value(res->ai_flags));
+    OBJECT_SET(mrb, c, "family", mrb_fixnum_value(res->ai_family));
+    OBJECT_SET(mrb, c, "socktype", mrb_fixnum_value(res->ai_socktype));
+    OBJECT_SET(mrb, c, "protocol", mrb_fixnum_value(res->ai_protocol));
+    // TODO: Not implemented yet!
+    OBJECT_SET(mrb, c, "addr", mrb_nil_value());
+    OBJECT_SET(mrb, c, "canonname", mrb_str_new_cstr(mrb, res->ai_canonname ? res->ai_canonname : ""));
+    // TODO: Not implemented yet!
+    OBJECT_SET(mrb, c, "next", mrb_nil_value());
+  }
+
+  args[0] = mrb_fixnum_value(status);
+  args[1] = c;
+  mrb_yield_argv(mrb, addr->proc, 2, args);
+}
+
+static mrb_value
+mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
+{
+  mrb_value node, service; 
+  mrb_value b = mrb_nil_value();
+  uv_getaddrinfo_cb getaddrinfo_cb = _uv_getaddrinfo_cb;
+  struct addrinfo hint = {0};
+
+  mrb_get_args(mrb, "SS|o&", &node, &service, &hint, &b);
+
+  mrb_uv_addrinfo* addr = (mrb_uv_addrinfo*) malloc(sizeof(mrb_uv_addrinfo));
+  if (!addr) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  memset(addr, 0, sizeof(mrb_uv_addrinfo));
+  addr->mrb = mrb;
+  addr->proc = b;
+
+  if (mrb_nil_p(b)) {
+    getaddrinfo_cb = NULL;
+  }
+
+  uv_getaddrinfo_t* req = (uv_getaddrinfo_t*) malloc(sizeof(uv_getaddrinfo_t));
+  if (!req) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  memset(req, 0, sizeof(uv_getaddrinfo_t));
+  req->data = addr;
+  int ret = uv_getaddrinfo(
+    uv_default_loop(),
+    req,
+    getaddrinfo_cb,
+    RSTRING_PTR(node),
+    RSTRING_PTR(service),
+    &hint);
+  return mrb_fixnum_value(ret);
+}
+
+static mrb_value
+mrb_uv_addrinfo_flags(mrb_state *mrb, mrb_value self)
+{
+  return OBJECT_GET(mrb, self, "flags");
+}
+
+static mrb_value
+mrb_uv_addrinfo_family(mrb_state *mrb, mrb_value self)
+{
+  return OBJECT_GET(mrb, self, "family");
+}
+
+static mrb_value
+mrb_uv_addrinfo_socktype(mrb_state *mrb, mrb_value self)
+{
+  return OBJECT_GET(mrb, self, "socktype");
+}
+
+static mrb_value
+mrb_uv_addrinfo_protocol(mrb_state *mrb, mrb_value self)
+{
+  return OBJECT_GET(mrb, self, "protocol");
+}
+
+static mrb_value
+mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
+{
+  return OBJECT_GET(mrb, self, "addr");
+}
+
+static mrb_value
+mrb_uv_addrinfo_canonname(mrb_state *mrb, mrb_value self)
+{
+  return OBJECT_GET(mrb, self, "canonname");
+}
+
+static mrb_value
+mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
+{
+  return OBJECT_GET(mrb, self, "next");
+}
+
+/*********************************************************
  * Ip4Addr / Ip6Addr
  *********************************************************/
+static void
+uv_ip4addr_free(mrb_state *mrb, void *p)
+{
+  free(p);
+}
+
+static const struct mrb_data_type uv_ip4addr_type = {
+  "uv_ip4addr", uv_ip4addr_free,
+};
+
 static mrb_value
 mrb_uv_ip4_addr(mrb_state *mrb, mrb_value self)
 {
@@ -1671,8 +1810,14 @@ _uv_fs_cb(uv_fs_t* req)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->data;
   mrb_state* mrb = context->mrb;
+  if (req->result == -1) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
+  }
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
-  if (!mrb_nil_p(proc)) {
+  if (req->result == 0) {
+    uv_fs_t close_req;
+    uv_fs_close(context->loop, &close_req, context->any.fs, NULL);
+  } else if (!mrb_nil_p(proc)) {
     mrb_value args[1];
     args[0] = mrb_fixnum_value(req->result);
     mrb_yield_argv(mrb, proc, 1, args);
@@ -1952,6 +2097,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "run_once", mrb_uv_run_once, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
+  mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
   ARENA_RESTORE;
 
@@ -1995,6 +2141,16 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_prepare, "stop", mrb_uv_prepare_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_prepare, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_prepare, "data", mrb_uv_data_get, ARGS_NONE());
+  ARENA_RESTORE;
+
+  _class_uv_addrinfo = mrb_define_class_under(mrb, _class_uv, "Addrinfo", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_addrinfo, "flags", mrb_uv_addrinfo_flags, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "family", mrb_uv_addrinfo_family, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "socktype", mrb_uv_addrinfo_socktype, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "protocol", mrb_uv_addrinfo_protocol, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "addr", mrb_uv_addrinfo_addr, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "canonname", mrb_uv_addrinfo_canonname, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "next", mrb_uv_addrinfo_next, ARGS_NONE());
   ARENA_RESTORE;
 
   _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
