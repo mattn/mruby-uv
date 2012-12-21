@@ -46,8 +46,9 @@ typedef struct {
     uv_handle_t handle;
     uv_stream_t stream;
     uv_mutex_t mutex;
-    uv_file fs;
     uv_signal_t signal;
+    uv_file fs;
+    uv_fs_poll_t fs_poll;
   } any;
   mrb_value instance;
   uv_loop_t* loop;
@@ -94,6 +95,7 @@ static struct RClass *_class_uv_addrinfo;
 static struct RClass *_class_uv_prepare;
 static struct RClass *_class_uv_mutex;
 static struct RClass *_class_uv_fs;
+static struct RClass *_class_uv_fs_poll;
 static struct RClass *_class_uv_signal;
 
 /*********************************************************
@@ -379,7 +381,7 @@ mrb_uv_data_set(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * Loop
+ * UV::Loop
  *********************************************************/
 static mrb_value
 mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
@@ -470,7 +472,7 @@ mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * Timer
+ * UV::Timer
  *********************************************************/
 static mrb_value
 mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
@@ -572,7 +574,7 @@ mrb_uv_timer_stop(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * Idle
+ * UV::Idle
  *********************************************************/
 static mrb_value
 mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
@@ -673,7 +675,7 @@ mrb_uv_idle_stop(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * Async
+ * UV::Async
  *********************************************************/
 static void
 _uv_async_cb(uv_async_t* async, int status)
@@ -755,7 +757,7 @@ mrb_uv_async_send(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * Prepare
+ * UV::Prepare
  *********************************************************/
 static void
 _uv_prepare_cb(uv_prepare_t* prepare, int status)
@@ -854,7 +856,7 @@ mrb_uv_prepare_stop(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * Mutex
+ * UV::Mutex
  *********************************************************/
 static mrb_value
 mrb_uv_mutex_init(mrb_state *mrb, mrb_value self)
@@ -939,7 +941,7 @@ mrb_uv_mutex_destroy(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * Addrinfo
+ * UV::Addrinfo
  *********************************************************/
 typedef struct {
   mrb_state* mrb;
@@ -1066,7 +1068,7 @@ mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * Ip4Addr / Ip6Addr
+ * UV::Ip4Addr / UV::Ip6Addr
  *********************************************************/
 static void
 uv_ip4addr_free(mrb_state *mrb, void *p)
@@ -1125,7 +1127,7 @@ mrb_uv_ip4addr_to_s(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * TCP
+ * UV::TCP
  *********************************************************/
 static mrb_value
 mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
@@ -1399,7 +1401,7 @@ mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * UDP
+ * UV::UDP
  *********************************************************/
 static mrb_value
 mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
@@ -1611,7 +1613,7 @@ mrb_uv_udp_recv_stop(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * Pipe
+ * UV::Pipe
  *********************************************************/
 static mrb_value
 mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
@@ -1788,7 +1790,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * FS
+ * UV::FS
  *********************************************************/
 static void
 _uv_fs_open_cb(uv_fs_t* req)
@@ -2223,6 +2225,38 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_path;
+  mrb_value b = mrb_nil_value();
+  uv_fs_cb fs_cb = _uv_fs_cb;
+  static mrb_uv_context context;
+
+  mrb_get_args(mrb, "|&S", &b, &arg_path);
+  if (mrb_nil_p(b)) {
+    fs_cb = NULL;
+  } else {
+    memset(&context, 0, sizeof(mrb_uv_context));
+    context.mrb = mrb;
+    context.instance = self;
+    context.loop = uv_default_loop();
+  }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
+
+  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  if (!req) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  memset(req, 0, sizeof(uv_fs_t));
+  req->data = &context;
+  if (uv_fs_lstat(uv_default_loop(), req, RSTRING_PTR(arg_path), fs_cb) != 0) {
+    free(req);
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+  }
+  return mrb_nil_value();
+}
+
+static mrb_value
 mrb_uv_fs_rename(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_path, arg_new_path;
@@ -2415,8 +2449,141 @@ mrb_uv_fs_chmod(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value
+mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_path, arg_new_path;
+  mrb_value b = mrb_nil_value();
+  uv_fs_cb fs_cb = _uv_fs_cb;
+  static mrb_uv_context context;
+
+  mrb_get_args(mrb, "|&SS", &b, &arg_path, &arg_new_path);
+  if (mrb_nil_p(b)) {
+    fs_cb = NULL;
+  } else {
+    memset(&context, 0, sizeof(mrb_uv_context));
+    context.mrb = mrb;
+    context.instance = self;
+    context.loop = uv_default_loop();
+  }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
+
+  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  if (!req) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  memset(req, 0, sizeof(uv_fs_t));
+  req->data = &context;
+  if (uv_fs_link(uv_default_loop(), req, RSTRING_PTR(arg_path), RSTRING_PTR(arg_new_path), fs_cb) != 0) {
+    free(req);
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+  }
+  return mrb_nil_value();
+}
+
 /*********************************************************
- * Signal
+ * UV::FS::Poll
+ *********************************************************/
+static void
+_uv_fs_poll_cb(uv_fs_poll_t* handle, int status, const uv_statbuf_t* prev, const uv_statbuf_t* curr)
+{
+  mrb_uv_context* context = (mrb_uv_context*) handle->data;
+  mrb_state* mrb = context->mrb;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_poll_cb"));
+  if (!mrb_nil_p(proc)) {
+     mrb_value args[1];
+     args[0] = mrb_fixnum_value(status);
+     mrb_yield_argv(mrb, proc, 1, args);
+  }
+}
+
+static mrb_value
+mrb_uv_fs_poll_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_loop = mrb_nil_value();
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  mrb_uv_context* loop_context = NULL;
+  uv_loop_t* loop;
+
+  mrb_get_args(mrb, "|o", &arg_loop);
+  if (!mrb_nil_p(arg_loop)) {
+    if (!strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+      value_context = mrb_iv_get(mrb, arg_loop, mrb_intern(mrb, "context"));
+      Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+      if (!loop_context) {
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+      }
+      loop = loop_context->loop;
+    } else {
+      loop = uv_default_loop();
+    }
+  } else {
+    loop = uv_default_loop();
+  }
+
+  context = uv_context_alloc(mrb);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  context->instance = self;
+  context->loop = loop;
+
+  if (uv_fs_poll_init(loop, &context->any.fs_poll) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
+  }
+  context->any.fs_poll.data = context;
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_context_type, (void*) context)));
+  return self;
+}
+
+static mrb_value
+mrb_uv_fs_poll_start(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_path, arg_interval;
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  mrb_value b = mrb_nil_value();
+  uv_fs_poll_cb fs_poll_cb = _uv_fs_poll_cb;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  mrb_get_args(mrb, "&Si", &b, &arg_path, &arg_interval);
+
+  if (mrb_nil_p(b)) {
+    fs_poll_cb = NULL;
+  }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_poll_cb"), b);
+
+  int ret = uv_fs_poll_start(&context->any.fs_poll, fs_poll_cb, RSTRING_PTR(arg_path), mrb_fixnum(arg_interval));
+  return mrb_fixnum_value(ret);
+}
+
+static mrb_value
+mrb_uv_fs_poll_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  int ret = uv_fs_poll_stop(&context->any.fs_poll);
+  return mrb_fixnum_value(ret);
+}
+
+/*********************************************************
+ * UV::Signal
  *********************************************************/
 static void
 _uv_signal_cb(uv_signal_t* handle, int signum)
@@ -2680,23 +2847,25 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv_fs, "ftruncate", mrb_uv_fs_ftruncate, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv_fs, "sendfile", mrb_uv_fs_sendfile, ARGS_REQ(4));
   mrb_define_module_function(mrb, _class_uv_fs, "chmod", mrb_uv_fs_chmod, ARGS_REQ(2));
+  mrb_define_module_function(mrb, _class_uv_fs, "lstat", mrb_uv_fs_lstat, ARGS_REQ(1));
+  mrb_define_module_function(mrb, _class_uv_fs, "link", mrb_uv_fs_link, ARGS_REQ(2));
   /* TODO
+  UV::FS::Stat object
+
   uv_fs_utime
   uv_fs_futime
-  uv_fs_lstat
-  uv_fs_link
   uv_fs_symlink
   uv_fs_readlink
   uv_fs_fchmod
   uv_fs_chown
   uv_fs_fchown
   */
+  ARENA_RESTORE;
 
-  /* TODO
-  uv_fs_poll_init
-  uv_fs_poll_start
-  uv_fs_poll_stop
-  */
+  _class_uv_fs_poll = mrb_define_class_under(mrb, _class_uv_fs, "Poll", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_fs_poll, "initialize", mrb_uv_fs_poll_init, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs_poll, "start", mrb_uv_fs_poll_start, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_fs_poll, "stop", mrb_uv_fs_poll_stop, ARGS_NONE());
   ARENA_RESTORE;
 
   _class_uv_signal = mrb_define_class_under(mrb, _class_uv, "Signal", mrb->object_class);
