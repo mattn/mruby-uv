@@ -2358,6 +2358,7 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
 
+  // TODO: accept UV::FS object also.
   mrb_get_args(mrb, "|&iiii", &b, &arg_infd, &arg_outfd, &arg_offset, &arg_length);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
