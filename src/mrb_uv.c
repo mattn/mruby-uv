@@ -47,6 +47,7 @@ typedef struct {
     uv_stream_t stream;
     uv_mutex_t mutex;
     uv_file fs;
+    uv_signal_t signal;
   } any;
   mrb_value instance;
   uv_loop_t* loop;
@@ -93,6 +94,7 @@ static struct RClass *_class_uv_addrinfo;
 static struct RClass *_class_uv_prepare;
 static struct RClass *_class_uv_mutex;
 static struct RClass *_class_uv_fs;
+static struct RClass *_class_uv_signal;
 
 /*********************************************************
  * main
@@ -2335,6 +2337,107 @@ mrb_uv_fs_ftruncate(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
+ * Signal
+ *********************************************************/
+static void
+_uv_signal_cb(uv_signal_t* handle, int signum)
+{
+  mrb_uv_context* context = (mrb_uv_context*) handle->data;
+  mrb_state* mrb = context->mrb;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "signal_cb"));
+  if (!mrb_nil_p(proc)) {
+     mrb_value args[1];
+     args[0] = mrb_fixnum_value(signum);
+     mrb_yield_argv(mrb, proc, 1, args);
+  }
+}
+
+static mrb_value
+mrb_uv_signal_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_loop = mrb_nil_value();
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  mrb_uv_context* loop_context = NULL;
+  uv_loop_t* loop;
+
+  mrb_get_args(mrb, "|o", &arg_loop);
+  if (!mrb_nil_p(arg_loop)) {
+    if (!strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+      value_context = mrb_iv_get(mrb, arg_loop, mrb_intern(mrb, "context"));
+      Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+      if (!loop_context) {
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+      }
+      loop = loop_context->loop;
+    } else {
+      loop = uv_default_loop();
+    }
+  } else {
+    loop = uv_default_loop();
+  }
+
+  context = uv_context_alloc(mrb);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  context->instance = self;
+  context->loop = loop;
+
+  if (uv_signal_init(loop, &context->any.signal) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
+  }
+  context->any.signal.data = context;
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_context_type, (void*) context)));
+  return self;
+}
+
+static mrb_value
+mrb_uv_signal_start(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_signum;
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  mrb_value b = mrb_nil_value();
+  uv_signal_cb signal_cb = _uv_signal_cb;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  mrb_get_args(mrb, "&i", &b, &arg_signum);
+
+  if (mrb_nil_p(b)) {
+    signal_cb = NULL;
+  }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "signal_cb"), b);
+
+  int ret = uv_signal_start(&context->any.signal, signal_cb, mrb_fixnum(arg_signum));
+  return mrb_fixnum_value(ret);
+}
+
+static mrb_value
+mrb_uv_signal_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  int ret = uv_signal_stop(&context->any.signal);
+  return mrb_fixnum_value(ret);
+}
+
+/*********************************************************
  * register
  *********************************************************/
 
@@ -2512,6 +2615,29 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_fs_poll_stop
   */
   ARENA_RESTORE;
+
+  _class_uv_signal = mrb_define_class_under(mrb, _class_uv, "Signal", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_signal, "initialize", mrb_uv_signal_init, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_signal, "start", mrb_uv_signal_start, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_signal, "stop", mrb_uv_signal_stop, ARGS_NONE());
+  mrb_define_const(mrb, _class_uv_signal, "SIGINT", mrb_fixnum_value(SIGINT));
+  mrb_define_const(mrb, _class_uv_signal, "SIGBREAK", mrb_fixnum_value(SIGBREAK));
+  mrb_define_const(mrb, _class_uv_signal, "SIGHUP", mrb_fixnum_value(SIGHUP));
+  mrb_define_const(mrb, _class_uv_signal, "SIGWINCH", mrb_fixnum_value(SIGWINCH));
+  mrb_define_const(mrb, _class_uv_signal, "SIGILL", mrb_fixnum_value(SIGILL));
+  mrb_define_const(mrb, _class_uv_signal, "SIGABRT", mrb_fixnum_value(SIGABRT));
+  mrb_define_const(mrb, _class_uv_signal, "SIGFPE", mrb_fixnum_value(SIGFPE));
+  mrb_define_const(mrb, _class_uv_signal, "SIGSEGV", mrb_fixnum_value(SIGSEGV));
+  mrb_define_const(mrb, _class_uv_signal, "SIGTERM", mrb_fixnum_value(SIGTERM));
+  mrb_define_const(mrb, _class_uv_signal, "SIGKILL", mrb_fixnum_value(SIGKILL));
+  ARENA_RESTORE;
+
+  /* TODO
+  TTY
+  PROCESS
+  WORK
+  etc...
+  */
 
   uv_gc_hash = mrb_hash_new(mrb);
   mrb_define_const(mrb, _class_uv, "$GC", uv_gc_hash);
