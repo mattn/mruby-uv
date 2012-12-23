@@ -131,9 +131,11 @@ mrb_uv_run(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_uv_run_once(mrb_state *mrb, mrb_value self)
+mrb_uv_run2(mrb_state *mrb, mrb_value self)
 {
-  return mrb_fixnum_value(uv_run_once(uv_default_loop()));
+  mrb_value arg_mode;
+  mrb_get_args(mrb, "i", &arg_mode);
+  return mrb_fixnum_value(uv_run2(uv_default_loop(), mrb_fixnum(arg_mode)));
 }
 
 static void
@@ -438,10 +440,13 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_uv_loop_run_once(mrb_state *mrb, mrb_value self)
+mrb_uv_loop_run2(mrb_state *mrb, mrb_value self)
 {
+  mrb_value arg_mode;
   mrb_value value_context;
   mrb_uv_context* context = NULL;
+
+  mrb_get_args(mrb, "i", &arg_mode);
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -449,7 +454,7 @@ mrb_uv_loop_run_once(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  if (uv_run_once(context->loop) != 0) {
+  if (uv_run2(context->loop, mrb_fixnum(arg_mode)) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   return mrb_nil_value();
@@ -2694,17 +2699,20 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   ARENA_SAVE;
 
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
-  mrb_define_module_function(mrb, _class_uv, "run_once", mrb_uv_run_once, ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "run2", mrb_uv_run2, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
+  mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
+  mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
+  mrb_define_const(mrb, _class_uv, "UV_RUN_NOWAIT", mrb_fixnum_value(UV_RUN_NOWAIT));
   ARENA_RESTORE;
 
   _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
   mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_loop, "run_once", mrb_uv_loop_run_once, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "run2", mrb_uv_loop_run2, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_delete, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
@@ -2873,7 +2881,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_signal, "start", mrb_uv_signal_start, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_signal, "stop", mrb_uv_signal_stop, ARGS_NONE());
   mrb_define_const(mrb, _class_uv_signal, "SIGINT", mrb_fixnum_value(SIGINT));
+#ifdef SIGBREAK
   mrb_define_const(mrb, _class_uv_signal, "SIGBREAK", mrb_fixnum_value(SIGBREAK));
+#endif
   mrb_define_const(mrb, _class_uv_signal, "SIGHUP", mrb_fixnum_value(SIGHUP));
   mrb_define_const(mrb, _class_uv_signal, "SIGWINCH", mrb_fixnum_value(SIGWINCH));
   mrb_define_const(mrb, _class_uv_signal, "SIGILL", mrb_fixnum_value(SIGILL));
