@@ -2,7 +2,6 @@ GEM := mruby-uv
 
 include $(MAKEFILE_4_GEM)
 
-CFLAGS += -I$(MRUBY_ROOT)/include
 MRUBY_CFLAGS += -I$(MRUBY_ROOT)/include
 ifeq ($(OS),Windows_NT)
 MRUBY_LIBS += -luv -lws2_32 -liphlpapi -lpsapi
