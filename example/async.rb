@@ -1,3 +1,5 @@
+#!mruby
+
 t = UV::Timer.new()
 
 a = UV::Async.new {|x|

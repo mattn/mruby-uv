@@ -1,3 +1,5 @@
+#!mruby
+
 s = UV::Pipe.new(1)
 s.bind('/tmp/mruby-uv')
 s.listen(5) {|x|

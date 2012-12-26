@@ -1,3 +1,5 @@
+#!mruby
+
 c = UV::Pipe.new(1)
 c.connect('/tmp/mrub-yuv') {|x|
   if x == 0
