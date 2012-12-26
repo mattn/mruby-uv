@@ -229,7 +229,7 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   if (!mrb) return;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "read_cb"));
   if (!mrb_nil_p(proc)) {
-    mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "read_cb"), mrb_nil_value());
+    //mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "read_cb"), mrb_nil_value());
     mrb_value args[1];
     if (nread == -1) {
       args[0] = mrb_nil_value();
