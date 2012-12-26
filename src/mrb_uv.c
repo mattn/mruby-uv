@@ -49,6 +49,7 @@ typedef struct {
     uv_signal_t signal;
     uv_file fs;
     uv_fs_poll_t fs_poll;
+    uv_tty_t tty;
   } any;
   mrb_value instance;
   uv_loop_t* loop;
@@ -95,12 +96,14 @@ static struct RClass *_class_uv_tcp;
 static struct RClass *_class_uv_udp;
 static struct RClass *_class_uv_pipe;
 static struct RClass *_class_uv_ip4addr;
+static struct RClass *_class_uv_ip6addr;
 static struct RClass *_class_uv_addrinfo;
 static struct RClass *_class_uv_prepare;
 static struct RClass *_class_uv_mutex;
 static struct RClass *_class_uv_fs;
 static struct RClass *_class_uv_fs_poll;
 static struct RClass *_class_uv_signal;
+static struct RClass *_class_uv_tty;
 
 /*********************************************************
  * main
@@ -1075,7 +1078,7 @@ mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
- * UV::Ip4Addr / UV::Ip6Addr
+ * UV::Ip4Addr
  *********************************************************/
 static void
 uv_ip4addr_free(mrb_state *mrb, void *p)
@@ -1128,6 +1131,65 @@ mrb_uv_ip4addr_to_s(mrb_state *mrb, mrb_value self)
     return mrb_nil_value();
   }
   if (uv_ip4_name(addr, name, sizeof(name)) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+  }
+  return mrb_str_new(mrb, name, strlen(name));
+}
+
+/*********************************************************
+ * UV::Ip6Addr
+ *********************************************************/
+static void
+uv_ip6addr_free(mrb_state *mrb, void *p)
+{
+  free(p);
+}
+
+static const struct mrb_data_type uv_ip6addr_type = {
+  "uv_ip6addr", uv_ip6addr_free,
+};
+
+static mrb_value
+mrb_uv_ip6_addr(mrb_state *mrb, mrb_value self)
+{
+  int argc;
+  mrb_value *argv;
+  mrb_get_args(mrb, "*", &argv, &argc);
+  return mrb_class_new_instance(mrb, argc, argv, _class_uv_ip6addr);
+}
+
+static mrb_value
+mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_host = mrb_nil_value(), arg_port = mrb_nil_value();
+  struct sockaddr_in6 vaddr;
+  struct sockaddr_in6 *addr = NULL;
+
+  mrb_get_args(mrb, "Si", &arg_host, &arg_port);
+  if (!mrb_nil_p(arg_host) && !mrb_nil_p(arg_port)) {
+    vaddr = uv_ip6_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port));
+    addr = (struct sockaddr_in6*) malloc(sizeof(struct sockaddr_in));
+    memcpy(addr, &vaddr, sizeof(vaddr));
+  }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_ip6addr_type, (void*) addr)));
+  return self;
+}
+
+static mrb_value
+mrb_uv_ip6addr_to_s(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_addr;
+  struct sockaddr_in6* addr = NULL;
+  char name[256];
+
+  value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+  if (!addr) {
+    return mrb_nil_value();
+  }
+  if (uv_ip6_name(addr, name, sizeof(name)) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
   }
   return mrb_str_new(mrb, name, strlen(name));
@@ -1632,7 +1694,7 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
   int ipc = 0;
 
-  mrb_get_args(mrb, "|oi", &arg_loop, &arg_ipc);
+  mrb_get_args(mrb, "i|oi", &arg_ipc, &arg_loop);
   if (!mrb_nil_p(arg_loop)) {
     if (!strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -2691,6 +2753,101 @@ mrb_uv_signal_stop(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
+ * UV::TTY
+ *********************************************************/
+static mrb_value
+mrb_uv_tty_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_loop = mrb_nil_value();
+  mrb_value arg_file = mrb_fixnum_value(-1);
+  mrb_value arg_readable = mrb_fixnum_value(0);
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  mrb_uv_context* loop_context = NULL;
+  uv_loop_t* loop;
+
+  mrb_get_args(mrb, "ii|o", &arg_file, &arg_readable, &arg_loop);
+  if (!mrb_nil_p(arg_loop)) {
+    if (!strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+      value_context = mrb_iv_get(mrb, arg_loop, mrb_intern(mrb, "context"));
+      Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+      if (!loop_context) {
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+      }
+      loop = loop_context->loop;
+    } else {
+      loop = uv_default_loop();
+    }
+  } else {
+    loop = uv_default_loop();
+  }
+
+  context = uv_context_alloc(mrb);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  context->instance = self;
+  context->loop = loop;
+
+  if (uv_tty_init(loop, &context->any.tty, mrb_fixnum(arg_file), mrb_fixnum(arg_readable)) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(loop)));
+  }
+  context->any.tty.data = context;
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_context_type, (void*) context)));
+  return self;
+}
+
+static mrb_value
+mrb_uv_tty_set_mode(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_mode;
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  mrb_get_args(mrb, "i", &arg_mode);
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  return mrb_fixnum_value(uv_tty_set_mode(&context->any.tty, mrb_fixnum(arg_mode)));
+}
+
+static mrb_value
+mrb_uv_tty_reset_mode(mrb_state *mrb, mrb_value self)
+{
+  uv_tty_reset_mode();
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_tty_get_winsize(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  int width = 0, height = 0;
+  if (uv_tty_get_winsize(&context->any.tty, &width, &height) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
+  }
+  mrb_value ary = mrb_ary_new(mrb);
+  mrb_ary_push(mrb, ary, mrb_fixnum_value(width));
+  mrb_ary_push(mrb, ary, mrb_fixnum_value(height));
+  return ary;
+}
+
+/*********************************************************
  * register
  *********************************************************/
 
@@ -2704,6 +2861,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "run2", mrb_uv_run2, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
+  mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
@@ -2724,7 +2882,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_timer, "stop", mrb_uv_timer_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_timer, "close", mrb_uv_close, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_timer, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_timer, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
@@ -2733,7 +2891,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_idle, "initialize", mrb_uv_idle_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_idle, "start", mrb_uv_idle_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "stop", mrb_uv_idle_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_idle, "close", mrb_uv_close, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_idle, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_idle, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
@@ -2741,6 +2899,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Async", mrb->object_class);
   mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_async_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_async, "send", mrb_uv_async_send, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_async, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_async, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_async, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
@@ -2749,6 +2908,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_prepare, "initialize", mrb_uv_prepare_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_prepare, "start", mrb_uv_prepare_start, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_prepare, "stop", mrb_uv_prepare_stop, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_prepare, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_prepare, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_prepare, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
@@ -2768,13 +2928,18 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, ARGS_NONE());
   ARENA_RESTORE;
 
+  _class_uv_ip6addr = mrb_define_class_under(mrb, _class_uv, "Ip6Addr", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_ip6addr, "initialize", mrb_uv_ip6addr_init, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_ip6addr, "to_s", mrb_uv_ip6addr_to_s, ARGS_NONE());
+  ARENA_RESTORE;
+
   _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_stop", mrb_uv_read_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "write", mrb_uv_write, ARGS_OPT(2));
-  mrb_define_method(mrb, _class_uv_tcp, "close", mrb_uv_close, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_tcp, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "shutdown", mrb_uv_shutdown, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "listen", mrb_uv_tcp_listen, ARGS_REQ(1));
@@ -2794,7 +2959,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send, ARGS_OPT(3));
-  mrb_define_method(mrb, _class_uv_udp, "close", mrb_uv_close, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_udp, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "data", mrb_uv_data_get, ARGS_NONE());
@@ -2806,7 +2971,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_pipe, "read_start", mrb_uv_read_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_pipe, "read_stop", mrb_uv_read_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_pipe, "write", mrb_uv_write, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_pipe, "close", mrb_uv_close, ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_pipe, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_pipe, "shutdown", mrb_uv_shutdown, ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_pipe, "bind", mrb_uv_pipe_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "listen", mrb_uv_pipe_listen, ARGS_REQ(1));
@@ -2876,12 +3041,14 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_fs_poll, "initialize", mrb_uv_fs_poll_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_fs_poll, "start", mrb_uv_fs_poll_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs_poll, "stop", mrb_uv_fs_poll_stop, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs_poll, "close", mrb_uv_close, ARGS_NONE());
   ARENA_RESTORE;
 
   _class_uv_signal = mrb_define_class_under(mrb, _class_uv, "Signal", mrb->object_class);
   mrb_define_method(mrb, _class_uv_signal, "initialize", mrb_uv_signal_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_signal, "start", mrb_uv_signal_start, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_signal, "stop", mrb_uv_signal_stop, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_signal, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_const(mrb, _class_uv_signal, "SIGINT", mrb_fixnum_value(SIGINT));
 #ifdef SIGBREAK
   mrb_define_const(mrb, _class_uv_signal, "SIGBREAK", mrb_fixnum_value(SIGBREAK));
@@ -2896,10 +3063,22 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, _class_uv_signal, "SIGKILL", mrb_fixnum_value(SIGKILL));
   ARENA_RESTORE;
 
+  _class_uv_tty = mrb_define_class_under(mrb, _class_uv, "TTY", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_tty, "initialize", mrb_uv_tty_init, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_tty, "set_mode", mrb_uv_tty_set_mode, ARGS_REQ(1));
+  mrb_define_module_function(mrb, _class_uv_tty, "reset_mode", mrb_uv_tty_reset_mode, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tty, "get_winsize", mrb_uv_tty_get_winsize, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tty, "close", mrb_uv_close, ARGS_NONE());
+  ARENA_RESTORE;
+
   /* TODO
-  TTY
-  PROCESS
-  WORK
+  dl
+  barrier
+  process
+  queue/work
+  cpuinfo
+  uv_once
+  uv_thread
   etc...
   */
 
