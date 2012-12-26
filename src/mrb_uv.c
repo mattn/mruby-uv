@@ -2868,36 +2868,56 @@ _uv_exit_cb(uv_process_t* process, int exit_status, int term_signal)
 }
 
 static mrb_value
-mrb_uv_spawn(mrb_state *mrb, mrb_value self)
+mrb_uv_process_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_opt = mrb_nil_value();
-  mrb_value b = mrb_nil_value();
-  uv_exit_cb exit_cb = _uv_exit_cb;
 
-  mrb_get_args(mrb, "H|&", &arg_opt, &b);
+  mrb_get_args(mrb, "H", &arg_opt);
   if (mrb_nil_p(arg_opt)) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   mrb_value arg_file = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "file"));
   if (mrb_type(arg_file) != MRB_TT_STRING) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   mrb_value arg_args = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "args"));
   if (mrb_type(arg_args) != MRB_TT_ARRAY) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
 
-  mrb_value c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_process);
-
   mrb_uv_context* context = uv_context_alloc(mrb);
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
+  context->instance = self;
+  context->loop = uv_default_loop();
+
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_context_type, (void*) context)));
+
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "options"), arg_opt);
+
+  return self;
+}
+
+static mrb_value
+mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+  mrb_value b = mrb_nil_value();
+  uv_exit_cb exit_cb = _uv_exit_cb;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  mrb_value options = mrb_iv_get(mrb, self, mrb_intern(mrb, "options"));
+  mrb_value arg_file = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "file"));
+  mrb_value arg_args = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "args"));
+
+  mrb_get_args(mrb, "|&", &b);
   if (mrb_nil_p(b)) {
     exit_cb = NULL;
   }
-  mrb_iv_set(mrb, c, mrb_intern(mrb, "exit_cb"), b);
-
-  context->instance = c;
-  context->loop = uv_default_loop();
-
-  mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "exit_cb"), b);
 
   char cwd[MAX_PATH] = {0};
   uv_cwd(cwd, sizeof(cwd));
@@ -2926,7 +2946,7 @@ mrb_uv_spawn(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
   context->any.process.data = context;
-  return c;
+  return mrb_nil_value();
 }
 
 static mrb_value
@@ -2963,7 +2983,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
-  mrb_define_module_function(mrb, _class_uv, "spawn", mrb_uv_spawn, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
@@ -3173,7 +3192,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   ARENA_RESTORE;
 
   _class_uv_process = mrb_define_class_under(mrb, _class_uv, "Process", mrb->object_class);
-  mrb_define_method(mrb, _class_uv_process, "initialize", mrb_uv_tty_init, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_process, "initialize", mrb_uv_process_init, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_process, "spawn", mrb_uv_process_spawn, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "kill", mrb_uv_process_kill, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "close", mrb_uv_close, ARGS_NONE());
   ARENA_RESTORE;
