@@ -50,6 +50,7 @@ typedef struct {
     uv_file fs;
     uv_fs_poll_t fs_poll;
     uv_tty_t tty;
+    uv_process_t process;
   } any;
   mrb_value instance;
   uv_loop_t* loop;
@@ -104,6 +105,7 @@ static struct RClass *_class_uv_fs;
 static struct RClass *_class_uv_fs_poll;
 static struct RClass *_class_uv_signal;
 static struct RClass *_class_uv_tty;
+static struct RClass *_class_uv_process;
 
 /*********************************************************
  * main
@@ -1694,7 +1696,7 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
   int ipc = 0;
 
-  mrb_get_args(mrb, "i|oi", &arg_ipc, &arg_loop);
+  mrb_get_args(mrb, "i|o", &arg_ipc, &arg_loop);
   if (!mrb_nil_p(arg_loop)) {
     if (!strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -2848,6 +2850,103 @@ mrb_uv_tty_get_winsize(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
+ * UV::Process
+ *********************************************************/
+static void
+_uv_exit_cb(uv_process_t* process, int exit_status, int term_signal)
+{
+  mrb_uv_context* context = (mrb_uv_context*) process->data;
+  mrb_state* mrb = context->mrb;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "exit_cb"));
+  if (!mrb_nil_p(proc)) {
+     mrb_value args[2];
+     args[0] = mrb_fixnum_value(exit_status);
+     args[1] = mrb_fixnum_value(term_signal);
+     mrb_yield_argv(mrb, proc, 2, args);
+  }
+}
+
+static mrb_value
+mrb_uv_spawn(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_opt = mrb_nil_value();
+  mrb_value b = mrb_nil_value();
+  uv_exit_cb exit_cb = _uv_exit_cb;
+
+  mrb_get_args(mrb, "H|&", &arg_opt, &b);
+  if (mrb_nil_p(arg_opt)) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  mrb_value arg_file = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "file"));
+  if (mrb_type(arg_file) != MRB_TT_STRING) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  mrb_value arg_args = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "args"));
+  if (mrb_type(arg_args) != MRB_TT_ARRAY) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+
+  mrb_value c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_process);
+
+  mrb_uv_context* context = uv_context_alloc(mrb);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  if (mrb_nil_p(b)) {
+    exit_cb = NULL;
+  }
+  mrb_iv_set(mrb, c, mrb_intern(mrb, "exit_cb"), b);
+
+  context->instance = c;
+  context->loop = uv_default_loop();
+
+  mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_context_type, (void*) context)));
+
+  char cwd[MAX_PATH] = {0};
+  uv_cwd(cwd, sizeof(cwd));
+  char** args = malloc(sizeof(char*) * (RARRAY_LEN(arg_args)+2));
+  int i;
+  args[0] = RSTRING_PTR(arg_file);
+  for (i = 0; i < RARRAY_LEN(arg_args); i++) {
+    args[i+1] = RSTRING_PTR(mrb_ary_entry(arg_args, i));
+  }
+  args[i+1] = NULL;
+
+  uv_process_options_t opt = {0};
+  opt.file = RSTRING_PTR(arg_file);
+  opt.args = uv_setup_args(RARRAY_LEN(arg_args)+1, args);
+  opt.env = environ;
+  opt.cwd = cwd;
+  opt.exit_cb = exit_cb;
+  opt.stdio_count = 0;
+  opt.uid = 0;
+  opt.gid = 0;
+  opt.flags = 0;
+
+  int ret = uv_spawn(context->loop, &context->any.process, opt);
+  free(args);
+  if (ret != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
+  }
+  context->any.process.data = context;
+  return c;
+}
+
+static mrb_value
+mrb_uv_process_kill(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_signum;
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  mrb_get_args(mrb, "i", &arg_signum);
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  return mrb_fixnum_value(uv_process_kill(&context->any.process, mrb_fixnum(arg_signum)));
+}
+
+/*********************************************************
  * register
  *********************************************************/
 
@@ -2863,6 +2962,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
+  mrb_define_module_function(mrb, _class_uv, "spawn", mrb_uv_spawn, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
@@ -3069,6 +3169,11 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv_tty, "reset_mode", mrb_uv_tty_reset_mode, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tty, "get_winsize", mrb_uv_tty_get_winsize, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tty, "close", mrb_uv_close, ARGS_NONE());
+  ARENA_RESTORE;
+
+  _class_uv_process = mrb_define_class_under(mrb, _class_uv, "Process", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_process, "kill", mrb_uv_process_kill, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_process, "close", mrb_uv_close, ARGS_NONE());
   ARENA_RESTORE;
 
   /* TODO
