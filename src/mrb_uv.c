@@ -116,8 +116,10 @@ mrb_uv_gc(mrb_state *mrb, mrb_value self)
     if (!mrb_nil_p(ctx)) {
       mrb_uv_context* context;
       Data_Get_Struct(mrb, ctx, &uv_context_type, context);
-      if (context || context->mrb == NULL) {
+      if (!context || context->mrb == NULL) {
         mrb_funcall(mrb, uv_gc_table, "delete_at", 1, mrb_fixnum_value(i));
+        i--;
+        l--;
       }
     }
   }
