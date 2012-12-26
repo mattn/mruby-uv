@@ -2,10 +2,10 @@
 
 UV::FS::mkdir("foo-bar") do
   f = UV::FS::open("foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD)
-  f.write("fooo") do
+  f.write("helloworld") do
     f.close() do
       f = UV::FS::open("foo-bar/foo.txt", UV::FS::O_RDONLY, UV::FS::S_IREAD) do
-        puts f.read(3)
+        puts f.read(5)
         puts f.read()
         f.close() do
           UV::FS::unlink("foo-bar/foo.txt") do
