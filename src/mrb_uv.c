@@ -2891,6 +2891,9 @@ mrb_uv_process_init(mrb_state *mrb, mrb_value self)
     &uv_context_type, (void*) context)));
 
   mrb_iv_set(mrb, self, mrb_intern(mrb, "options"), arg_opt);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "stdout_pipe"), mrb_nil_value());
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "stderr_pipe"), mrb_nil_value());
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "stdin_pipe"), mrb_nil_value());
 
   return self;
 }
@@ -2912,6 +2915,9 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   mrb_value options = mrb_iv_get(mrb, self, mrb_intern(mrb, "options"));
   mrb_value arg_file = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "file"));
   mrb_value arg_args = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "args"));
+  mrb_value stdin_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stdin_pipe"));
+  mrb_value stdout_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stdout_pipe"));
+  mrb_value stderr_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stderr_pipe"));
 
   mrb_get_args(mrb, "|&", &b);
   if (mrb_nil_p(b)) {
@@ -2929,13 +2935,55 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
   args[i+1] = NULL;
 
+  uv_stdio_container_t stdio[3];
+
+  if (!mrb_nil_p(stdin_pipe)) {
+    mrb_value pipe_context = mrb_iv_get(mrb, stdin_pipe, mrb_intern(mrb, "context"));
+    mrb_uv_context* pcontext = NULL;
+    Data_Get_Struct(mrb, pipe_context, &uv_context_type, pcontext);
+    if (!pcontext) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+    }
+    stdio[0].flags = UV_CREATE_PIPE | UV_READABLE_PIPE;
+    stdio[0].data.stream = &pcontext->any.stream;
+  } else {
+    stdio[0].flags = UV_IGNORE;
+  }
+
+  if (!mrb_nil_p(stdout_pipe)) {
+    mrb_value pipe_context = mrb_iv_get(mrb, stdout_pipe, mrb_intern(mrb, "context"));
+    mrb_uv_context* pcontext = NULL;
+    Data_Get_Struct(mrb, pipe_context, &uv_context_type, pcontext);
+    if (!pcontext) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+    }
+    stdio[1].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
+    stdio[1].data.stream = &pcontext->any.stream;
+  } else {
+    stdio[1].flags = UV_IGNORE;
+  }
+
+  if (!mrb_nil_p(stderr_pipe)) {
+    mrb_value pipe_context = mrb_iv_get(mrb, stderr_pipe, mrb_intern(mrb, "context"));
+    mrb_uv_context* pcontext = NULL;
+    Data_Get_Struct(mrb, pipe_context, &uv_context_type, pcontext);
+    if (!pcontext) {
+      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+    }
+    stdio[2].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
+    stdio[2].data.stream = &pcontext->any.stream;
+  } else {
+    stdio[2].flags = UV_IGNORE;
+  }
+
   uv_process_options_t opt = {0};
   opt.file = RSTRING_PTR(arg_file);
   opt.args = uv_setup_args(RARRAY_LEN(arg_args)+1, args);
   opt.env = environ;
   opt.cwd = cwd;
   opt.exit_cb = exit_cb;
-  opt.stdio_count = 0;
+  opt.stdio_count = 3;
+  opt.stdio = stdio;
   opt.uid = 0;
   opt.gid = 0;
   opt.flags = 0;
@@ -2967,6 +3015,51 @@ mrb_uv_process_kill(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(uv_process_kill(&context->any.process, mrb_fixnum(arg_signum)));
 }
 
+static mrb_value
+mrb_uv_process_stdout_pipe_get(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, mrb_intern(mrb, "stdout_pipe"));
+}
+
+static mrb_value
+mrb_uv_process_stdout_pipe_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg;
+  mrb_get_args(mrb, "o", &arg);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "stdout_pipe"), arg);
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_process_stdin_pipe_get(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, mrb_intern(mrb, "stdin_pipe"));
+}
+
+static mrb_value
+mrb_uv_process_stdin_pipe_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg;
+  mrb_get_args(mrb, "o", &arg);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "stdin_pipe"), arg);
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_process_stderr_pipe_get(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, mrb_intern(mrb, "stderr_pipe"));
+}
+
+static mrb_value
+mrb_uv_process_stderr_pipe_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg;
+  mrb_get_args(mrb, "o", &arg);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "stderr_pipe"), arg);
+  return mrb_nil_value();
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -2987,6 +3080,11 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
   mrb_define_const(mrb, _class_uv, "UV_RUN_NOWAIT", mrb_fixnum_value(UV_RUN_NOWAIT));
+#ifdef _WIN32
+  mrb_define_const(mrb, _class_uv, "IS_WINDOWS", mrb_true_value());
+#else
+  mrb_define_const(mrb, _class_uv, "IS_WINDOWS", mrb_false_value());
+#endif
   ARENA_RESTORE;
 
   _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
@@ -3194,8 +3292,16 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   _class_uv_process = mrb_define_class_under(mrb, _class_uv, "Process", mrb->object_class);
   mrb_define_method(mrb, _class_uv_process, "initialize", mrb_uv_process_init, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_process, "spawn", mrb_uv_process_spawn, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_process, "stdout_pipe=", mrb_uv_process_stdout_pipe_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_process, "stdout_pipe", mrb_uv_process_stdout_pipe_get, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_process, "stdin_pipe=", mrb_uv_process_stdin_pipe_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_process, "stdin_pipe", mrb_uv_process_stdin_pipe_get, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_process, "stderr_pipe=", mrb_uv_process_stderr_pipe_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_process, "stderr_pipe", mrb_uv_process_stderr_pipe_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "kill", mrb_uv_process_kill, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "close", mrb_uv_close, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_process, "data=", mrb_uv_data_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_process, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
 
   /* TODO
