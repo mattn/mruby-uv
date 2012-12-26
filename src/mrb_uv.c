@@ -70,10 +70,14 @@ static void
 uv_context_free(mrb_state *mrb, void *p)
 {
   mrb_uv_context* context = (mrb_uv_context*) p;
-  OBJECT_REMOVE(mrb, context->instance, "context");
-  context->instance = mrb_nil_value();
-  context->mrb = NULL;
-  context->loop = NULL;
+  if (context) {
+    OBJECT_REMOVE(mrb, context->instance, "read_cb");
+    OBJECT_REMOVE(mrb, context->instance, "write_cb");
+    OBJECT_REMOVE(mrb, context->instance, "context");
+    context->instance = mrb_nil_value();
+    context->mrb = NULL;
+    context->loop = NULL;
+  }
   free(p);
 }
 
@@ -81,7 +85,7 @@ static const struct mrb_data_type uv_context_type = {
   "uv_context", uv_context_free,
 };
 
-static mrb_value uv_gc_hash;
+static mrb_value uv_gc_table;
 static struct RClass *_class_uv;
 static struct RClass *_class_uv_loop;
 static struct RClass *_class_uv_timer;
@@ -105,18 +109,15 @@ static mrb_value
 mrb_uv_gc(mrb_state *mrb, mrb_value self)
 {
   ARENA_SAVE;
-  mrb_value keys;
-  keys = mrb_hash_keys(mrb, uv_gc_hash);
-  int i, l = RARRAY_LEN(keys);
+  int i, l = RARRAY_LEN(uv_gc_table);
   for (i = 0; i < l; i++) {
-    mrb_value key = mrb_ary_entry(keys, i);
-    mrb_value obj = mrb_hash_get(mrb, uv_gc_hash, key);
+    mrb_value obj = mrb_ary_entry(uv_gc_table, i);
     mrb_value ctx  = mrb_iv_get(mrb, obj, mrb_intern(mrb, "context"));
     if (!mrb_nil_p(ctx)) {
       mrb_uv_context* context;
       Data_Get_Struct(mrb, ctx, &uv_context_type, context);
       if (context || context->mrb == NULL) {
-        //mrb_hash_delete_key(mrb, uv_gc_hash, key);
+        mrb_funcall(mrb, uv_gc_table, "delete_at", 1, mrb_fixnum_value(i));
       }
     }
   }
@@ -229,7 +230,6 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
   if (!mrb) return;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "read_cb"));
   if (!mrb_nil_p(proc)) {
-    //mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "read_cb"), mrb_nil_value());
     mrb_value args[1];
     if (nread == -1) {
       args[0] = mrb_nil_value();
@@ -1305,7 +1305,7 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   }
 
   ARENA_SAVE;
-  mrb_hash_set(mrb, uv_gc_hash, c, c);
+  mrb_ary_push(mrb, uv_gc_table, c);
   ARENA_RESTORE;
   return c;
 }
@@ -1789,7 +1789,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
   }
 
   ARENA_SAVE;
-  mrb_hash_set(mrb, uv_gc_hash, c, c);
+  mrb_ary_push(mrb, uv_gc_table, c);
   ARENA_RESTORE;
   return c;
 }
@@ -1915,7 +1915,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   }
 
   ARENA_SAVE;
-  mrb_hash_set(mrb, uv_gc_hash, c, c);
+  mrb_ary_push(mrb, uv_gc_table, c);
   ARENA_RESTORE;
   return c;
 }
@@ -2901,8 +2901,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   etc...
   */
 
-  uv_gc_hash = mrb_hash_new(mrb);
-  mrb_define_const(mrb, _class_uv, "$GC", uv_gc_hash);
+  uv_gc_table = mrb_ary_new(mrb);
+  mrb_define_const(mrb, _class_uv, "$GC", uv_gc_table);
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */
