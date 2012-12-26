@@ -1,4 +1,4 @@
-c = UV::Pipe.new()
+c = UV::Pipe.new(0)
 c.connect('\\\\.\\pipe\\mruby-uv') {|x|
   if x == 0
     c.read_start {|b|

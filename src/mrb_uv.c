@@ -1613,7 +1613,7 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "timer_cb"));
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "udp_recv_cb"));
   mrb_value args[3];
   ARENA_SAVE;
   if (nread != -1) {
@@ -1654,6 +1654,7 @@ mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
+  mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
     udp_recv_cb = NULL;
   }
@@ -3056,7 +3057,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_udp, "close", mrb_uv_close, ARGS_NONE());
