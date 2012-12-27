@@ -1,13 +1,5 @@
-# Compiled Object files
-*.slo
-*.lo
-*.o
-
-# Compiled Dynamic libraries
-*.so
-*.exe
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
+gem_*
+gem-*
+mrb-*.a
+src/*.o
+.local.vimrc
