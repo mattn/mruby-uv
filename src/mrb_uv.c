@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <errno.h>
 #include <memory.h>
 #include <mruby.h>
@@ -11,6 +12,8 @@
 #include <uv.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <unistd.h>
 
 #if 1
 #define ARENA_SAVE \
@@ -2925,7 +2928,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "exit_cb"), b);
 
-  char cwd[MAX_PATH] = {0};
+  char cwd[PATH_MAX] = {0};
   uv_cwd(cwd, sizeof(cwd));
   char** args = malloc(sizeof(char*) * (RARRAY_LEN(arg_args)+2));
   int i;
