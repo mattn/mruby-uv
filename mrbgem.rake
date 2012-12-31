@@ -9,6 +9,10 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
       spec.linker.flags << "-L" + ENV['libuv_path']
       spec.cc.flags << '-I"#{ENV["libuv_path"] + "/include"}"'
     end
-    spec.linker.libraries << ['uv', 'rt', 'm']
+    spec.linker.libraries << ['uv', 'm']
+    
+    unless RUBY_PLATFORM.include?('darwin')
+      spec.linker.libraries << 'rt'
+    end
   end
 end
