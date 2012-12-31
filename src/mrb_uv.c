@@ -986,7 +986,7 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
   mrb_value args[2];
   mrb_uv_addrinfo* addr = (mrb_uv_addrinfo*) req->data;
   mrb_state* mrb = addr->mrb;
-  char addr[17] = {'\0'};
+  char ipaddr[17] = {'\0'};
 
   mrb_value c = mrb_nil_value();
   if (status != -1) {
@@ -995,8 +995,8 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
     OBJECT_SET(mrb, c, "family", mrb_fixnum_value(res->ai_family));
     OBJECT_SET(mrb, c, "socktype", mrb_fixnum_value(res->ai_socktype));
     OBJECT_SET(mrb, c, "protocol", mrb_fixnum_value(res->ai_protocol));
-    uv_ip4_name((struct sockaddr_in*) res->ai_addr, addr, 16);
-    OBJECT_SET(mrb, c, "addr", mrb_str_new_cstr(mrb, addr));
+    uv_ip4_name((struct sockaddr_in*) res->ai_addr, ipaddr, 16);
+    OBJECT_SET(mrb, c, "addr", mrb_str_new_cstr(mrb, ipaddr));
     OBJECT_SET(mrb, c, "canonname", mrb_str_new_cstr(mrb, res->ai_canonname ? res->ai_canonname : ""));
     // TODO: Not implemented yet!
     OBJECT_SET(mrb, c, "next", mrb_nil_value());
