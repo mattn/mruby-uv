@@ -14,6 +14,7 @@ s.listen(5) {|x|
       c.write "helloworld\r\n"
     rescue RuntimeError
       c.close()
+      c = nil
       t.stop()
       t = nil
     end
