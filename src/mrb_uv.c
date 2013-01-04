@@ -141,6 +141,7 @@ mrb_uv_run(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(uv_run(uv_default_loop()));
 }
 
+#ifdef UV_RUN_DEFAULT
 static mrb_value
 mrb_uv_run2(mrb_state *mrb, mrb_value self)
 {
@@ -148,6 +149,7 @@ mrb_uv_run2(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "i", &arg_mode);
   return mrb_fixnum_value(uv_run2(uv_default_loop(), mrb_fixnum(arg_mode)));
 }
+#endif
 
 static void
 _uv_close_cb(uv_handle_t* handle)
@@ -449,6 +451,7 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+#ifdef UV_RUN_DEFAULT
 static mrb_value
 mrb_uv_loop_run2(mrb_state *mrb, mrb_value self)
 {
@@ -469,6 +472,7 @@ mrb_uv_loop_run2(mrb_state *mrb, mrb_value self)
   }
   return mrb_nil_value();
 }
+#endif
 
 static mrb_value
 mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
@@ -3074,15 +3078,19 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   ARENA_SAVE;
 
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
+#ifdef UV_RUN_DEFAULT
   mrb_define_module_function(mrb, _class_uv, "run2", mrb_uv_run2, ARGS_REQ(1));
+#endif
   mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
+#ifdef UV_RUN_DEFAULT
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
   mrb_define_const(mrb, _class_uv, "UV_RUN_NOWAIT", mrb_fixnum_value(UV_RUN_NOWAIT));
+#endif
 #ifdef _WIN32
   mrb_define_const(mrb, _class_uv, "IS_WINDOWS", mrb_true_value());
 #else
@@ -3093,7 +3101,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
   mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, ARGS_NONE());
+#ifdef UV_RUN_DEFAULT
   mrb_define_method(mrb, _class_uv_loop, "run2", mrb_uv_loop_run2, ARGS_REQ(1));
+#endif
   mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_delete, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
