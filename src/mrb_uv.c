@@ -90,26 +90,6 @@ static const struct mrb_data_type uv_context_type = {
   "uv_context", uv_context_free,
 };
 
-static mrb_value uv_gc_table;
-static struct RClass *_class_uv;
-static struct RClass *_class_uv_loop;
-static struct RClass *_class_uv_timer;
-static struct RClass *_class_uv_idle;
-static struct RClass *_class_uv_async;
-static struct RClass *_class_uv_tcp;
-static struct RClass *_class_uv_udp;
-static struct RClass *_class_uv_pipe;
-static struct RClass *_class_uv_ip4addr;
-static struct RClass *_class_uv_ip6addr;
-static struct RClass *_class_uv_addrinfo;
-static struct RClass *_class_uv_prepare;
-static struct RClass *_class_uv_mutex;
-static struct RClass *_class_uv_fs;
-static struct RClass *_class_uv_fs_poll;
-static struct RClass *_class_uv_signal;
-static struct RClass *_class_uv_tty;
-static struct RClass *_class_uv_process;
-
 /*********************************************************
  * main
  *********************************************************/
@@ -117,6 +97,8 @@ static mrb_value
 mrb_uv_gc(mrb_state *mrb, mrb_value self)
 {
   ARENA_SAVE;
+  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
+  mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
   int i, l = RARRAY_LEN(uv_gc_table);
   for (i = 0; i < l; i++) {
     mrb_value obj = mrb_ary_entry(uv_gc_table, i);
@@ -403,6 +385,8 @@ mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
   mrb_value c;
   mrb_uv_context* context = NULL;
 
+  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
+  struct RClass* _class_uv_loop = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Loop")));
   c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_loop);
 
   context = uv_context_alloc(mrb);
@@ -989,6 +973,8 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
 
   mrb_value c = mrb_nil_value();
   if (status != -1) {
+    struct RClass* _class_uv = mrb_class_get(mrb, "UV");
+    struct RClass* _class_uv_addrinfo = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Addrinfo")));
     c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_addrinfo);
     OBJECT_SET(mrb, c, "flags", mrb_fixnum_value(res->ai_flags));
     OBJECT_SET(mrb, c, "family", mrb_fixnum_value(res->ai_family));
@@ -1105,6 +1091,8 @@ mrb_uv_ip4_addr(mrb_state *mrb, mrb_value self)
   int argc;
   mrb_value *argv;
   mrb_get_args(mrb, "*", &argv, &argc);
+  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
+  struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
   return mrb_class_new_instance(mrb, argc, argv, _class_uv_ip4addr);
 }
 
@@ -1164,6 +1152,8 @@ mrb_uv_ip6_addr(mrb_state *mrb, mrb_value self)
   int argc;
   mrb_value *argv;
   mrb_get_args(mrb, "*", &argv, &argc);
+  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
+  struct RClass* _class_uv_ip6addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip6Addr")));
   return mrb_class_new_instance(mrb, argc, argv, _class_uv_ip6addr);
 }
 
@@ -1365,6 +1355,8 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
+  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
+  struct RClass* _class_uv_tcp = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "TCP")));
   c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_tcp);
 
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
@@ -1378,6 +1370,7 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   }
 
   ARENA_SAVE;
+  mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
   mrb_ary_push(mrb, uv_gc_table, c);
   ARENA_RESTORE;
   return c;
@@ -1632,6 +1625,8 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
     }
     addr_args[0] = mrb_str_new(mrb, name, strlen(name));
     addr_args[1] = mrb_fixnum_value(ntohs(((struct sockaddr_in*)addr)->sin_port));
+    struct RClass* _class_uv = mrb_class_get(mrb, "UV");
+    struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
     c = mrb_class_new_instance(mrb, 2, addr_args, _class_uv_ip4addr);
     mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
       Data_Wrap_Struct(mrb, mrb->object_class,
@@ -1847,6 +1842,8 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
 
   mrb_value args[1];
   args[0] = mrb_fixnum_value(0);
+  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
+  struct RClass* _class_uv_pipe = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Pipe")));
   c = mrb_class_new_instance(mrb, 1, args, _class_uv_pipe);
 
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
@@ -1863,6 +1860,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
   }
 
   ARENA_SAVE;
+  mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
   mrb_ary_push(mrb, uv_gc_table, c);
   ARENA_RESTORE;
   return c;
@@ -1958,6 +1956,8 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "&Sii", &b, &arg_filename, &arg_flags, &arg_mode);
 
+  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
+  struct RClass* _class_uv_fs = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "FS")));
   mrb_value c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_fs);
 
   mrb_uv_context* context = uv_context_alloc(mrb);
@@ -1989,6 +1989,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   }
 
   ARENA_SAVE;
+  mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
   mrb_ary_push(mrb, uv_gc_table, c);
   ARENA_RESTORE;
   return c;
@@ -3073,10 +3074,9 @@ mrb_uv_process_stderr_pipe_set(mrb_state *mrb, mrb_value self)
 
 void
 mrb_mruby_uv_gem_init(mrb_state* mrb) {
-  _class_uv = mrb_define_module(mrb, "UV");
-
   ARENA_SAVE;
 
+  struct RClass* _class_uv = mrb_define_module(mrb, "UV");
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
 #ifdef UV_RUN_DEFAULT
   mrb_define_module_function(mrb, _class_uv, "run2", mrb_uv_run2, ARGS_REQ(1));
@@ -3098,7 +3098,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 #endif
   ARENA_RESTORE;
 
-  _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
+  struct RClass* _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
   mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, ARGS_NONE());
 #ifdef UV_RUN_DEFAULT
@@ -3109,6 +3109,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
 
+  struct RClass* _class_uv_timer;
   _class_uv_timer = mrb_define_class_under(mrb, _class_uv, "Timer", mrb->object_class);
   mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(2));
@@ -3118,7 +3119,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_timer, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_idle = mrb_define_class_under(mrb, _class_uv, "Idle", mrb->object_class);
+  struct RClass* _class_uv_idle = mrb_define_class_under(mrb, _class_uv, "Idle", mrb->object_class);
   mrb_define_method(mrb, _class_uv_idle, "initialize", mrb_uv_idle_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "start", mrb_uv_idle_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "stop", mrb_uv_idle_stop, ARGS_NONE());
@@ -3127,7 +3128,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_idle, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Async", mrb->object_class);
+  struct RClass* _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Async", mrb->object_class);
   mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_async_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_async, "send", mrb_uv_async_send, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_async, "close", mrb_uv_close, ARGS_NONE());
@@ -3135,7 +3136,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_async, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_prepare = mrb_define_class_under(mrb, _class_uv, "Prepare", mrb->object_class);
+  struct RClass* _class_uv_prepare = mrb_define_class_under(mrb, _class_uv, "Prepare", mrb->object_class);
   mrb_define_method(mrb, _class_uv_prepare, "initialize", mrb_uv_prepare_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_prepare, "start", mrb_uv_prepare_start, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_prepare, "stop", mrb_uv_prepare_stop, ARGS_NONE());
@@ -3144,7 +3145,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_prepare, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_addrinfo = mrb_define_class_under(mrb, _class_uv, "Addrinfo", mrb->object_class);
+  struct RClass* _class_uv_addrinfo = mrb_define_class_under(mrb, _class_uv, "Addrinfo", mrb->object_class);
   mrb_define_method(mrb, _class_uv_addrinfo, "flags", mrb_uv_addrinfo_flags, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "family", mrb_uv_addrinfo_family, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "socktype", mrb_uv_addrinfo_socktype, ARGS_NONE());
@@ -3154,17 +3155,17 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_addrinfo, "next", mrb_uv_addrinfo_next, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
+  struct RClass* _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
   mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_ip6addr = mrb_define_class_under(mrb, _class_uv, "Ip6Addr", mrb->object_class);
+  struct RClass* _class_uv_ip6addr = mrb_define_class_under(mrb, _class_uv, "Ip6Addr", mrb->object_class);
   mrb_define_method(mrb, _class_uv_ip6addr, "initialize", mrb_uv_ip6addr_init, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_ip6addr, "to_s", mrb_uv_ip6addr_to_s, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
+  struct RClass* _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
@@ -3185,7 +3186,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_tcp, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
+  struct RClass* _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
@@ -3196,7 +3197,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_udp, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_pipe = mrb_define_class_under(mrb, _class_uv, "Pipe", mrb->object_class);
+  struct RClass* _class_uv_pipe = mrb_define_class_under(mrb, _class_uv, "Pipe", mrb->object_class);
   mrb_define_method(mrb, _class_uv_pipe, "initialize", mrb_uv_pipe_init, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "connect", mrb_uv_pipe_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_pipe, "read_start", mrb_uv_read_start, ARGS_REQ(2));
@@ -3211,7 +3212,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_pipe, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_mutex = mrb_define_class_under(mrb, _class_uv, "Mutex", mrb->object_class);
+  struct RClass* _class_uv_mutex = mrb_define_class_under(mrb, _class_uv, "Mutex", mrb->object_class);
   mrb_define_method(mrb, _class_uv_mutex, "initialize", mrb_uv_mutex_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_mutex, "lock", mrb_uv_mutex_lock, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_mutex, "trylock", mrb_uv_mutex_trylock, ARGS_NONE());
@@ -3221,7 +3222,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_mutex, "data", mrb_uv_data_get, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_fs = mrb_define_class_under(mrb, _class_uv, "FS", mrb->object_class);
+  struct RClass* _class_uv_fs = mrb_define_class_under(mrb, _class_uv, "FS", mrb->object_class);
   mrb_define_const(mrb, _class_uv_fs, "O_RDONLY", mrb_fixnum_value(O_RDONLY));
   mrb_define_const(mrb, _class_uv_fs, "O_WRONLY", mrb_fixnum_value(O_WRONLY));
   mrb_define_const(mrb, _class_uv_fs, "O_RDWR", mrb_fixnum_value(O_RDWR));
@@ -3268,14 +3269,14 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   */
   ARENA_RESTORE;
 
-  _class_uv_fs_poll = mrb_define_class_under(mrb, _class_uv_fs, "Poll", mrb->object_class);
+  struct RClass* _class_uv_fs_poll = mrb_define_class_under(mrb, _class_uv_fs, "Poll", mrb->object_class);
   mrb_define_method(mrb, _class_uv_fs_poll, "initialize", mrb_uv_fs_poll_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_fs_poll, "start", mrb_uv_fs_poll_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs_poll, "stop", mrb_uv_fs_poll_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_fs_poll, "close", mrb_uv_close, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_signal = mrb_define_class_under(mrb, _class_uv, "Signal", mrb->object_class);
+  struct RClass* _class_uv_signal = mrb_define_class_under(mrb, _class_uv, "Signal", mrb->object_class);
   mrb_define_method(mrb, _class_uv_signal, "initialize", mrb_uv_signal_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_signal, "start", mrb_uv_signal_start, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_signal, "stop", mrb_uv_signal_stop, ARGS_NONE());
@@ -3294,7 +3295,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, _class_uv_signal, "SIGKILL", mrb_fixnum_value(SIGKILL));
   ARENA_RESTORE;
 
-  _class_uv_tty = mrb_define_class_under(mrb, _class_uv, "TTY", mrb->object_class);
+  struct RClass* _class_uv_tty = mrb_define_class_under(mrb, _class_uv, "TTY", mrb->object_class);
   mrb_define_method(mrb, _class_uv_tty, "initialize", mrb_uv_tty_init, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tty, "set_mode", mrb_uv_tty_set_mode, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_tty, "reset_mode", mrb_uv_tty_reset_mode, ARGS_NONE());
@@ -3302,7 +3303,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_tty, "close", mrb_uv_close, ARGS_NONE());
   ARENA_RESTORE;
 
-  _class_uv_process = mrb_define_class_under(mrb, _class_uv, "Process", mrb->object_class);
+  struct RClass* _class_uv_process = mrb_define_class_under(mrb, _class_uv, "Process", mrb->object_class);
   mrb_define_method(mrb, _class_uv_process, "initialize", mrb_uv_process_init, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_process, "spawn", mrb_uv_process_spawn, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "stdout_pipe=", mrb_uv_process_stdout_pipe_set, ARGS_REQ(1));
@@ -3328,7 +3329,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   etc...
   */
 
-  uv_gc_table = mrb_ary_new(mrb);
+  mrb_value uv_gc_table = mrb_ary_new(mrb);
   mrb_define_const(mrb, _class_uv, "$GC", uv_gc_table);
 }
 
