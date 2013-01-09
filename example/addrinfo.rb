@@ -1,6 +1,6 @@
 #!mruby
 
-UV::getaddrinfo("127.0.0.1", "http") do |x, a|
+UV::getaddrinfo("www.google.com", "http") do |x, a|
   if a
     puts "flags: #{a.flags}"
     puts "family: #{a.family}"
