@@ -972,7 +972,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_host = mrb_nil_value(), arg_port = mrb_nil_value();
   struct sockaddr_in vaddr;
-  struct sockaddr_in *addr = NULL;
+  struct sockaddr_in *addr = NULL, *paddr = NULL;
 
   mrb_get_args(mrb, "o|i", &arg_host, &arg_port);
   if (mrb_type(arg_host) == MRB_TT_STRING && mrb_type(arg_port) == MRB_TT_FIXNUM) {
@@ -981,7 +981,8 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
     addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
-    memcpy(addr, mrb_obj_ptr(arg_host), sizeof(struct sockaddr_in));
+    Data_Get_Struct(mrb, arg_host, &uv_ip4addr_type, paddr);
+    memcpy(addr, paddr, sizeof(struct sockaddr_in));
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -993,6 +994,15 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
 
 static mrb_value
 mrb_uv_ip4addr_to_s(mrb_state *mrb, mrb_value self)
+{
+  mrb_value str = mrb_funcall(mrb, self, "sin_addr", 0, NULL);
+  mrb_str_cat2(mrb, str, ":");
+  mrb_str_concat(mrb, str, mrb_funcall(mrb, self, "sin_port", 0, NULL));
+  return str;
+}
+
+static mrb_value
+mrb_uv_ip4addr_sin_addr(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_addr;
   struct sockaddr_in* addr = NULL;
@@ -1007,6 +1017,16 @@ mrb_uv_ip4addr_to_s(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
   }
   return mrb_str_new(mrb, name, strlen(name));
+}
+
+static mrb_value
+mrb_uv_ip4addr_sin_port(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_addr;
+  struct sockaddr_in* addr = NULL;
+  value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  return mrb_fixnum_value(htons(addr->sin_port));
 }
 
 /*********************************************************
@@ -1038,7 +1058,7 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_host = mrb_nil_value(), arg_port = mrb_nil_value();
   struct sockaddr_in6 vaddr;
-  struct sockaddr_in6 *addr = NULL;
+  struct sockaddr_in6 *addr = NULL, *paddr = NULL;
 
   mrb_get_args(mrb, "o|i", &arg_host, &arg_port);
   if (mrb_type(arg_host) == MRB_TT_STRING && mrb_type(arg_port) == MRB_TT_FIXNUM) {
@@ -1047,7 +1067,8 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
     memcpy(addr, &vaddr, sizeof(vaddr));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
     addr = (struct sockaddr_in6*) malloc(sizeof(struct sockaddr_in6));
-    memcpy(addr, mrb_obj_ptr(arg_host), sizeof(struct sockaddr_in6));
+    Data_Get_Struct(mrb, arg_host, &uv_ip4addr_type, paddr);
+    memcpy(addr, paddr, sizeof(struct sockaddr_in));
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1059,6 +1080,15 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
 
 static mrb_value
 mrb_uv_ip6addr_to_s(mrb_state *mrb, mrb_value self)
+{
+  mrb_value str = mrb_funcall(mrb, self, "sin_addr", 0, NULL);
+  mrb_str_cat2(mrb, str, ":");
+  mrb_str_concat(mrb, str, mrb_funcall(mrb, self, "sin_port", 0, NULL));
+  return str;
+}
+
+static mrb_value
+mrb_uv_ip6addr_sin_addr(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_addr;
   struct sockaddr_in6* addr = NULL;
@@ -1073,6 +1103,16 @@ mrb_uv_ip6addr_to_s(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
   }
   return mrb_str_new(mrb, name, strlen(name));
+}
+
+static mrb_value
+mrb_uv_ip6addr_sin_port(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_addr;
+  struct sockaddr_in6* addr = NULL;
+  value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+  return mrb_fixnum_value(htons(addr->sin6_port));
 }
 
 /*********************************************************
@@ -1202,15 +1242,15 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
   struct RClass* _class_uv = mrb_class_get(mrb, "UV");
 
   mrb_value c = mrb_nil_value();
+  mrb_value args[1];
   switch (addr->ai_family) {
   case AF_INET:
     {
       struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(
           mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
-      mrb_value args[1];
       args[0] = mrb_obj_value(
         Data_Wrap_Struct(mrb, mrb->object_class,
-        &uv_ip4addr_type, (void*) addr));
+        &uv_ip4addr_type, (void*) addr->ai_addr));
       c = mrb_class_new_instance(mrb, 1, args, _class_uv_ip4addr);
     }
     break;
@@ -1218,10 +1258,9 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
     {
       struct RClass* _class_uv_ip6addr = mrb_class_ptr(mrb_const_get(
           mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip6Addr")));
-      mrb_value args[1];
       args[0] = mrb_obj_value(
         Data_Wrap_Struct(mrb, mrb->object_class,
-        &uv_ip6addr_type, (void*) addr));
+        &uv_ip6addr_type, (void*) addr->ai_addr));
       c = mrb_class_new_instance(mrb, 1, args, _class_uv_ip6addr);
     }
     break;
@@ -1257,15 +1296,6 @@ mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
     return c;
   }
   return mrb_nil_value();
-}
-
-static mrb_value
-mrb_uv_addrinfo_port(mrb_state *mrb, mrb_value self)
-{
-  mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  struct addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(((struct sockaddr_in*) addr->ai_addr)->sin_port);
 }
 
 /*********************************************************
@@ -3227,17 +3257,20 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_addrinfo, "addr", mrb_uv_addrinfo_addr, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "canonname", mrb_uv_addrinfo_canonname, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "next", mrb_uv_addrinfo_next, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_addrinfo, "port", mrb_uv_addrinfo_port, ARGS_NONE());
   ARENA_RESTORE;
 
   struct RClass* _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
   mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(1) | ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip4addr, "sin_addr", mrb_uv_ip4addr_sin_addr, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip4addr, "sin_port", mrb_uv_ip4addr_sin_port, ARGS_NONE());
   ARENA_RESTORE;
 
   struct RClass* _class_uv_ip6addr = mrb_define_class_under(mrb, _class_uv, "Ip6Addr", mrb->object_class);
   mrb_define_method(mrb, _class_uv_ip6addr, "initialize", mrb_uv_ip6addr_init, ARGS_REQ(1) | ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_ip6addr, "to_s", mrb_uv_ip6addr_to_s, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip6addr, "sin_addr", mrb_uv_ip6addr_sin_addr, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip6addr, "sin_port", mrb_uv_ip6addr_sin_port, ARGS_NONE());
   ARENA_RESTORE;
 
   struct RClass* _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
