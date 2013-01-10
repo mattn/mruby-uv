@@ -135,6 +135,29 @@ mrb_uv_run2(mrb_state *mrb, mrb_value self)
 }
 #endif
 
+/*
+ * TODO: need to UV::Once object to avoid gc.
+ */
+/*
+static void
+_uv_once_cb() {
+  mrb_value proc = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$ONCE"));
+  mrb_yield_argv(mrb, proc, 0, NULL);
+}
+
+static mrb_value
+mrb_uv_once(mrb_state *mrb, mrb_value self)
+{
+  mrb_value b = mrb_nil_value();
+  mrb_get_args(mrb, "&", &b);
+  uv_once_t guard;
+  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
+  mrb_define_const(mrb, _class_uv, "$ONCE", b);
+  uv_once(&guard, _uv_once_cb);
+  return mrb_nil_value();
+}
+*/
+
 static void
 _uv_close_cb(uv_handle_t* handle)
 {
@@ -3315,11 +3338,17 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 #ifdef UV_RUN_DEFAULT
   mrb_define_module_function(mrb, _class_uv, "run2", mrb_uv_run2, ARGS_REQ(1));
 #endif
+  //mrb_define_module_function(mrb, _class_uv, "once", mrb_uv_once, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
+
+  // TODO
+  //mrb_define_module_function(mrb, _class_uv, "dlopen", mrb_uv_dlopen, ARGS_NONE());
+  //mrb_define_module_function(mrb, _class_uv, "dlclose", mrb_uv_dlclose, ARGS_NONE());
+
 #ifdef UV_RUN_DEFAULT
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
@@ -3569,10 +3598,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   ARENA_RESTORE;
 
   /* TODO
-  dl
   queue/work
   cpuinfo
-  uv_once
   etc...
   */
 
