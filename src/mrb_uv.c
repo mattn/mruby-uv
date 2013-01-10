@@ -55,6 +55,7 @@ typedef struct {
     uv_tty_t tty;
     uv_process_t process;
     uv_thread_t thread;
+    uv_barrier_t barrier;
   } any;
   mrb_value instance;
   uv_loop_t* loop;
@@ -941,6 +942,7 @@ mrb_uv_mutex_destroy(mrb_state *mrb, mrb_value self)
   }
 
   uv_mutex_destroy(&context->any.mutex);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_nil_value());
   return mrb_nil_value();
 }
 
@@ -3242,6 +3244,65 @@ mrb_uv_thread_self(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
+ * UV::Barrier
+ *********************************************************/
+static mrb_value
+mrb_uv_barrier_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value arg_count = mrb_nil_value();
+  mrb_uv_context* context = NULL;
+
+  mrb_get_args(mrb, "i", &arg_count);
+
+  context = uv_context_alloc(mrb);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  context->instance = self;
+  context->loop = uv_default_loop();
+
+  if (uv_barrier_init(&context->any.barrier, mrb_fixnum(arg_count)) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+  }
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_context_type, (void*) context)));
+  return self;
+}
+
+static mrb_value
+mrb_uv_barrier_wait(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  uv_barrier_wait(&context->any.barrier);
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_barrier_destroy(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  uv_barrier_destroy(&context->any.barrier);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_nil_value());
+  return mrb_nil_value();
+}
+/*********************************************************
  * register
  *********************************************************/
 
@@ -3501,14 +3562,17 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_thread, "join", mrb_uv_thread_join, ARGS_NONE());
   ARENA_RESTORE;
 
+  struct RClass* _class_uv_barrier = mrb_define_class_under(mrb, _class_uv, "Barrier", mrb->object_class);
+  mrb_define_method(mrb, _class_uv_barrier, "initialize", mrb_uv_barrier_init, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_barrier, "wait", mrb_uv_barrier_wait, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_barrier, "destroy", mrb_uv_barrier_destroy, ARGS_NONE());
+  ARENA_RESTORE;
+
   /* TODO
   dl
-  barrier
-  process
   queue/work
   cpuinfo
   uv_once
-  uv_thread
   etc...
   */
 
