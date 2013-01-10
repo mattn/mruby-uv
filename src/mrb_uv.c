@@ -54,6 +54,7 @@ typedef struct {
     uv_fs_poll_t fs_poll;
     uv_tty_t tty;
     uv_process_t process;
+    uv_thread_t thread;
   } any;
   mrb_value instance;
   uv_loop_t* loop;
@@ -3173,6 +3174,74 @@ mrb_uv_process_stderr_pipe_set(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
+ * UV::Thread
+ *********************************************************/
+static void
+_uv_thread_proc(void *arg)
+{
+  mrb_uv_context* context = (mrb_uv_context*) arg;
+  mrb_state* mrb = context->mrb;
+  if (!mrb) return;
+  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "thread_proc"));
+  mrb_value thread_arg = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "thread_arg"));
+  if (!mrb_nil_p(proc)) {
+    mrb_value args[1];
+    args[0] = thread_arg;
+    mrb_yield_argv(mrb, proc, 1, args);
+  }
+}
+
+static mrb_value
+mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value thread_arg = mrb_nil_value();
+  mrb_value b = mrb_nil_value();
+  mrb_uv_context* context = NULL;
+
+  mrb_get_args(mrb, "&|o", &b, &thread_arg);
+
+  context = uv_context_alloc(mrb);
+  if (!context) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+  }
+  context->instance = self;
+  context->loop = uv_default_loop();
+
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "thread_proc"), b);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "thread_arg"), thread_arg);
+  mrb_iv_set(mrb, self, mrb_intern(mrb, "context"), mrb_obj_value(
+    Data_Wrap_Struct(mrb, mrb->object_class,
+    &uv_context_type, (void*) context)));
+
+  if (uv_thread_create(&context->any.thread, _uv_thread_proc, context) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
+  }
+  return self;
+}
+
+static mrb_value
+mrb_uv_thread_join(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  uv_thread_join(&context->any.thread);
+  return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_thread_self(mrb_state *mrb, mrb_value self)
+{
+  return mrb_fixnum_value(uv_thread_self());
+}
+
+/*********************************************************
  * register
  *********************************************************/
 
@@ -3424,6 +3493,12 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_process, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_process, "data", mrb_uv_data_get, ARGS_NONE());
+  ARENA_RESTORE;
+
+  struct RClass* _class_uv_thread = mrb_define_class_under(mrb, _class_uv, "Thread", mrb->object_class);
+  mrb_define_module_function(mrb, _class_uv_thread, "self", mrb_uv_thread_self, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_thread, "initialize", mrb_uv_thread_init, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_thread, "join", mrb_uv_thread_join, ARGS_NONE());
   ARENA_RESTORE;
 
   /* TODO
