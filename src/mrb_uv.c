@@ -342,9 +342,6 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
-  if (!uv_is_active(&context->any.stream)) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, "connection closed");
-  }
 
   mrb_get_args(mrb, "|&S", &b, &arg_data);
   if (mrb_nil_p(arg_data)) {
