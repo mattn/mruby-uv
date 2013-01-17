@@ -1005,7 +1005,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
   struct sockaddr_in *addr = NULL, *paddr = NULL;
 
   mrb_get_args(mrb, "o|i", &arg_host, &arg_port);
-  if (mrb_type(arg_host) == MRB_TT_STRING && mrb_type(arg_port) == MRB_TT_FIXNUM) {
+  if (mrb_type(arg_host) == MRB_TT_STRING && !mrb_nil_p(arg_port)) {
     vaddr = uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port));
     addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in));
@@ -1091,7 +1091,7 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
   struct sockaddr_in6 *addr = NULL, *paddr = NULL;
 
   mrb_get_args(mrb, "o|i", &arg_host, &arg_port);
-  if (mrb_type(arg_host) == MRB_TT_STRING && mrb_type(arg_port) == MRB_TT_FIXNUM) {
+  if (mrb_type(arg_host) == MRB_TT_STRING && !mrb_nil_p(arg_port)) {
     vaddr = uv_ip6_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port));
     addr = (struct sockaddr_in6*) malloc(sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(vaddr));
