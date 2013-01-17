@@ -15,6 +15,8 @@
 #include <limits.h>
 #include <unistd.h>
 
+extern char **environ;
+
 #if 1
 #define ARENA_SAVE \
   int ai = mrb_gc_arena_save(mrb); \
