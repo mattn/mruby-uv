@@ -20,4 +20,7 @@ s.listen(5) {|x|
     end
   }
 }
+
+UV::Signal.new.start(UV::Signal::SIGPIPE) {}
+
 UV::run()
