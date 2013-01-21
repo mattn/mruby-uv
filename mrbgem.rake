@@ -3,12 +3,12 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   spec.authors = 'mattn'
 
   if ENV['OS'] == 'Windows_NT'
-    spec.mruby_libs = '-luv -lws2_32 -liphlpapi -lpsapi'
+    spec.linker.libraries << ['uv', 'ws2_32', 'iphlpapi', 'psapi']
   else
     if ENV['libuv_path'] != nil
-      spec.mruby_libs = "-L" + ENV['libuv_path']
-      spec.mruby_includes = ENV['libuv_path'] + "/include"
+      spec.linker.flags = "-L" + ENV['libuv_path']
+      spec.cc.flags << '-I"#{ENV["libuv_path"] + "/include"}"'
     end
-    spec.mruby_libs = "-luv -lrt -lm"
+    spec.linker.libraries << ['uv', 'rt', 'm']
   end
 end
