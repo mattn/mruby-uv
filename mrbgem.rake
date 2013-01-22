@@ -6,7 +6,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
     spec.linker.libraries << ['uv', 'ws2_32', 'iphlpapi', 'psapi']
   else
     if ENV['libuv_path'] != nil
-      spec.linker.flags = "-L" + ENV['libuv_path']
+      spec.linker.flags << "-L" + ENV['libuv_path']
       spec.cc.flags << '-I"#{ENV["libuv_path"] + "/include"}"'
     end
     spec.linker.libraries << ['uv', 'rt', 'm']
