@@ -3328,7 +3328,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   //mrb_define_module_function(mrb, _class_uv, "dlopen", mrb_uv_dlopen, ARGS_NONE());
   //mrb_define_module_function(mrb, _class_uv, "dlclose", mrb_uv_dlclose, ARGS_NONE());
 
-#ifdef UV_RUN_DEFAULT
+#if UV_VERSION_MINOR >= 9
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
   mrb_define_const(mrb, _class_uv, "UV_RUN_NOWAIT", mrb_fixnum_value(UV_RUN_NOWAIT));
@@ -3343,9 +3343,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
   mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, ARGS_NONE());
-#ifdef UV_RUN_DEFAULT
-  mrb_define_method(mrb, _class_uv_loop, "run2", mrb_uv_loop_run2, ARGS_REQ(1));
-#endif
   mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_delete, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
