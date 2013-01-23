@@ -124,18 +124,14 @@ mrb_uv_gc(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_run(mrb_state *mrb, mrb_value self)
 {
+#if UV_VERSION_MINOR >= 9
+  mrb_value arg_mode = mrb_fixnum_value(UV_RUN_DEFAULT);
+  mrb_get_args(mrb, "|i", &arg_mode);
+  return mrb_fixnum_value(uv_run(uv_default_loop(), mrb_fixnum(arg_mode)));
+#else
   return mrb_fixnum_value(uv_run(uv_default_loop()));
-}
-
-#ifdef UV_RUN_DEFAULT
-static mrb_value
-mrb_uv_run2(mrb_state *mrb, mrb_value self)
-{
-  mrb_value arg_mode;
-  mrb_get_args(mrb, "i", &arg_mode);
-  return mrb_fixnum_value(uv_run2(uv_default_loop(), mrb_fixnum(arg_mode)));
-}
 #endif
+}
 
 /*
  * TODO: need to UV::Once object to avoid gc.
@@ -456,34 +452,19 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  if (uv_run(context->loop) != 0) {
+#if UV_VERSION_MINOR >= 9
+  mrb_value arg_mode = mrb_fixnum_value(UV_RUN_DEFAULT);
+  mrb_get_args(mrb, "|i", &arg_mode);
+  if (uv_run(uv_default_loop(), mrb_fixnum(arg_mode)) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-  return mrb_nil_value();
-}
-
-#ifdef UV_RUN_DEFAULT
-static mrb_value
-mrb_uv_loop_run2(mrb_state *mrb, mrb_value self)
-{
-  mrb_value arg_mode;
-  mrb_value value_context;
-  mrb_uv_context* context = NULL;
-
-  mrb_get_args(mrb, "i", &arg_mode);
-
-  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
-  if (!context) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-  }
-
-  if (uv_run2(context->loop, mrb_fixnum(arg_mode)) != 0) {
+#else
+  if (uv_run(uv_default_loop()) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-  return mrb_nil_value();
-}
 #endif
+  return mrb_nil_value();
+}
 
 static mrb_value
 mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
@@ -3336,9 +3317,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   struct RClass* _class_uv = mrb_define_module(mrb, "UV");
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
-#ifdef UV_RUN_DEFAULT
-  mrb_define_module_function(mrb, _class_uv, "run2", mrb_uv_run2, ARGS_REQ(1));
-#endif
   //mrb_define_module_function(mrb, _class_uv, "once", mrb_uv_once, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
