@@ -3586,4 +3586,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, _class_uv, "$GC", uv_gc_table);
 }
 
+void
+mrb_mruby_uv_gem_final(mrb_state* mrb) {
+}
+
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */
