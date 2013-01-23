@@ -3,7 +3,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   spec.authors = 'mattn'
 
   if ENV['OS'] == 'Windows_NT'
-    spec.linker.libraries << ['psapi', 'iphlpapi', 'ws2_32', 'uv']
+    spec.linker.libraries << ['uv', 'psapi', 'iphlpapi', 'ws2_32']
   else
     if ENV['libuv_path'] != nil
       spec.linker.flags << "-L" + ENV['libuv_path']
