@@ -188,6 +188,7 @@ static void
 _uv_shutdown_cb(uv_shutdown_t* req, int status)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
+  mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "shutdown_cb"));
   mrb_value args[1];
   args[0] = mrb_fixnum_value(status);
