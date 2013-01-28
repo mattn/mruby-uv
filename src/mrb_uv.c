@@ -13,22 +13,13 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <limits.h>
+#ifndef _MSC_VER
 #include <unistd.h>
+#else
+#define PATH_MAX MAX_PATH
+#endif
 
 extern char **environ;
-
-#if 1
-#define ARENA_SAVE \
-  int ai = mrb_gc_arena_save(mrb); \
-  if (ai == MRB_ARENA_SIZE) { \
-    mrb_raise(mrb, E_RUNTIME_ERROR, "arena overflow"); \
-  }
-#define ARENA_RESTORE \
-  mrb_gc_arena_restore(mrb, ai);
-#else
-#define ARENA_SAVE
-#define ARENA_RESTORE
-#endif
 
 #define OBJECT_GET(mrb, instance, name) \
   mrb_iv_get(mrb, instance, mrb_intern(mrb, name))
@@ -100,7 +91,7 @@ static const struct mrb_data_type uv_context_type = {
 static mrb_value
 mrb_uv_gc(mrb_state *mrb, mrb_value self)
 {
-  ARENA_SAVE;
+  int ai = mrb_gc_arena_save(mrb);
   struct RClass* _class_uv = mrb_class_get(mrb, "UV");
   mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
   int i, l = RARRAY_LEN(uv_gc_table);
@@ -117,7 +108,7 @@ mrb_uv_gc(mrb_state *mrb, mrb_value self)
       }
     }
   }
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
   return mrb_nil_value();
 }
 
@@ -161,8 +152,9 @@ _uv_close_cb(uv_handle_t* handle)
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
+  mrb_value proc;
   if (!mrb) return;
-  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "close_cb"));
+  proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "close_cb"));
   mrb_yield_argv(mrb, proc, 0, NULL);
 }
 
@@ -196,7 +188,6 @@ static void
 _uv_shutdown_cb(uv_shutdown_t* req, int status)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
-  mrb_state* mrb = mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "shutdown_cb"));
   mrb_value args[1];
   args[0] = mrb_fixnum_value(status);
@@ -210,6 +201,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_shutdown_cb shutdown_cb = _uv_shutdown_cb;
+  uv_shutdown_t* req;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -223,7 +215,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "shutdown_cb"), b);
 
-  uv_shutdown_t* req = (uv_shutdown_t*) malloc(sizeof(uv_shutdown_t));
+  req = (uv_shutdown_t*) malloc(sizeof(uv_shutdown_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -244,8 +236,9 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
   mrb_uv_context* context = (mrb_uv_context*) stream->data;
   mrb_state* mrb = context->mrb;
+  mrb_value proc;
   if (!mrb) return;
-  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "read_cb"));
+  proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "read_cb"));
   if (!mrb_nil_p(proc)) {
     mrb_value args[1];
     if (nread == -1) {
@@ -254,9 +247,9 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     } else if (nread == 0) {
       uv_close(&context->any.handle, NULL);
     } else {
-      ARENA_SAVE;
+      int ai = mrb_gc_arena_save(mrb);
       args[0] = mrb_str_new(mrb, buf.base, nread);
-      ARENA_RESTORE;
+      mrb_gc_arena_restore(mrb, ai);
       mrb_yield_argv(mrb, proc, 1, args);
       free(buf.base);
     }
@@ -312,11 +305,12 @@ _uv_write_cb(uv_write_t* req, int status)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->handle->data;
   mrb_state* mrb = context->mrb;
+  mrb_value proc;
   if (!mrb) return;
-  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "write_cb"));
+  proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "write_cb"));
   if (!mrb_nil_p(proc)) {
-    mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "write_cb"), mrb_nil_value());
     mrb_value args[1];
+    mrb_iv_set(mrb, context->instance, mrb_intern(mrb, "write_cb"), mrb_nil_value());
     args[0] = mrb_fixnum_value(status);
     mrb_yield_argv(mrb, proc, 1, args);
   }
@@ -332,6 +326,7 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_write_cb write_cb = _uv_write_cb;
   uv_buf_t buf;
+  uv_write_t* req;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -349,7 +344,7 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "write_cb"), b);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
-  uv_write_t* req = (uv_write_t*) malloc(sizeof(uv_write_t));
+  req = (uv_write_t*) malloc(sizeof(uv_write_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -445,6 +440,9 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_context;
   mrb_uv_context* context = NULL;
+#if UV_VERSION_MINOR >= 9
+  mrb_value arg_mode;
+#endif
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -453,7 +451,7 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
   }
 
 #if UV_VERSION_MINOR >= 9
-  mrb_value arg_mode = mrb_fixnum_value(UV_RUN_DEFAULT);
+  arg_mode = mrb_fixnum_value(UV_RUN_DEFAULT);
   mrb_get_args(mrb, "|i", &arg_mode);
   if (uv_run(uv_default_loop(), mrb_fixnum(arg_mode)) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -969,9 +967,11 @@ mrb_uv_ip4_addr(mrb_state *mrb, mrb_value self)
 {
   int argc;
   mrb_value *argv;
+  struct RClass* _class_uv;
+  struct RClass* _class_uv_ip4addr;
   mrb_get_args(mrb, "*", &argv, &argc);
-  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
-  struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
+  _class_uv = mrb_class_get(mrb, "UV");
+  _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
   return mrb_class_new_instance(mrb, argc, argv, _class_uv_ip4addr);
 }
 
@@ -1055,9 +1055,11 @@ mrb_uv_ip6_addr(mrb_state *mrb, mrb_value self)
 {
   int argc;
   mrb_value *argv;
+  struct RClass* _class_uv;
+  struct RClass* _class_uv_ip6addr;
   mrb_get_args(mrb, "*", &argv, &argc);
-  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
-  struct RClass* _class_uv_ip6addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip6Addr")));
+  _class_uv = mrb_class_get(mrb, "UV");
+  _class_uv_ip6addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip6Addr")));
   return mrb_class_new_instance(mrb, argc, argv, _class_uv_ip6addr);
 }
 
@@ -1173,10 +1175,13 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_getaddrinfo_cb getaddrinfo_cb = _uv_getaddrinfo_cb;
   struct addrinfo hint = {0};
+  mrb_uv_addrinfo* addr;
+  uv_getaddrinfo_t* req;
+  int ret;
 
   mrb_get_args(mrb, "SS|o&", &node, &service, &hint, &b);
 
-  mrb_uv_addrinfo* addr = (mrb_uv_addrinfo*) malloc(sizeof(mrb_uv_addrinfo));
+  addr = (mrb_uv_addrinfo*) malloc(sizeof(mrb_uv_addrinfo));
   if (!addr) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -1188,13 +1193,13 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
     getaddrinfo_cb = NULL;
   }
 
-  uv_getaddrinfo_t* req = (uv_getaddrinfo_t*) malloc(sizeof(uv_getaddrinfo_t));
+  req = (uv_getaddrinfo_t*) malloc(sizeof(uv_getaddrinfo_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
   memset(req, 0, sizeof(uv_getaddrinfo_t));
   req->data = addr;
-  int ret = uv_getaddrinfo(
+  ret = uv_getaddrinfo(
     uv_default_loop(),
     req,
     getaddrinfo_cb,
@@ -1245,12 +1250,14 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   struct addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
-
-  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
-
+  struct RClass* _class_uv;
   mrb_value c = mrb_nil_value();
   mrb_value args[1];
+
+  Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
+
+  _class_uv = mrb_class_get(mrb, "UV");
+
   switch (addr->ai_family) {
   case AF_INET:
     {
@@ -1359,6 +1366,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_connect_cb connect_cb = _uv_connect_cb;
   struct sockaddr_in* addr = NULL;
+  uv_connect_t* req;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -1381,7 +1389,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b);
 
-  uv_connect_t* req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -1460,6 +1468,10 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   mrb_value c, value_context, value_new_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* new_context = NULL;
+  struct RClass* _class_uv;
+  struct RClass* _class_uv_tcp;
+  int ai;
+  mrb_value uv_gc_table;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -1467,8 +1479,8 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
-  struct RClass* _class_uv_tcp = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "TCP")));
+  _class_uv = mrb_class_get(mrb, "UV");
+  _class_uv_tcp = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "TCP")));
   c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_tcp);
 
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
@@ -1481,10 +1493,10 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
 
-  ARENA_SAVE;
-  mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
+  ai = mrb_gc_arena_save(mrb);
+  uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
   mrb_ary_push(mrb, uv_gc_table, c);
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
   return c;
 }
 
@@ -1683,6 +1695,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_udp_send_cb udp_send_cb = _uv_udp_send_cb;
   uv_buf_t buf;
+  uv_udp_send_t* req;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -1706,7 +1719,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern(mrb, "udp_send_cb"), b);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
-  uv_udp_send_t* req = (uv_udp_send_t*) malloc(sizeof(uv_udp_send_t));
+  req = (uv_udp_send_t*) malloc(sizeof(uv_udp_send_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -1727,8 +1740,10 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "udp_recv_cb"));
   mrb_value args[3];
-  ARENA_SAVE;
+  int ai = mrb_gc_arena_save(mrb);
   if (nread != -1) {
+    struct RClass* _class_uv;
+    struct RClass* _class_uv_ip4addr;
     char name[256];
     mrb_value c;
     mrb_value addr_args[2];
@@ -1737,8 +1752,8 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
     }
     addr_args[0] = mrb_str_new(mrb, name, strlen(name));
     addr_args[1] = mrb_fixnum_value(ntohs(((struct sockaddr_in*)addr)->sin_port));
-    struct RClass* _class_uv = mrb_class_get(mrb, "UV");
-    struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
+    _class_uv = mrb_class_get(mrb, "UV");
+    _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
     c = mrb_class_new_instance(mrb, 2, addr_args, _class_uv_ip4addr);
     mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
       Data_Wrap_Struct(mrb, mrb->object_class,
@@ -1749,7 +1764,7 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
     args[0] = mrb_nil_value();
     args[1] = mrb_nil_value();
   }
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
   args[2] = mrb_fixnum_value(flags);
   mrb_yield_argv(mrb, proc, 3, args);
 }
@@ -1858,6 +1873,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_connect_cb connect_cb = _uv_connect_cb;
   char* name = NULL;
+  uv_connect_t* req;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -1876,7 +1892,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "connect_cb"), b);
 
-  uv_connect_t* req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -1945,6 +1961,11 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
   mrb_value c, value_context, value_new_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* new_context = NULL;
+  mrb_value args[1];
+  struct RClass* _class_uv;
+  struct RClass* _class_uv_pipe;
+  int ai;
+  mrb_value uv_gc_table;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -1952,10 +1973,9 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_value args[1];
   args[0] = mrb_fixnum_value(0);
-  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
-  struct RClass* _class_uv_pipe = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Pipe")));
+  _class_uv = mrb_class_get(mrb, "UV");
+  _class_uv_pipe = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Pipe")));
   c = mrb_class_new_instance(mrb, 1, args, _class_uv_pipe);
 
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
@@ -1971,10 +1991,10 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
 
-  ARENA_SAVE;
-  mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
+  ai = mrb_gc_arena_save(mrb);
+  uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
   mrb_ary_push(mrb, uv_gc_table, c);
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
   return c;
 }
 
@@ -1986,10 +2006,11 @@ _uv_fs_open_cb(uv_fs_t* req)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->data;
   mrb_state* mrb = context->mrb;
+  mrb_value proc;
   if (req->result == -1) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
+  proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
   if (!mrb_nil_p(proc)) {
     mrb_value args[1];
     context->any.fs = req->result;
@@ -2005,20 +2026,24 @@ _uv_fs_cb(uv_fs_t* req)
 {
   mrb_uv_context* context = (mrb_uv_context*) req->data;
   mrb_state* mrb = context->mrb;
+  mrb_value proc;
+  uv_fs_t close_req;
   if (req->result == -1) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
+  proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "fs_cb"));
 
-  uv_fs_t close_req;
   switch (req->fs_type) {
   case UV_FS_READDIR:
     if (!mrb_nil_p(proc)) {
+       int count;
+       char* ptr;
+       mrb_value ary;
        mrb_value args[2];
        args[0] = mrb_fixnum_value(req->result);
-       int count = req->result;
-       char* ptr = req->ptr;
-       mrb_value ary = mrb_ary_new(mrb);
+       count = req->result;
+       ptr = req->ptr;
+       ary = mrb_ary_new(mrb);
        while (count-- > 0) {
          mrb_ary_push(mrb, ary, mrb_str_new_cstr(mrb, ptr));
          ptr += strlen(ptr) + 1;
@@ -2065,14 +2090,21 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   mrb_value arg_flags;
   uv_fs_cb fs_cb = _uv_fs_open_cb;
   mrb_value b = mrb_nil_value();
+  struct RClass* _class_uv;
+  struct RClass* _class_uv_fs;
+  mrb_value c;
+  mrb_uv_context* context;
+  uv_fs_t* req;
+  int ai;
+  mrb_value uv_gc_table;
 
   mrb_get_args(mrb, "&Sii", &b, &arg_filename, &arg_flags, &arg_mode);
 
-  struct RClass* _class_uv = mrb_class_get(mrb, "UV");
-  struct RClass* _class_uv_fs = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "FS")));
-  mrb_value c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_fs);
+  _class_uv = mrb_class_get(mrb, "UV");
+  _class_uv_fs = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "FS")));
+  c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_fs);
 
-  mrb_uv_context* context = uv_context_alloc(mrb);
+  context = uv_context_alloc(mrb);
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2088,7 +2120,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
     Data_Wrap_Struct(mrb, mrb->object_class,
     &uv_context_type, (void*) context)));
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2100,10 +2132,10 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(uv_default_loop())));
   }
 
-  ARENA_SAVE;
-  mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
+  ai = mrb_gc_arena_save(mrb);
+  uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "$GC"));
   mrb_ary_push(mrb, uv_gc_table, c);
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
   return c;
 }
 
@@ -2114,6 +2146,7 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
+  uv_fs_t* req;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -2127,7 +2160,7 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2145,6 +2178,8 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
+  uv_fs_t* req;
+  int r;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -2162,13 +2197,13 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
-  int r = uv_fs_write(uv_default_loop(), req, context->any.fs, RSTRING_PTR(arg_data), RSTRING_LEN(arg_data), mrb_fixnum(arg_offset), fs_cb);
+  r = uv_fs_write(uv_default_loop(), req, context->any.fs, RSTRING_PTR(arg_data), RSTRING_LEN(arg_data), mrb_fixnum(arg_offset), fs_cb);
   if (r == -1) {
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -2185,6 +2220,11 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
+  char* buf;
+  size_t len;
+  uv_fs_t* req;
+  int ai;
+  mrb_value str;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -2199,12 +2239,12 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  size_t len = mrb_fixnum(arg_length);
-  char* buf = malloc(len);
+  len = mrb_fixnum(arg_length);
+  buf = malloc(len);
   if (!buf) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     free(buf);
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
@@ -2217,9 +2257,9 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-  ARENA_SAVE;
-  mrb_value str = mrb_str_new(mrb, buf, len);
-  ARENA_RESTORE;
+  ai = mrb_gc_arena_save(mrb);
+  str = mrb_str_new(mrb, buf, len);
+  mrb_gc_arena_restore(mrb, ai);
   free(buf);
   return str;
 }
@@ -2231,6 +2271,7 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
@@ -2243,7 +2284,7 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2263,6 +2304,7 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&Si", &b, &arg_path, &arg_mode);
   if (mrb_nil_p(b)) {
@@ -2275,7 +2317,7 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2295,6 +2337,7 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
@@ -2307,7 +2350,7 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2327,6 +2370,7 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&Si", &b, &arg_path, &arg_flags);
   if (mrb_nil_p(b)) {
@@ -2339,7 +2383,7 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2359,6 +2403,7 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
@@ -2371,7 +2416,7 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2391,6 +2436,7 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&i", &b, &arg_file);
   if (mrb_nil_p(b)) {
@@ -2403,7 +2449,7 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2423,6 +2469,7 @@ mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
@@ -2435,7 +2482,7 @@ mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2455,6 +2502,7 @@ mrb_uv_fs_rename(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&SS", &b, &arg_path, &arg_new_path);
   if (mrb_nil_p(b)) {
@@ -2467,7 +2515,7 @@ mrb_uv_fs_rename(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2487,6 +2535,7 @@ mrb_uv_fs_fsync(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&i", &b, &arg_file);
   if (mrb_nil_p(b)) {
@@ -2499,7 +2548,7 @@ mrb_uv_fs_fsync(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2519,6 +2568,7 @@ mrb_uv_fs_fdatasync(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&i", &b, &arg_file);
   if (mrb_nil_p(b)) {
@@ -2531,7 +2581,7 @@ mrb_uv_fs_fdatasync(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2551,6 +2601,7 @@ mrb_uv_fs_ftruncate(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&ii", &b, &arg_file, &arg_offset);
   if (mrb_nil_p(b)) {
@@ -2563,7 +2614,7 @@ mrb_uv_fs_ftruncate(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2583,6 +2634,7 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   // TODO: accept UV::FS object also.
   mrb_get_args(mrb, "|&iiii", &b, &arg_infd, &arg_outfd, &arg_offset, &arg_length);
@@ -2596,7 +2648,7 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2616,6 +2668,7 @@ mrb_uv_fs_chmod(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&Si", &b, &arg_path, &arg_mode);
   if (mrb_nil_p(b)) {
@@ -2628,7 +2681,7 @@ mrb_uv_fs_chmod(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2648,6 +2701,7 @@ mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
+  uv_fs_t* req;
 
   mrb_get_args(mrb, "|&SS", &b, &arg_path, &arg_new_path);
   if (mrb_nil_p(b)) {
@@ -2660,7 +2714,7 @@ mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_cb"), b);
 
-  uv_fs_t* req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2754,8 +2808,7 @@ mrb_uv_fs_poll_start(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "fs_poll_cb"), b);
 
-  int ret = uv_fs_poll_start(&context->any.fs_poll, fs_poll_cb, RSTRING_PTR(arg_path), mrb_fixnum(arg_interval));
-  return mrb_fixnum_value(ret);
+  return mrb_fixnum_value(uv_fs_poll_start(&context->any.fs_poll, fs_poll_cb, RSTRING_PTR(arg_path), mrb_fixnum(arg_interval)));
 }
 
 static mrb_value
@@ -2770,8 +2823,7 @@ mrb_uv_fs_poll_stop(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  int ret = uv_fs_poll_stop(&context->any.fs_poll);
-  return mrb_fixnum_value(ret);
+  return mrb_fixnum_value(uv_fs_poll_stop(&context->any.fs_poll));
 }
 
 /*********************************************************
@@ -2855,8 +2907,7 @@ mrb_uv_signal_start(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "signal_cb"), b);
 
-  int ret = uv_signal_start(&context->any.signal, signal_cb, mrb_fixnum(arg_signum));
-  return mrb_fixnum_value(ret);
+  return mrb_fixnum_value(uv_signal_start(&context->any.signal, signal_cb, mrb_fixnum(arg_signum)));
 }
 
 static mrb_value
@@ -2871,8 +2922,7 @@ mrb_uv_signal_stop(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  int ret = uv_signal_stop(&context->any.signal);
-  return mrb_fixnum_value(ret);
+  return mrb_fixnum_value(uv_signal_stop(&context->any.signal));
 }
 
 /*********************************************************
@@ -2953,6 +3003,8 @@ mrb_uv_tty_get_winsize(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_context;
   mrb_uv_context* context = NULL;
+  int width = 0, height = 0;
+  mrb_value ary;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -2960,11 +3012,10 @@ mrb_uv_tty_get_winsize(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  int width = 0, height = 0;
   if (uv_tty_get_winsize(&context->any.tty, &width, &height) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-  mrb_value ary = mrb_ary_new(mrb);
+  ary = mrb_ary_new(mrb);
   mrb_ary_push(mrb, ary, mrb_fixnum_value(width));
   mrb_ary_push(mrb, ary, mrb_fixnum_value(height));
   return ary;
@@ -2991,15 +3042,18 @@ static mrb_value
 mrb_uv_process_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_opt = mrb_nil_value();
+  mrb_value arg_file;
+  mrb_value arg_args;
+  mrb_uv_context* context;
 
   mrb_get_args(mrb, "H", &arg_opt);
   if (mrb_nil_p(arg_opt)) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-  mrb_value arg_file = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "file"));
+  arg_file = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "file"));
   if (mrb_type(arg_file) != MRB_TT_STRING) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-  mrb_value arg_args = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "args"));
+  arg_args = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "args"));
   if (mrb_type(arg_args) != MRB_TT_ARRAY) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
 
-  mrb_uv_context* context = uv_context_alloc(mrb);
+  context = uv_context_alloc(mrb);
   if (!context) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -3025,6 +3079,17 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_exit_cb exit_cb = _uv_exit_cb;
+  mrb_value options;
+  mrb_value arg_file;
+  mrb_value arg_args;
+  mrb_value stdin_pipe;
+  mrb_value stdout_pipe;
+  mrb_value stderr_pipe;
+  char cwd[PATH_MAX] = {0};
+  int i, ret;
+  uv_stdio_container_t stdio[3];
+  uv_process_options_t opt = {0};
+  char** args;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -3032,12 +3097,12 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_value options = mrb_iv_get(mrb, self, mrb_intern(mrb, "options"));
-  mrb_value arg_file = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "file"));
-  mrb_value arg_args = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "args"));
-  mrb_value stdin_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stdin_pipe"));
-  mrb_value stdout_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stdout_pipe"));
-  mrb_value stderr_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stderr_pipe"));
+  options = mrb_iv_get(mrb, self, mrb_intern(mrb, "options"));
+  arg_file = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "file"));
+  arg_args = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "args"));
+  stdin_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stdin_pipe"));
+  stdout_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stdout_pipe"));
+  stderr_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stderr_pipe"));
 
   mrb_get_args(mrb, "|&", &b);
   if (mrb_nil_p(b)) {
@@ -3045,17 +3110,13 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern(mrb, "exit_cb"), b);
 
-  char cwd[PATH_MAX] = {0};
   uv_cwd(cwd, sizeof(cwd));
-  char** args = malloc(sizeof(char*) * (RARRAY_LEN(arg_args)+2));
-  int i;
+  args = malloc(sizeof(char*) * (RARRAY_LEN(arg_args)+2));
   args[0] = RSTRING_PTR(arg_file);
   for (i = 0; i < RARRAY_LEN(arg_args); i++) {
     args[i+1] = RSTRING_PTR(mrb_ary_entry(arg_args, i));
   }
   args[i+1] = NULL;
-
-  uv_stdio_container_t stdio[3];
 
   if (!mrb_nil_p(stdin_pipe)) {
     mrb_value pipe_context = mrb_iv_get(mrb, stdin_pipe, mrb_intern(mrb, "context"));
@@ -3096,7 +3157,6 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
     stdio[2].flags = UV_IGNORE;
   }
 
-  uv_process_options_t opt = {0};
   opt.file = RSTRING_PTR(arg_file);
   opt.args = uv_setup_args(RARRAY_LEN(arg_args)+1, args);
   opt.env = environ;
@@ -3108,7 +3168,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   opt.gid = 0;
   opt.flags = 0;
 
-  int ret = uv_spawn(context->loop, &context->any.process, opt);
+  ret = uv_spawn(context->loop, &context->any.process, opt);
   free(args);
   if (ret != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -3188,9 +3248,10 @@ _uv_thread_proc(void *arg)
 {
   mrb_uv_context* context = (mrb_uv_context*) arg;
   mrb_state* mrb = context->mrb;
+  mrb_value proc, thread_arg;
   if (!mrb) return;
-  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "thread_proc"));
-  mrb_value thread_arg = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "thread_arg"));
+  proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "thread_proc"));
+  thread_arg = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "thread_arg"));
   if (!mrb_nil_p(proc)) {
     mrb_value args[1];
     args[0] = thread_arg;
@@ -3313,9 +3374,31 @@ mrb_uv_barrier_destroy(mrb_state *mrb, mrb_value self)
 
 void
 mrb_mruby_uv_gem_init(mrb_state* mrb) {
-  ARENA_SAVE;
+  int ai = mrb_gc_arena_save(mrb);
 
-  struct RClass* _class_uv = mrb_define_module(mrb, "UV");
+  struct RClass* _class_uv;
+  struct RClass* _class_uv_loop;
+  struct RClass* _class_uv_timer;
+  struct RClass* _class_uv_idle;
+  struct RClass* _class_uv_async;
+  struct RClass* _class_uv_prepare;
+  struct RClass* _class_uv_addrinfo;
+  struct RClass* _class_uv_ip4addr;
+  struct RClass* _class_uv_ip6addr;
+  struct RClass* _class_uv_tcp;
+  struct RClass* _class_uv_udp;
+  struct RClass* _class_uv_pipe;
+  struct RClass* _class_uv_mutex;
+  struct RClass* _class_uv_fs;
+  struct RClass* _class_uv_fs_poll;
+  struct RClass* _class_uv_signal;
+  struct RClass* _class_uv_tty;
+  struct RClass* _class_uv_process;
+  struct RClass* _class_uv_thread;
+  struct RClass* _class_uv_barrier;
+  mrb_value uv_gc_table;
+  
+  _class_uv = mrb_define_module(mrb, "UV");
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
   //mrb_define_module_function(mrb, _class_uv, "once", mrb_uv_once, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
@@ -3338,17 +3421,16 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 #else
   mrb_define_const(mrb, _class_uv, "IS_WINDOWS", mrb_false_value());
 #endif
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
+  _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
   mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_delete, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_timer;
   _class_uv_timer = mrb_define_class_under(mrb, _class_uv, "Timer", mrb->object_class);
   mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(2));
@@ -3356,35 +3438,35 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_timer, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_timer, "data", mrb_uv_data_get, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_idle = mrb_define_class_under(mrb, _class_uv, "Idle", mrb->object_class);
+  _class_uv_idle = mrb_define_class_under(mrb, _class_uv, "Idle", mrb->object_class);
   mrb_define_method(mrb, _class_uv_idle, "initialize", mrb_uv_idle_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "start", mrb_uv_idle_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "stop", mrb_uv_idle_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_idle, "data", mrb_uv_data_get, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Async", mrb->object_class);
+  _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Async", mrb->object_class);
   mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_async_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_async, "send", mrb_uv_async_send, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_async, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_async, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_async, "data", mrb_uv_data_get, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_prepare = mrb_define_class_under(mrb, _class_uv, "Prepare", mrb->object_class);
+  _class_uv_prepare = mrb_define_class_under(mrb, _class_uv, "Prepare", mrb->object_class);
   mrb_define_method(mrb, _class_uv_prepare, "initialize", mrb_uv_prepare_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_prepare, "start", mrb_uv_prepare_start, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_prepare, "stop", mrb_uv_prepare_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_prepare, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_prepare, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_prepare, "data", mrb_uv_data_get, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_addrinfo = mrb_define_class_under(mrb, _class_uv, "Addrinfo", mrb->object_class);
+  _class_uv_addrinfo = mrb_define_class_under(mrb, _class_uv, "Addrinfo", mrb->object_class);
   mrb_define_method(mrb, _class_uv_addrinfo, "flags", mrb_uv_addrinfo_flags, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "family", mrb_uv_addrinfo_family, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "socktype", mrb_uv_addrinfo_socktype, ARGS_NONE());
@@ -3392,23 +3474,23 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_addrinfo, "addr", mrb_uv_addrinfo_addr, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "canonname", mrb_uv_addrinfo_canonname, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "next", mrb_uv_addrinfo_next, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
+  _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
   mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(1) | ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_ip4addr, "sin_addr", mrb_uv_ip4addr_sin_addr, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_ip4addr, "sin_port", mrb_uv_ip4addr_sin_port, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_ip6addr = mrb_define_class_under(mrb, _class_uv, "Ip6Addr", mrb->object_class);
+  _class_uv_ip6addr = mrb_define_class_under(mrb, _class_uv, "Ip6Addr", mrb->object_class);
   mrb_define_method(mrb, _class_uv_ip6addr, "initialize", mrb_uv_ip6addr_init, ARGS_REQ(1) | ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_ip6addr, "to_s", mrb_uv_ip6addr_to_s, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_ip6addr, "sin_addr", mrb_uv_ip6addr_sin_addr, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_ip6addr, "sin_port", mrb_uv_ip6addr_sin_port, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
+  _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
@@ -3427,9 +3509,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   //mrb_define_method(mrb, _class_uv_tcp, "nodelay", mrb_uv_tcp_nodelay_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "data", mrb_uv_data_get, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
+  _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
@@ -3438,9 +3520,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "data", mrb_uv_data_get, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_pipe = mrb_define_class_under(mrb, _class_uv, "Pipe", mrb->object_class);
+  _class_uv_pipe = mrb_define_class_under(mrb, _class_uv, "Pipe", mrb->object_class);
   mrb_define_method(mrb, _class_uv_pipe, "initialize", mrb_uv_pipe_init, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "connect", mrb_uv_pipe_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_pipe, "read_start", mrb_uv_read_start, ARGS_REQ(2));
@@ -3453,9 +3535,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_pipe, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "data", mrb_uv_data_get, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_mutex = mrb_define_class_under(mrb, _class_uv, "Mutex", mrb->object_class);
+  _class_uv_mutex = mrb_define_class_under(mrb, _class_uv, "Mutex", mrb->object_class);
   mrb_define_method(mrb, _class_uv_mutex, "initialize", mrb_uv_mutex_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_mutex, "lock", mrb_uv_mutex_lock, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_mutex, "trylock", mrb_uv_mutex_trylock, ARGS_NONE());
@@ -3463,9 +3545,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_mutex, "destroy", mrb_uv_mutex_destroy, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_mutex, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_mutex, "data", mrb_uv_data_get, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_fs = mrb_define_class_under(mrb, _class_uv, "FS", mrb->object_class);
+  _class_uv_fs = mrb_define_class_under(mrb, _class_uv, "FS", mrb->object_class);
   mrb_define_const(mrb, _class_uv_fs, "O_RDONLY", mrb_fixnum_value(O_RDONLY));
   mrb_define_const(mrb, _class_uv_fs, "O_WRONLY", mrb_fixnum_value(O_WRONLY));
   mrb_define_const(mrb, _class_uv_fs, "O_RDWR", mrb_fixnum_value(O_RDWR));
@@ -3510,16 +3592,16 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_fs_chown
   uv_fs_fchown
   */
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_fs_poll = mrb_define_class_under(mrb, _class_uv_fs, "Poll", mrb->object_class);
+  _class_uv_fs_poll = mrb_define_class_under(mrb, _class_uv_fs, "Poll", mrb->object_class);
   mrb_define_method(mrb, _class_uv_fs_poll, "initialize", mrb_uv_fs_poll_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_fs_poll, "start", mrb_uv_fs_poll_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs_poll, "stop", mrb_uv_fs_poll_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_fs_poll, "close", mrb_uv_close, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_signal = mrb_define_class_under(mrb, _class_uv, "Signal", mrb->object_class);
+  _class_uv_signal = mrb_define_class_under(mrb, _class_uv, "Signal", mrb->object_class);
   mrb_define_method(mrb, _class_uv_signal, "initialize", mrb_uv_signal_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_signal, "start", mrb_uv_signal_start, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_signal, "stop", mrb_uv_signal_stop, ARGS_NONE());
@@ -3539,17 +3621,17 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, _class_uv_signal, "SIGSEGV", mrb_fixnum_value(SIGSEGV));
   mrb_define_const(mrb, _class_uv_signal, "SIGTERM", mrb_fixnum_value(SIGTERM));
   mrb_define_const(mrb, _class_uv_signal, "SIGKILL", mrb_fixnum_value(SIGKILL));
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_tty = mrb_define_class_under(mrb, _class_uv, "TTY", mrb->object_class);
+  _class_uv_tty = mrb_define_class_under(mrb, _class_uv, "TTY", mrb->object_class);
   mrb_define_method(mrb, _class_uv_tty, "initialize", mrb_uv_tty_init, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tty, "set_mode", mrb_uv_tty_set_mode, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_tty, "reset_mode", mrb_uv_tty_reset_mode, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tty, "get_winsize", mrb_uv_tty_get_winsize, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tty, "close", mrb_uv_close, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_process = mrb_define_class_under(mrb, _class_uv, "Process", mrb->object_class);
+  _class_uv_process = mrb_define_class_under(mrb, _class_uv, "Process", mrb->object_class);
   mrb_define_method(mrb, _class_uv_process, "initialize", mrb_uv_process_init, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_process, "spawn", mrb_uv_process_spawn, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "stdout_pipe=", mrb_uv_process_stdout_pipe_set, ARGS_REQ(1));
@@ -3562,19 +3644,19 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_process, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_process, "data", mrb_uv_data_get, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_thread = mrb_define_class_under(mrb, _class_uv, "Thread", mrb->object_class);
+  _class_uv_thread = mrb_define_class_under(mrb, _class_uv, "Thread", mrb->object_class);
   mrb_define_module_function(mrb, _class_uv_thread, "self", mrb_uv_thread_self, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_thread, "initialize", mrb_uv_thread_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_thread, "join", mrb_uv_thread_join, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
-  struct RClass* _class_uv_barrier = mrb_define_class_under(mrb, _class_uv, "Barrier", mrb->object_class);
+  _class_uv_barrier = mrb_define_class_under(mrb, _class_uv, "Barrier", mrb->object_class);
   mrb_define_method(mrb, _class_uv_barrier, "initialize", mrb_uv_barrier_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_barrier, "wait", mrb_uv_barrier_wait, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_barrier, "destroy", mrb_uv_barrier_destroy, ARGS_NONE());
-  ARENA_RESTORE;
+  mrb_gc_arena_restore(mrb, ai);
 
   /* TODO
   queue/work
@@ -3582,7 +3664,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   etc...
   */
 
-  mrb_value uv_gc_table = mrb_ary_new(mrb);
+  uv_gc_table = mrb_ary_new(mrb);
   mrb_define_const(mrb, _class_uv, "$GC", uv_gc_table);
 }
 
