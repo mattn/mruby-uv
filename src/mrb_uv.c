@@ -1511,7 +1511,6 @@ mrb_uv_tcp_simultaneous_accepts_set(mrb_state *mrb, mrb_value self)
   mrb_int arg_simultaneous_accepts;
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  int simultaneous_accepts;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -1520,9 +1519,6 @@ mrb_uv_tcp_simultaneous_accepts_set(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "i", &arg_simultaneous_accepts);
-  /*
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "simultaneous_accepts"), mrb_fixnum_value(simultaneous_accepts));
-  */
   uv_tcp_simultaneous_accepts(&context->any.tcp, arg_simultaneous_accepts);
   return mrb_nil_value();
 }
@@ -1541,7 +1537,6 @@ mrb_uv_tcp_keepalive_set(mrb_state *mrb, mrb_value self)
   mrb_int arg_keepalive, arg_delay;
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  int keepalive, delay;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -1550,10 +1545,6 @@ mrb_uv_tcp_keepalive_set(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "ii", &arg_keepalive, &arg_delay);
-  /*
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "keepalive"), mrb_fixnum_value(keepalive));
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "delay"), mrb_fixnum_value(delay));
-  */
   uv_tcp_keepalive(&context->any.tcp, arg_keepalive, arg_delay);
   return mrb_nil_value();
 }
@@ -1572,7 +1563,6 @@ mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
   mrb_int arg_nodelay;
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-  int nodelay;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -1581,9 +1571,6 @@ mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "i", &arg_nodelay);
-  /*
-  mrb_iv_set(mrb, self, mrb_intern(mrb, "nodelay"), mrb_fixnum_value(nodelay));
-  */
   uv_tcp_nodelay(&context->any.tcp, arg_nodelay);
   return mrb_nil_value();
 }
