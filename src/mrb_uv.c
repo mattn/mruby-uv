@@ -174,7 +174,7 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
 
   if (!uv_is_active(&context->any.handle)) return mrb_nil_value();
 
-  mrb_get_args(mrb, "|&", &b);
+  mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
     close_cb = NULL;
   }
@@ -210,7 +210,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "|&", &b);
+  mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
     shutdown_cb = NULL;
   }
@@ -335,7 +335,7 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "|&S", &b, &arg_data);
+  mrb_get_args(mrb, "&S", &b, &arg_data);
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1686,7 +1686,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "|&So", &b, &arg_data, &arg_addr);
+  mrb_get_args(mrb, "&So", &b, &arg_data, &arg_addr);
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2140,7 +2140,7 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "|&", &b);
+  mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   }
@@ -2160,7 +2160,8 @@ static mrb_value
 mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_data = mrb_nil_value();
-  mrb_int arg_offset;
+  mrb_int arg_length = -1;
+  mrb_int arg_offset = 0;
   mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
@@ -2174,7 +2175,7 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "|&Si", &b, &arg_data, &arg_offset);
+  mrb_get_args(mrb, "&S|i|i", &b, &arg_data, &arg_offset);
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2190,7 +2191,11 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   }
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
-  r = uv_fs_write(uv_default_loop(), req, context->any.fs, RSTRING_PTR(arg_data), RSTRING_LEN(arg_data), arg_offset, fs_cb);
+  if (arg_length == -1)
+    arg_length = RSTRING_LEN(arg_data);
+  if (arg_offset < 0)
+    arg_offset = 0;
+  r = uv_fs_write(uv_default_loop(), req, context->any.fs, RSTRING_PTR(arg_data), arg_length, arg_offset, fs_cb);
   if (r == -1) {
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
@@ -2202,7 +2207,7 @@ static mrb_value
 mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_length = BUFSIZ;
-  mrb_int arg_offset = -1;
+  mrb_int arg_offset = 0;
   mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
@@ -2219,7 +2224,7 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  mrb_get_args(mrb, "&ii", &b, &arg_length, &arg_offset);
+  mrb_get_args(mrb, "&|i|i", &b, &arg_length, &arg_offset);
 
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
@@ -2259,7 +2264,7 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&S", &b, &arg_path);
+  mrb_get_args(mrb, "&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2287,13 +2292,13 @@ static mrb_value
 mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_path = mrb_nil_value();
-  mrb_int arg_mode;
+  mrb_int arg_mode = 0755;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&Si", &b, &arg_path, &arg_mode);
+  mrb_get_args(mrb, "&S|i", &b, &arg_path, &arg_mode);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2326,7 +2331,7 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&S", &b, &arg_path);
+  mrb_get_args(mrb, "&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2360,7 +2365,7 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&Si", &b, &arg_path, &arg_flags);
+  mrb_get_args(mrb, "&Si", &b, &arg_path, &arg_flags);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2393,7 +2398,7 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&S", &b, &arg_path);
+  mrb_get_args(mrb, "&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2426,7 +2431,7 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&i", &b, &arg_file);
+  mrb_get_args(mrb, "&i", &b, &arg_file);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2459,7 +2464,7 @@ mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&S", &b, &arg_path);
+  mrb_get_args(mrb, "&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2492,7 +2497,7 @@ mrb_uv_fs_rename(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&SS", &b, &arg_path, &arg_new_path);
+  mrb_get_args(mrb, "&SS", &b, &arg_path, &arg_new_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2525,7 +2530,7 @@ mrb_uv_fs_fsync(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&i", &b, &arg_file);
+  mrb_get_args(mrb, "&i", &b, &arg_file);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2558,7 +2563,7 @@ mrb_uv_fs_fdatasync(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&i", &b, &arg_file);
+  mrb_get_args(mrb, "&i", &b, &arg_file);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2659,7 +2664,7 @@ mrb_uv_fs_chmod(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&Si", &b, &arg_path, &arg_mode);
+  mrb_get_args(mrb, "&Si", &b, &arg_path, &arg_mode);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -2692,7 +2697,7 @@ mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
   static mrb_uv_context context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "|&SS", &b, &arg_path, &arg_new_path);
+  mrb_get_args(mrb, "&SS", &b, &arg_path, &arg_new_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
@@ -3093,7 +3098,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   stdout_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stdout_pipe"));
   stderr_pipe = mrb_iv_get(mrb, self, mrb_intern(mrb, "stderr_pipe"));
 
-  mrb_get_args(mrb, "|&", &b);
+  mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
     exit_cb = NULL;
   }
@@ -3553,11 +3558,11 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, _class_uv_fs, "S_IREAD", mrb_fixnum_value(S_IREAD));
   mrb_define_module_function(mrb, _class_uv_fs, "fd", mrb_uv_fs_fd, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv_fs, "open", mrb_uv_fs_open, ARGS_REQ(2));
-  mrb_define_method(mrb, _class_uv_fs, "write", mrb_uv_fs_write, ARGS_REQ(2));
-  mrb_define_method(mrb, _class_uv_fs, "read", mrb_uv_fs_read, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_fs, "write", mrb_uv_fs_write, ARGS_REQ(1) | ARGS_OPT(2));
+  mrb_define_method(mrb, _class_uv_fs, "read", mrb_uv_fs_read, ARGS_REQ(0) | ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_fs, "close", mrb_uv_fs_close, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv_fs, "unlink", mrb_uv_fs_unlink, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "mkdir", mrb_uv_fs_mkdir, ARGS_REQ(2));
+  mrb_define_module_function(mrb, _class_uv_fs, "mkdir", mrb_uv_fs_mkdir, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_fs, "rmdir", mrb_uv_fs_rmdir, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_fs, "readdir", mrb_uv_fs_readdir, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv_fs, "stat", mrb_uv_fs_stat, ARGS_REQ(1));
