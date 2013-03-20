@@ -10,7 +10,7 @@
 #include <mruby/class.h>
 #include <mruby/variable.h>
 #include <uv.h>
-#include <stdio.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <limits.h>
 #ifndef _MSC_VER
