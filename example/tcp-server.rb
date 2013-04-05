@@ -21,7 +21,7 @@ s.listen(5) {|x|
     begin
       c.write "helloworld\r\n"
     rescue RuntimeError
-		puts "foo"
+      puts "disconnected"
       c.close
       c = nil
       t.stop
