@@ -1,9 +1,12 @@
 #!mruby
 
 t = UV::Timer.new
-UV::Signal.new.start(UV::Signal::SIGPIPE) do
-  puts "connection closed"
-  t.stop
+
+if UV::Signal.const_defined?(:SIGPIPE)
+  UV::Signal.new.start(UV::Signal::SIGPIPE) do
+    puts "connection closed"
+    t.stop
+  end
 end
 
 s = UV::TCP.new
