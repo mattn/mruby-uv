@@ -3392,6 +3392,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   // TODO
   //mrb_define_module_function(mrb, _class_uv, "dlopen", mrb_uv_dlopen, ARGS_NONE());
   //mrb_define_module_function(mrb, _class_uv, "dlclose", mrb_uv_dlclose, ARGS_NONE());
+  // TODO: uv_dlsym
+  // TODO: uv_dlerror
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
@@ -3413,6 +3415,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_timer = mrb_define_class_under(mrb, _class_uv, "Timer", mrb->object_class);
   mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_NONE());
+  // TODO: uv_timer_again
+  // TODO: uv_timer_set_repeat
+  // TODO: uv_timer_get_repeat
   mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_timer, "stop", mrb_uv_timer_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "close", mrb_uv_close, ARGS_NONE());
@@ -3472,6 +3477,16 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_NONE());
+  // TODO: uv_tcp_open
+  // TODO: uv_tcp_getsockname
+  // TODO: uv_tcp_getpeername
+  // TODO: uv_udp_set_membership
+  // TODO: uv_udp_set_multicast_loop
+  // TODO: uv_udp_set_multicast_ttl
+  // TODO: uv_udp_set_broadcast
+  // TODO: uv_udp_set_ttl
+  // TODO: uv_udp_bind6
+  // TODO: uv_udp_send6
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_stop", mrb_uv_read_stop, ARGS_NONE());
@@ -3493,6 +3508,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_NONE());
+  // TODO: uv_udp_open
+  // TODO: uv_udp_getsockname
   mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send, ARGS_REQ(2));
@@ -3564,6 +3581,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   /* TODO
   UV::FS::Stat object
 
+  uv_fs_event_init
   uv_fs_utime
   uv_fs_futime
   uv_fs_symlink
@@ -3613,6 +3631,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_process = mrb_define_class_under(mrb, _class_uv, "Process", mrb->object_class);
   mrb_define_method(mrb, _class_uv_process, "initialize", mrb_uv_process_init, ARGS_REQ(1));
+  // TODO: uv_pipe_open
+  // TODO: uv_pipe_pending_instances
   mrb_define_method(mrb, _class_uv_process, "spawn", mrb_uv_process_spawn, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "stdout_pipe=", mrb_uv_process_stdout_pipe_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_process, "stdout_pipe", mrb_uv_process_stdout_pipe_get, ARGS_NONE());
@@ -3641,7 +3661,55 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   /* TODO
   queue/work
   cpuinfo
-  etc...
+
+  uv_guess_handle
+  uv_poll_init
+  uv_poll_init_socket
+  uv_poll_start
+  uv_poll_stop
+  uv_check_init
+  uv_check_start
+  uv_check_stop
+  uv_kill
+  uv_queue_work
+  uv_cancel
+  uv_setup_args
+  uv_set_process_title
+  uv_get_process_title
+  uv_uptime
+  uv_cpu_info
+  uv_free_cpu_info
+  uv_interface_addresses
+  uv_free_interface_addresses
+  uv_loadavg
+  uv_inet_ntop
+  uv_inet_pton
+  uv_exepath
+  uv_cwd
+  uv_chdir
+  uv_get_free_memory
+  uv_get_total_memory
+  uv_hrtime
+  uv_disable_stdio_inheritance
+  uv_rwlock_init
+  uv_rwlock_destroy
+  uv_rwlock_rdlock
+  uv_rwlock_tryrdlock
+  uv_rwlock_rdunlock
+  uv_rwlock_wrlock
+  uv_rwlock_trywrlock
+  uv_rwlock_wrunlock
+  uv_sem_init
+  uv_sem_destroy
+  uv_sem_post
+  uv_sem_wait
+  uv_sem_trywait
+  uv_cond_init
+  uv_cond_destroy
+  uv_cond_signal
+  uv_cond_broadcast
+  uv_cond_wait
+  uv_cond_timedwait
   */
 
   uv_gc_table = mrb_ary_new(mrb);
