@@ -513,6 +513,24 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static mrb_value
+mrb_uv_timer_again(mrb_state *mrb, mrb_value self)
+{
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  if (uv_timer_again(&context->any.timer) != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
+  }
+  return mrb_nil_value();
+}
+
 static void
 _uv_timer_cb(uv_timer_t* timer, int status)
 {
@@ -3453,7 +3471,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_timer = mrb_define_class_under(mrb, _class_uv, "Timer", mrb->object_class);
   mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_NONE());
-  // TODO: uv_timer_again
+  mrb_define_method(mrb, _class_uv_timer, "again", mrb_uv_timer_again, ARGS_NONE());
   // TODO: uv_timer_set_repeat
   // TODO: uv_timer_get_repeat
   mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(2));
