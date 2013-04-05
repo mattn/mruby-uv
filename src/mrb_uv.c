@@ -115,13 +115,9 @@ mrb_uv_gc(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_run(mrb_state *mrb, mrb_value self)
 {
-#if UV_VERSION_MINOR >= 9
   mrb_int arg_mode = UV_RUN_DEFAULT;
   mrb_get_args(mrb, "|i", &arg_mode);
   return mrb_fixnum_value(uv_run(uv_default_loop(), arg_mode));
-#else
-  return mrb_fixnum_value(uv_run(uv_default_loop()));
-#endif
 }
 
 /*
@@ -441,9 +437,7 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_context;
   mrb_uv_context* context = NULL;
-#if UV_VERSION_MINOR >= 9
   mrb_int arg_mode = UV_RUN_DEFAULT;
-#endif
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -451,16 +445,10 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-#if UV_VERSION_MINOR >= 9
   mrb_get_args(mrb, "|i", &arg_mode);
   if (uv_run(uv_default_loop(), arg_mode) != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
   }
-#else
-  if (uv_run(uv_default_loop())) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(uv_last_error(context->loop)));
-  }
-#endif
   return mrb_nil_value();
 }
 
@@ -2725,7 +2713,7 @@ mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
  * UV::FS::Poll
  *********************************************************/
 static void
-_uv_fs_poll_cb(uv_fs_poll_t* handle, int status, const uv_statbuf_t* prev, const uv_statbuf_t* curr)
+_uv_fs_poll_cb(uv_fs_poll_t* handle, int status, const uv_stat_t* prev, const uv_stat_t* curr)
 {
   mrb_uv_context* context = (mrb_uv_context*) handle->data;
   mrb_state* mrb = context->mrb;
@@ -3405,11 +3393,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   //mrb_define_module_function(mrb, _class_uv, "dlopen", mrb_uv_dlopen, ARGS_NONE());
   //mrb_define_module_function(mrb, _class_uv, "dlclose", mrb_uv_dlclose, ARGS_NONE());
 
-#if UV_VERSION_MINOR >= 9
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
   mrb_define_const(mrb, _class_uv, "UV_RUN_NOWAIT", mrb_fixnum_value(UV_RUN_NOWAIT));
-#endif
 #ifdef _WIN32
   mrb_define_const(mrb, _class_uv, "IS_WINDOWS", mrb_true_value());
 #else
