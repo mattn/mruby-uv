@@ -1992,6 +1992,24 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
   return c;
 }
 
+
+static mrb_value
+mrb_uv_pipe_pending_instances(mrb_state *mrb, mrb_value self)
+{
+  mrb_int arg_count = 0;
+  mrb_value value_context;
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  mrb_get_args(mrb, "i", &arg_count);
+  uv_pipe_pending_instances(&context->any.pipe, arg_count);
+  return mrb_nil_value();
+}
 /*********************************************************
  * UV::FS
  *********************************************************/
@@ -3541,8 +3559,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_pipe = mrb_define_class_under(mrb, _class_uv, "Pipe", mrb->object_class);
   mrb_define_method(mrb, _class_uv_pipe, "initialize", mrb_uv_pipe_init, ARGS_REQ(1));
-  // TODO: uv_pipe_pending_instances
-  mrb_define_method(mrb, _class_uv_pipe, "connect", mrb_uv_pipe_open, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_pipe, "open", mrb_uv_pipe_open, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "connect", mrb_uv_pipe_connect, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_pipe, "read_start", mrb_uv_read_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_pipe, "read_stop", mrb_uv_read_stop, ARGS_NONE());
@@ -3552,6 +3569,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_pipe, "bind", mrb_uv_pipe_bind, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "listen", mrb_uv_pipe_listen, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_pipe, "pending_instances=", mrb_uv_pipe_pending_instances, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "data", mrb_uv_data_get, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
