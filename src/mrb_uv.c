@@ -1451,13 +1451,13 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self)
+mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
   mrb_value arg_addr = mrb_nil_value();
   mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
-  struct sockaddr_in* addr = NULL;
+  struct sockaddr_storage* addr = NULL;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_context, &uv_context_type, context);
@@ -1466,20 +1466,46 @@ mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "o", &arg_addr);
-  if (mrb_nil_p(arg_addr) || strcmp(mrb_obj_classname(mrb, arg_addr), "UV::Ip4Addr")) {
+  if (version != 4 && version != 6) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "(INTERNAL BUG) invalid IP version!");
+  }
+  if (mrb_nil_p(arg_addr) || strcmp(mrb_obj_classname(mrb, arg_addr), version == 4 ? "UV::Ip4Addr" : "UV::Ip6Addr")) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
+
   value_addr = mrb_iv_get(mrb, arg_addr, mrb_intern(mrb, "context"));
-  Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  if (version == 4) {
+    Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  }
+  else {
+    Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+  }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  err = uv_tcp_bind(&context->any.tcp, *addr);
+  if (version == 4) {
+    err = uv_tcp_bind(&context->any.tcp, *((struct sockaddr_in *) addr));
+  }
+  else {
+    err = uv_tcp_bind6(&context->any.tcp, *((struct sockaddr_in6 *) addr));
+  }
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_tcp_bind4(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_tcp_bind(mrb, self, 4);
+}
+
+static mrb_value
+mrb_uv_tcp_bind6(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_tcp_bind(mrb, self, 6);
 }
 
 static mrb_value
@@ -3657,7 +3683,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_tcp, "write", mrb_uv_write, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "shutdown", mrb_uv_shutdown, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind4, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_tcp, "bind6", mrb_uv_tcp_bind6, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "listen", mrb_uv_tcp_listen, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "accept", mrb_uv_tcp_accept, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts=", mrb_uv_tcp_simultaneous_accepts_set, ARGS_REQ(1));
