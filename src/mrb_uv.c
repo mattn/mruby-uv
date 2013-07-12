@@ -1115,12 +1115,12 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "o|o", &arg_host, &arg_port);
   if (mrb_type(arg_host) == MRB_TT_STRING && !mrb_nil_p(arg_port) && mrb_fixnum_p(arg_port)) {
     vaddr = uv_ip6_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port));
-    addr = (struct sockaddr_in6*) malloc(sizeof(struct sockaddr_in));
-    memcpy(addr, &vaddr, sizeof(vaddr));
+    addr = (struct sockaddr_in6*) malloc(sizeof(struct sockaddr_in6));
+    memcpy(addr, &vaddr, sizeof(struct sockaddr_in6));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
     addr = (struct sockaddr_in6*) malloc(sizeof(struct sockaddr_in6));
-    Data_Get_Struct(mrb, arg_host, &uv_ip4addr_type, paddr);
-    memcpy(addr, paddr, sizeof(struct sockaddr_in));
+    Data_Get_Struct(mrb, arg_host, &uv_ip6addr_type, paddr);
+    memcpy(addr, paddr, sizeof(struct sockaddr_in6));
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
