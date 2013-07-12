@@ -1404,7 +1404,7 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
+mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
   mrb_value arg_addr;
@@ -1412,7 +1412,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_connect_cb connect_cb = _uv_connect_cb;
-  struct sockaddr_in* addr = NULL;
+  struct sockaddr_storage* addr = NULL;
   uv_connect_t* req;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -1422,11 +1422,20 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "&o", &b, &arg_addr);
-  if (mrb_nil_p(arg_addr) || strcmp(mrb_obj_classname(mrb, arg_addr), "UV::Ip4Addr")) {
+  if (version != 4 && version != 6) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "(INTERNAL BUG) invalid IP version!");
+  }
+  if (mrb_nil_p(arg_addr) || strcmp(mrb_obj_classname(mrb, arg_addr), version == 4 ? "UV::Ip4Addr" : "UV::Ip6Addr")) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
+
   value_addr = mrb_iv_get(mrb, arg_addr, mrb_intern(mrb, "context"));
-  Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  if (version == 4) {
+    Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  }
+  else {
+    Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+  }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1442,12 +1451,29 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self)
   }
   memset(req, 0, sizeof(uv_connect_t));
   req->data = context;
-  err = uv_tcp_connect(req, &context->any.tcp, *addr, connect_cb);
+  if (version == 4) {
+    err = uv_tcp_connect(req, &context->any.tcp, *((struct sockaddr_in *) addr), connect_cb);
+  }
+  else {
+    err = uv_tcp_connect6(req, &context->any.tcp, *((struct sockaddr_in6 *) addr), connect_cb);
+  }
   if (err != 0) {
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_tcp_connect4(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_tcp_connect(mrb, self, 4);
+}
+
+static mrb_value
+mrb_uv_tcp_connect6(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_tcp_connect(mrb, self, 6);
 }
 
 static mrb_value
@@ -3677,7 +3703,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   // TODO: uv_udp_set_ttl
   // TODO: uv_udp_bind6
   // TODO: uv_udp_send6
-  mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect4, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_tcp, "connect6", mrb_uv_tcp_connect6, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_stop", mrb_uv_read_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "write", mrb_uv_write, ARGS_REQ(2));
