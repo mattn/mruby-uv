@@ -1002,6 +1002,14 @@ static const struct mrb_data_type uv_ip4addr_type = {
   "uv_ip4addr", uv_ip4addr_free,
 };
 
+/* NOTE: this type is internally used for instances where a
+ * sockaddr is owned by libuv (such as during callbacks),
+ * therefore we don't want mruby to free the pointer during
+ * garbage collection */
+static const struct mrb_data_type uv_ip4addr_nofree_type = {
+  "uv_ip4addr_nofree", NULL,
+};
+
 static mrb_value
 mrb_uv_ip4_addr(mrb_state *mrb, mrb_value self)
 {
@@ -1028,8 +1036,13 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
     addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
+    if (DATA_TYPE(arg_host) == &uv_ip4addr_nofree_type) {
+      paddr = (struct sockaddr_in *) DATA_TYPE(arg_host);
+    }
+    else {
+      Data_Get_Struct(mrb, arg_host, &uv_ip4addr_type, paddr);
+    }
     addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
-    Data_Get_Struct(mrb, arg_host, &uv_ip4addr_type, paddr);
     memcpy(addr, paddr, sizeof(struct sockaddr_in));
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1092,6 +1105,14 @@ static const struct mrb_data_type uv_ip6addr_type = {
   "uv_ip6addr", uv_ip6addr_free,
 };
 
+/* NOTE: this type is internally used for instances where a
+ * sockaddr is owned by libuv (such as during callbacks),
+ * therefore we don't want mruby to free the pointer during
+ * garbage collection */
+static const struct mrb_data_type uv_ip6addr_nofree_type = {
+  "uv_ip6addr_nofree", NULL,
+};
+
 static mrb_value
 mrb_uv_ip6_addr(mrb_state *mrb, mrb_value self)
 {
@@ -1118,8 +1139,13 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
     addr = (struct sockaddr_in6*) malloc(sizeof(struct sockaddr_in6));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in6));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
+    if (DATA_TYPE(arg_host) == &uv_ip6addr_nofree_type) {
+      paddr = (struct sockaddr_in6 *) DATA_PTR(arg_host);
+    }
+    else {
+      Data_Get_Struct(mrb, arg_host, &uv_ip6addr_type, paddr);
+    }
     addr = (struct sockaddr_in6*) malloc(sizeof(struct sockaddr_in6));
-    Data_Get_Struct(mrb, arg_host, &uv_ip6addr_type, paddr);
     memcpy(addr, paddr, sizeof(struct sockaddr_in6));
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1729,13 +1755,13 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_uv_udp_bind(mrb_state *mrb, mrb_value self)
+mrb_uv_udp_bind(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
   mrb_value arg_addr = mrb_nil_value(), arg_flags = mrb_nil_value();
   mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
-  struct sockaddr_in* addr = NULL;
+  struct sockaddr_storage* addr = NULL;
   int flags = 0;
 
   value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
@@ -1745,7 +1771,10 @@ mrb_uv_udp_bind(mrb_state *mrb, mrb_value self)
   }
 
   mrb_get_args(mrb, "o|o", &arg_addr, &arg_flags);
-  if (mrb_nil_p(arg_addr) || strcmp(mrb_obj_classname(mrb, arg_addr), "UV::Ip4Addr")) {
+  if (version != 4 && version != 6) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "(INTERNAL BUG) invalid IP version!");
+  }
+  if (mrb_nil_p(arg_addr) || strcmp(mrb_obj_classname(mrb, arg_addr), version == 4 ? "UV::Ip4Addr" : "UV::Ip6Addr")) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
   if (!mrb_nil_p(arg_flags)) {
@@ -1755,16 +1784,38 @@ mrb_uv_udp_bind(mrb_state *mrb, mrb_value self)
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
   value_addr = mrb_iv_get(mrb, arg_addr, mrb_intern(mrb, "context"));
-  Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  if (version == 4) {
+    Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  }
+  else {
+    Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+  }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  err = uv_udp_bind(&context->any.udp, *addr, flags);
+  if (version == 4) {
+    err = uv_udp_bind(&context->any.udp, *((struct sockaddr_in *) addr), flags);
+  }
+  else {
+    err = uv_udp_bind6(&context->any.udp, *((struct sockaddr_in6 *) addr), flags);
+  }
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_udp_bind4(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_udp_bind(mrb, self, 4);
+}
+
+static mrb_value
+mrb_uv_udp_bind6(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_udp_bind(mrb, self, 6);
 }
 
 static void
@@ -1836,25 +1887,36 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern(mrb, "udp_recv_cb"));
   mrb_value args[3];
   int ai = mrb_gc_arena_save(mrb);
-  if (nread != -1) {
+  if (addr && nread != -1) {
     struct RClass* _class_uv;
-    struct RClass* _class_uv_ip4addr;
-    char name[256];
-    mrb_value c;
-    mrb_value addr_args[2];
-    if (uv_ip4_name((struct sockaddr_in*) addr, name, sizeof(name)) != 0) {
-      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-    }
-    addr_args[0] = mrb_str_new(mrb, name, strlen(name));
-    addr_args[1] = mrb_fixnum_value(ntohs(((struct sockaddr_in*)addr)->sin_port));
+    struct RClass* _class_uv_ipaddr = NULL;
+    struct RData* data = NULL;
+    mrb_value value_data, value_addr = mrb_nil_value();
+
     _class_uv = mrb_class_get(mrb, "UV");
-    _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
-    c = mrb_class_new_instance(mrb, 2, addr_args, _class_uv_ip4addr);
-    mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
-      Data_Wrap_Struct(mrb, mrb->object_class,
-      &uv_ip4addr_type, (void*) addr)));
+    switch (addr->sa_family) {
+      case AF_INET:
+        /* IPv4 */
+        _class_uv_ipaddr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
+        data = Data_Wrap_Struct(mrb, mrb->object_class,
+            &uv_ip4addr_nofree_type, (void *) addr);
+        break;
+      case AF_INET6:
+        /* IPv6 */
+        _class_uv_ipaddr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip6Addr")));
+        data = Data_Wrap_Struct(mrb, mrb->object_class,
+            &uv_ip6addr_nofree_type, (void *) addr);
+        break;
+
+      default:
+        /* Non-IP */
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+        break;
+    }
+    value_data = mrb_obj_value((void *) data);
+    value_addr = mrb_class_new_instance(mrb, 1, &value_data, _class_uv_ipaddr);
     args[0] = mrb_str_new(mrb, buf.base, nread);
-    args[1] = c;
+    args[1] = value_addr;
   } else {
     args[0] = mrb_nil_value();
     args[1] = mrb_nil_value();
@@ -3701,7 +3763,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   // TODO: uv_udp_set_multicast_ttl
   // TODO: uv_udp_set_broadcast
   // TODO: uv_udp_set_ttl
-  // TODO: uv_udp_bind6
   // TODO: uv_udp_send6
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect4, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "connect6", mrb_uv_tcp_connect6, ARGS_REQ(2));
@@ -3732,7 +3793,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_udp, "close", mrb_uv_close, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind4, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "bind6", mrb_uv_udp_bind6, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "data", mrb_uv_data_get, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
