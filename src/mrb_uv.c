@@ -1830,13 +1830,13 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
 }
 
 static mrb_value
-mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
+mrb_uv_udp_send(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
   mrb_value arg_data = mrb_nil_value(), arg_addr = mrb_nil_value();
   mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
-  struct sockaddr_in* addr = NULL;
+  struct sockaddr_storage* addr = NULL;
   mrb_value b = mrb_nil_value();
   uv_udp_send_cb udp_send_cb = _uv_udp_send_cb;
   uv_buf_t buf;
@@ -1852,8 +1852,20 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   if (mrb_nil_p(arg_data)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
-  value_addr = mrb_iv_get(mrb, arg_addr, mrb_intern(mrb, "context"));
-  Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  if (version != 4 && version != 6) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "(INTERNAL BUG) invalid IP version!");
+  }
+  if (mrb_nil_p(arg_addr) || strcmp(mrb_obj_classname(mrb, arg_addr), version == 4 ? "UV::Ip4Addr" : "UV::Ip6Addr")) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  value_addr = mrb_iv_get(mrb, arg_addr, mrb_intern(mrb, "context")); 
+  if (version == 4) {
+    Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  }
+  else {
+    Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+  }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1871,12 +1883,29 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_udp_send_t));
   req->data = context;
 
-  err = uv_udp_send(req, &context->any.udp, &buf, 1, *addr, udp_send_cb);
+  if (version == 4) {
+    err = uv_udp_send(req, &context->any.udp, &buf, 1, *((struct sockaddr_in *) addr), udp_send_cb);
+  }
+  else {
+    err = uv_udp_send6(req, &context->any.udp, &buf, 1, *((struct sockaddr_in6 *) addr), udp_send_cb);
+  }
   if (err != 0) {
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_udp_send4(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_udp_send(mrb, self, 4);
+}
+
+static mrb_value
+mrb_uv_udp_send6(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_udp_send(mrb, self, 6);
 }
 
 static void
@@ -3763,7 +3792,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   // TODO: uv_udp_set_multicast_ttl
   // TODO: uv_udp_set_broadcast
   // TODO: uv_udp_set_ttl
-  // TODO: uv_udp_send6
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect4, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "connect6", mrb_uv_tcp_connect6, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "read_start", mrb_uv_read_start, ARGS_REQ(2));
@@ -3791,7 +3819,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   // TODO: uv_udp_getsockname
   mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send4, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_udp, "send6", mrb_uv_udp_send6, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_udp, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind4, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "bind6", mrb_uv_udp_bind6, ARGS_REQ(1));
