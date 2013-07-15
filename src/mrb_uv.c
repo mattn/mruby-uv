@@ -1037,7 +1037,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
     if (DATA_TYPE(arg_host) == &uv_ip4addr_nofree_type) {
-      paddr = (struct sockaddr_in *) DATA_TYPE(arg_host);
+      paddr = (struct sockaddr_in *) DATA_PTR(arg_host);
     }
     else {
       Data_Get_Struct(mrb, arg_host, &uv_ip4addr_type, paddr);
