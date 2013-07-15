@@ -1517,6 +1517,61 @@ mrb_uv_tcp_getpeername(mrb_state *mrb, mrb_value self)
   return value_result;
 }
 
+static mrb_value
+mrb_uv_getsockname(mrb_state *mrb, mrb_value self, int tcp)
+{
+  int err, len;
+  struct sockaddr_storage addr;
+  struct RClass* _class_uv;
+  struct RClass* _class_uv_ipaddr;
+  struct RData *data;
+  mrb_value value_context, value_data, value_result = mrb_nil_value();
+  mrb_uv_context* context = NULL;
+
+  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
+  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  if (!context) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+  }
+
+  len = sizeof(addr);
+  if (tcp) {
+    err = uv_tcp_getsockname(&context->any.tcp, (struct sockaddr *)&addr, &len);
+  }
+  else {
+    err = uv_udp_getsockname(&context->any.udp, (struct sockaddr *)&addr, &len);
+  }
+  if (err != 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+  }
+  switch (addr.ss_family) {
+    case AF_INET:
+    case AF_INET6:
+      _class_uv = mrb_class_get(mrb, "UV");
+      if (addr.ss_family == AF_INET) {
+        _class_uv_ipaddr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
+        data = Data_Wrap_Struct(mrb, mrb->object_class,
+            &uv_ip4addr_nofree_type, (void *) &addr);
+      }
+      else {
+        _class_uv_ipaddr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip6Addr")));
+        data = Data_Wrap_Struct(mrb, mrb->object_class,
+            &uv_ip6addr_nofree_type, (void *) &addr);
+      }
+      value_data = mrb_obj_value((void *) data);
+      value_result = mrb_class_new_instance(mrb, 1, &value_data,
+          _class_uv_ipaddr);
+      break;
+  }
+  return value_result;
+}
+
+static mrb_value
+mrb_uv_tcp_getsockname(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_getsockname(mrb, self, 1);
+}
+
 /*********************************************************
  * UV::UDP
  *********************************************************/
@@ -1758,6 +1813,12 @@ mrb_uv_udp_recv_stop(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_udp_getsockname(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_getsockname(mrb, self, 0);
 }
 
 /*********************************************************
@@ -3323,7 +3384,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   MRB_SET_INSTANCE_TT(_class_uv_tcp, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_NONE());
   // TODO: uv_tcp_open
-  // TODO: uv_tcp_getsockname
   // TODO: uv_udp_set_membership
   // TODO: uv_udp_set_multicast_loop
   // TODO: uv_udp_set_multicast_ttl
@@ -3347,6 +3407,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_tcp, "nodelay=", mrb_uv_tcp_nodelay_set, ARGS_REQ(1));
   //mrb_define_method(mrb, _class_uv_tcp, "nodelay", mrb_uv_tcp_nodelay_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "getpeername", mrb_uv_tcp_getpeername, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "getsockname", mrb_uv_tcp_getsockname, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "data", mrb_uv_data_get, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
@@ -3355,7 +3416,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   MRB_SET_INSTANCE_TT(_class_uv_udp, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_NONE());
   // TODO: uv_udp_open
-  // TODO: uv_udp_getsockname
   mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send4, ARGS_REQ(2));
@@ -3363,6 +3423,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_udp, "close", mrb_uv_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind4, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "bind6", mrb_uv_udp_bind6, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "getsockname", mrb_uv_udp_getsockname, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "data", mrb_uv_data_get, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
