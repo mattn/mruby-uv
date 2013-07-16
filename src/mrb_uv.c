@@ -2368,7 +2368,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
   context->any.fs = uv_fs_open(uv_default_loop(), req, RSTRING_PTR(arg_filename), arg_flags, arg_mode, fs_cb);
-  if (context->any.fs == -1) {
+  if (context->any.fs < 0) {
     free(req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(context->any.fs));
   }
