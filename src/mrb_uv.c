@@ -1230,7 +1230,8 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
     c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_addrinfo);
     mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
       Data_Wrap_Struct(mrb, mrb->object_class,
-      &uv_addrinfo_type, (void*) res)));
+      &uv_addrinfo_type, (void*) addr)));
+    addr->addr = res;
   }
 
   args[0] = mrb_fixnum_value(status);
@@ -1283,43 +1284,43 @@ static mrb_value
 mrb_uv_addrinfo_flags(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  struct addrinfo* addr = NULL;
+  mrb_uv_addrinfo* addr = NULL;
   Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->ai_flags);
+  return mrb_fixnum_value(addr->addr->ai_flags);
 }
 
 static mrb_value
 mrb_uv_addrinfo_family(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  struct addrinfo* addr = NULL;
+  mrb_uv_addrinfo* addr = NULL;
   Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->ai_family);
+  return mrb_fixnum_value(addr->addr->ai_family);
 }
 
 static mrb_value
 mrb_uv_addrinfo_socktype(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  struct addrinfo* addr = NULL;
+  mrb_uv_addrinfo* addr = NULL;
   Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->ai_socktype);
+  return mrb_fixnum_value(addr->addr->ai_socktype);
 }
 
 static mrb_value
 mrb_uv_addrinfo_protocol(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  struct addrinfo* addr = NULL;
+  mrb_uv_addrinfo* addr = NULL;
   Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->ai_protocol);
+  return mrb_fixnum_value(addr->addr->ai_protocol);
 }
 
 static mrb_value
 mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  struct addrinfo* addr = NULL;
+  mrb_uv_addrinfo* addr = NULL;
   struct RClass* _class_uv;
   mrb_value c = mrb_nil_value();
   mrb_value args[1];
@@ -1328,14 +1329,19 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
 
   _class_uv = mrb_class_get(mrb, "UV");
 
-  switch (addr->ai_family) {
+  switch (addr->addr->ai_family) {
   case AF_INET:
     {
       struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(
           mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
+      struct sockaddr_in* saddr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
+      if (!saddr) {
+        mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+      }
+      *saddr = *(struct sockaddr_in*)addr->addr->ai_addr;
       args[0] = mrb_obj_value(
         Data_Wrap_Struct(mrb, mrb->object_class,
-        &uv_ip4addr_type, (void*) addr->ai_addr));
+        &uv_ip4addr_type, (void*) saddr));
       c = mrb_class_new_instance(mrb, 1, args, _class_uv_ip4addr);
     }
     break;
@@ -1343,9 +1349,14 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
     {
       struct RClass* _class_uv_ip6addr = mrb_class_ptr(mrb_const_get(
           mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip6Addr")));
+      struct sockaddr_in6* saddr = (struct sockaddr_in6*)malloc(sizeof(struct sockaddr_in6));
+      if (!saddr) {
+        mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
+      }
+      *saddr = *(struct sockaddr_in6*)addr->addr->ai_addr;
       args[0] = mrb_obj_value(
         Data_Wrap_Struct(mrb, mrb->object_class,
-        &uv_ip6addr_type, (void*) addr->ai_addr));
+        &uv_ip6addr_type, (void*) saddr));
       c = mrb_class_new_instance(mrb, 1, args, _class_uv_ip6addr);
     }
     break;
@@ -1357,27 +1368,27 @@ static mrb_value
 mrb_uv_addrinfo_canonname(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  struct addrinfo* addr = NULL;
+  mrb_uv_addrinfo* addr = NULL;
   Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
   return mrb_str_new_cstr(mrb,
-    addr->ai_canonname ? addr->ai_canonname : "");
+    addr->addr->ai_canonname ? addr->addr->ai_canonname : "");
 }
 
 static mrb_value
 mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
 {
   mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  struct addrinfo* addr = NULL;
+  mrb_uv_addrinfo* addr = NULL;
   Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
 
-  if (addr->ai_next) {
+  if (addr->addr->ai_next) {
     struct RClass* _class_uv = mrb_class_get(mrb, "UV");
     struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Addrinfo")));
 
     mrb_value c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_ip4addr);
     mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
       Data_Wrap_Struct(mrb, mrb->object_class,
-      &uv_addrinfo_type, (void*) addr->ai_next)));
+      &uv_addrinfo_type, (void*) addr->addr->ai_next)));
     return c;
   }
   return mrb_nil_value();
