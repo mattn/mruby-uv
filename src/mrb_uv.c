@@ -408,7 +408,7 @@ mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
 
   struct RClass* _class_uv = mrb_class_get(mrb, "UV");
   struct RClass* _class_uv_loop = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Loop")));
-  c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_loop);
+  c = mrb_obj_new(mrb, _class_uv_loop, 0, NULL);
 
   context = uv_context_alloc(mrb);
   if (!context) {
@@ -1020,7 +1020,7 @@ mrb_uv_ip4_addr(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "*", &argv, &argc);
   _class_uv = mrb_class_get(mrb, "UV");
   _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
-  return mrb_class_new_instance(mrb, argc, argv, _class_uv_ip4addr);
+  return mrb_obj_new(mrb, _class_uv_ip4addr, argc, argv);
 }
 
 static mrb_value
@@ -1123,7 +1123,7 @@ mrb_uv_ip6_addr(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "*", &argv, &argc);
   _class_uv = mrb_class_get(mrb, "UV");
   _class_uv_ip6addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip6Addr")));
-  return mrb_class_new_instance(mrb, argc, argv, _class_uv_ip6addr);
+  return mrb_obj_new(mrb, _class_uv_ip6addr, argc, argv);
 }
 
 static mrb_value
@@ -1227,7 +1227,7 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
   if (status != -1) {
     struct RClass* _class_uv = mrb_class_get(mrb, "UV");
     struct RClass* _class_uv_addrinfo = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Addrinfo")));
-    c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_addrinfo);
+    c = mrb_obj_new(mrb, _class_uv_addrinfo, 0, NULL);
     mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
       Data_Wrap_Struct(mrb, mrb->object_class,
       &uv_addrinfo_type, (void*) addr)));
@@ -1342,7 +1342,7 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
       args[0] = mrb_obj_value(
         Data_Wrap_Struct(mrb, mrb->object_class,
         &uv_ip4addr_type, (void*) saddr));
-      c = mrb_class_new_instance(mrb, 1, args, _class_uv_ip4addr);
+      c = mrb_obj_new(mrb, _class_uv_ip4addr, 1, args);
     }
     break;
   case AF_INET6:
@@ -1357,7 +1357,7 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
       args[0] = mrb_obj_value(
         Data_Wrap_Struct(mrb, mrb->object_class,
         &uv_ip6addr_type, (void*) saddr));
-      c = mrb_class_new_instance(mrb, 1, args, _class_uv_ip6addr);
+      c = mrb_obj_new(mrb, _class_uv_ip6addr, 1, args);
     }
     break;
   }
@@ -1385,7 +1385,7 @@ mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
     struct RClass* _class_uv = mrb_class_get(mrb, "UV");
     struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Addrinfo")));
 
-    mrb_value c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_ip4addr);
+    mrb_value c = mrb_obj_new(mrb, _class_uv_ip4addr, 0, NULL);
     mrb_iv_set(mrb, c, mrb_intern(mrb, "context"), mrb_obj_value(
       Data_Wrap_Struct(mrb, mrb->object_class,
       &uv_addrinfo_type, (void*) addr->addr->ai_next)));
@@ -1620,7 +1620,7 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
 
   _class_uv = mrb_class_get(mrb, "UV");
   _class_uv_tcp = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "TCP")));
-  c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_tcp);
+  c = mrb_obj_new(mrb, _class_uv_tcp, 0, NULL);
 
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
@@ -1954,7 +1954,7 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, uv_buf_t buf, struct sockaddr* 
         break;
     }
     value_data = mrb_obj_value((void *) data);
-    value_addr = mrb_class_new_instance(mrb, 1, &value_data, _class_uv_ipaddr);
+    value_addr = mrb_obj_new(mrb, _class_uv_ipaddr, 1, &value_data);
     args[0] = mrb_str_new(mrb, buf.base, nread);
     args[1] = value_addr;
   } else {
@@ -2209,7 +2209,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
   args[0] = mrb_fixnum_value(0);
   _class_uv = mrb_class_get(mrb, "UV");
   _class_uv_pipe = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Pipe")));
-  c = mrb_class_new_instance(mrb, 1, args, _class_uv_pipe);
+  c = mrb_obj_new(mrb, _class_uv_pipe, 1, args);
 
   value_new_context = mrb_iv_get(mrb, c, mrb_intern(mrb, "context"));
   Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
@@ -2354,7 +2354,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
 
   _class_uv = mrb_class_get(mrb, "UV");
   _class_uv_fs = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "FS")));
-  c = mrb_class_new_instance(mrb, 0, NULL, _class_uv_fs);
+  c = mrb_obj_new(mrb, _class_uv_fs, 0, NULL);
 
   context = uv_context_alloc(mrb);
   if (!context) {
