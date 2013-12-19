@@ -1,4 +1,5 @@
 #!mruby
+begin; require 'mruby-uv'; rescue Error; end
 
 UV::FS::mkdir("foo-bar") do
   f = UV::FS::open("foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD)

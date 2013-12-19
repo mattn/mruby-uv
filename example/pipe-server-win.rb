@@ -1,4 +1,5 @@
 #!mruby
+begin; require 'mruby-uv'; rescue Error; end
 
 s = UV::Pipe.new(0)
 s.bind('\\\\.\\pipe\\mruby-uv')

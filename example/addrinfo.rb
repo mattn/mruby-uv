@@ -1,4 +1,5 @@
 #!mruby
+begin; require 'mruby-uv'; rescue Error; end
 
 UV::getaddrinfo("www.google.com", "http") do |x, a|
   if a

@@ -1,4 +1,5 @@
 #!mruby
+begin; require 'mruby-uv'; rescue Error; end
 
 if UV::IS_WINDOWS == true
   ps = UV::Process.new({

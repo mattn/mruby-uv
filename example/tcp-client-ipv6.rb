@@ -1,4 +1,5 @@
 #!mruby
+begin; require 'mruby-uv'; rescue Error; end
 
 c = UV::TCP.new()
 c.connect6(UV.ip6_addr('::1', 8888)) {|x|

@@ -1,4 +1,5 @@
 #!mruby
+begin; require 'mruby-uv'; rescue Error; end
 
 l = UV::Loop.new()
 t = UV::Timer.new(l)
