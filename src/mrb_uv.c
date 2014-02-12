@@ -1549,7 +1549,7 @@ mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self, int version)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  err = uv_tcp_bind(&context->any.tcp, ((const struct sockaddr *) addr));
+  err = uv_tcp_bind(&context->any.tcp, ((const struct sockaddr *) addr), 0);
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
