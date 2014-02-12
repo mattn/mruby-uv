@@ -1914,7 +1914,7 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, const uv_buf_t* buf, const stru
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "udp_recv_cb"));
   mrb_value args[3];
   int ai = mrb_gc_arena_save(mrb);
-  if (addr && nread != -1) {
+  if (addr && nread >= 0) {
     struct RClass* _class_uv;
     struct RClass* _class_uv_ipaddr = NULL;
     struct RData* data = NULL;
