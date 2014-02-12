@@ -251,8 +251,11 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
     } else {
       puts("foo5");
       int ai = mrb_gc_arena_save(mrb);
+      printf("foo5.1 %d", nread);
       args[0] = mrb_str_new(mrb, buf->base, nread);
+      printf("foo5.2");
       mrb_gc_arena_restore(mrb, ai);
+      printf("foo5.3");
       mrb_yield_argv(mrb, proc, 1, args);
       puts("foo6");
       free(buf->base);
