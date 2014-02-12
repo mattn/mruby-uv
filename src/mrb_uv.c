@@ -236,20 +236,27 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
   mrb_state* mrb = context->mrb;
   mrb_value proc;
   if (!mrb) return;
+  puts("foo1");
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "read_cb"));
   if (!mrb_nil_p(proc)) {
+    puts("foo2");
     mrb_value args[1];
     if (nread == -1) {
+      puts("foo3");
       args[0] = mrb_nil_value();
       mrb_yield_argv(mrb, proc, 1, args);
     } else if (nread == 0) {
+      puts("foo4");
       uv_close(&context->any.handle, NULL);
     } else {
+      puts("foo5");
       int ai = mrb_gc_arena_save(mrb);
       args[0] = mrb_str_new(mrb, buf->base, nread);
       mrb_gc_arena_restore(mrb, ai);
       mrb_yield_argv(mrb, proc, 1, args);
+      puts("foo6");
       free(buf->base);
+      puts("foo7");
     }
   }
 }
