@@ -19,6 +19,10 @@
 #define PATH_MAX MAX_PATH
 #endif
 
+#ifndef MRUBY_VERSION
+#define mrb_module_get mrb_class_get
+#endif
+
 extern char **environ;
 
 #define OBJECT_GET(mrb, instance, name) \
