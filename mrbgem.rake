@@ -9,8 +9,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
 
   require 'open3'
 
-  version = '0.11.19'
-  libuv_dir = "#{build_dir}/libuv-v#{version}"
+  libuv_dir = "#{build_dir}/libuv"
   libuv_lib = libfile "#{libuv_dir}/.libs/libuv"
   header = "#{libuv_dir}/include/uv.h"
 
@@ -21,23 +20,13 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   file header do |t|
     FileUtils.mkdir_p libuv_dir
 
-    _pp 'getting', "libuv-v#{version}"
+    _pp 'getting', "libuv"
     begin
       FileUtils.mkdir_p build_dir
       Dir.chdir(build_dir) do
-        File.open("libuv-v#{version}.tar.gz", 'w') do |f|
-          IO.popen("curl \"http://libuv.org/dist/v#{version}/libuv-v#{version}.tar.gz\"") do |io|
-            f.write io.read
-          end
-          raise IOError unless $?.exitstatus
-        end
-
-        _pp 'extracting', "libuv-v#{version}"
-        `tar -zxf libuv-v#{version}.tar.gz`
-        raise IOError unless $?.exitstatus
+        sh 'git clone --depth 1 https://github.com/joyent/libuv'
       end
     rescue IOError
-      File.delete "libuv-v#{version}.tar.gz"
       exit(-1)
     end
   end
