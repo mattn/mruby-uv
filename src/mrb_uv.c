@@ -19,6 +19,10 @@
 #define PATH_MAX MAX_PATH
 #endif
 
+#ifndef MRUBY_VERSION
+#define mrb_module_get mrb_class_get
+#endif
+
 extern char **environ;
 
 #define OBJECT_GET(mrb, instance, name) \
@@ -1549,7 +1553,7 @@ mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self, int version)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  err = uv_tcp_bind(&context->any.tcp, ((const struct sockaddr *) addr), 0);
+  err = uv_tcp_bind(&context->any.tcp, ((const struct sockaddr *) addr), version == 4? 0 : UV_TCP_IPV6ONLY);
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
