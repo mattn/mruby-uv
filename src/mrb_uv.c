@@ -155,7 +155,10 @@ _uv_close_cb(uv_handle_t* handle)
   mrb_value proc;
   if (!mrb) return;
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "close_cb"));
-  mrb_yield_argv(mrb, proc, 0, NULL);
+  if (!mrb_nil_p(proc)) {
+    mrb_funcall_argv(mrb, proc, NULL,0, NULL);
+  }
+  context->mrb = NULL;
 }
 
 static mrb_value
@@ -175,11 +178,7 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
   if (!uv_is_active(&context->any.handle)) return mrb_nil_value();
 
   mrb_get_args(mrb, "&", &b);
-  if (mrb_nil_p(b)) {
-    close_cb = NULL;
-  }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "close_cb"), b);
-
   uv_close(&context->any.handle, close_cb);
   return mrb_nil_value();
 }
