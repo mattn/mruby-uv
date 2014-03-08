@@ -405,7 +405,7 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
   Data_Get_Struct(mrb, self, &uv_context_type, context);
 
   mrb_get_args(mrb, "|i", &arg_mode);
-  err = uv_run(uv_default_loop(), arg_mode);
+  err = uv_run(context->loop, arg_mode);
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }

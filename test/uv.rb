@@ -82,7 +82,6 @@ assert('UV::Loop') do
     if i < 0
       t.stop
       t.close
-      l.close
     end
   end
   l.run
