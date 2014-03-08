@@ -62,7 +62,7 @@ typedef struct {
 static mrb_uv_context*
 uv_context_alloc(mrb_state* mrb)
 {
-  mrb_uv_context* context = (mrb_uv_context*) malloc(sizeof(mrb_uv_context));
+  mrb_uv_context* context = (mrb_uv_context*) mrb_malloc(mrb, sizeof(mrb_uv_context));
   if (!context) return NULL;
   memset(context, 0, sizeof(mrb_uv_context));
   context->loop = uv_default_loop();
@@ -81,7 +81,7 @@ uv_context_free(mrb_state *mrb, void *p)
     context->mrb = NULL;
     context->loop = NULL;
   }
-  free(p);
+  mrb_free(mrb, p);
 }
 
 static const struct mrb_data_type uv_context_type = {
@@ -206,7 +206,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "shutdown_cb"), b);
 
-  req = (uv_shutdown_t*) malloc(sizeof(uv_shutdown_t));
+  req = (uv_shutdown_t*) mrb_malloc(mrb, sizeof(uv_shutdown_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -219,7 +219,7 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
 static void
 _uv_alloc_cb(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 {
-  buf->base = malloc(suggested_size);
+  buf->base = mrb_malloc(((mrb_uv_context*)handle->data)->mrb, suggested_size);
   buf->len = suggested_size;
 }
 
@@ -243,7 +243,7 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
       args[0] = mrb_str_new(mrb, buf->base, nread);
       mrb_gc_arena_restore(mrb, ai);
       mrb_yield_argv(mrb, proc, 1, args);
-      free(buf->base);
+      mrb_free(mrb, buf->base);
     }
   }
 }
@@ -306,7 +306,7 @@ _uv_write_cb(uv_write_t* req, int status)
     args[0] = mrb_fixnum_value(status);
     mrb_yield_argv(mrb, proc, 1, args);
   }
-  free(req);
+  mrb_free(mrb, req);
 }
 
 static mrb_value
@@ -335,7 +335,7 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "write_cb"), b);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
-  req = (uv_write_t*) malloc(sizeof(uv_write_t));
+  req = (uv_write_t*) mrb_malloc(mrb, sizeof(uv_write_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -343,7 +343,7 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   req->data = context;
   err = uv_write(req, &context->any.stream, &buf, 1, write_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -941,7 +941,7 @@ mrb_uv_mutex_destroy(mrb_state *mrb, mrb_value self)
 static void
 uv_ip4addr_free(mrb_state *mrb, void *p)
 {
-  free(p);
+  mrb_free(mrb, p);
 }
 
 static const struct mrb_data_type uv_ip4addr_type = {
@@ -982,7 +982,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
     if (err != 0) {
       mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
     }
-    addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
+    addr = (struct sockaddr_in*) mrb_malloc(mrb, sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
     if (DATA_TYPE(arg_host) == &uv_ip4addr_nofree_type) {
@@ -991,7 +991,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
     else {
       Data_Get_Struct(mrb, arg_host, &uv_ip4addr_type, paddr);
     }
-    addr = (struct sockaddr_in*) malloc(sizeof(struct sockaddr_in));
+    addr = (struct sockaddr_in*) mrb_malloc(mrb, sizeof(struct sockaddr_in));
     memcpy(addr, paddr, sizeof(struct sockaddr_in));
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1042,7 +1042,7 @@ mrb_uv_ip4addr_sin_port(mrb_state *mrb, mrb_value self)
 static void
 uv_ip6addr_free(mrb_state *mrb, void *p)
 {
-  free(p);
+  mrb_free(mrb, p);
 }
 
 static const struct mrb_data_type uv_ip6addr_type = {
@@ -1083,7 +1083,7 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
     if (err != 0) {
       mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
     }
-    addr = (struct sockaddr_in6*) malloc(sizeof(struct sockaddr_in6));
+    addr = (struct sockaddr_in6*) mrb_malloc(mrb, sizeof(struct sockaddr_in6));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in6));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
     if (DATA_TYPE(arg_host) == &uv_ip6addr_nofree_type) {
@@ -1092,7 +1092,7 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
     else {
       Data_Get_Struct(mrb, arg_host, &uv_ip6addr_type, paddr);
     }
-    addr = (struct sockaddr_in6*) malloc(sizeof(struct sockaddr_in6));
+    addr = (struct sockaddr_in6*) mrb_malloc(mrb, sizeof(struct sockaddr_in6));
     memcpy(addr, paddr, sizeof(struct sockaddr_in6));
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1151,7 +1151,7 @@ uv_addrinfo_free(mrb_state *mrb, void *p)
 {
   mrb_uv_addrinfo* addr = (mrb_uv_addrinfo*) p;
   uv_freeaddrinfo(addr->addr);
-  free(p);
+  mrb_free(mrb, p);
 }
 
 static const struct mrb_data_type uv_addrinfo_type = {
@@ -1193,7 +1193,7 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "SS|o&", &node, &service, &hint, &b);
 
-  addr = (mrb_uv_addrinfo*) malloc(sizeof(mrb_uv_addrinfo));
+  addr = (mrb_uv_addrinfo*) mrb_malloc(mrb, sizeof(mrb_uv_addrinfo));
   if (!addr) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -1205,7 +1205,7 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
     getaddrinfo_cb = NULL;
   }
 
-  req = (uv_getaddrinfo_t*) malloc(sizeof(uv_getaddrinfo_t));
+  req = (uv_getaddrinfo_t*) mrb_malloc(mrb, sizeof(uv_getaddrinfo_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -1269,7 +1269,7 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
   case AF_INET:
     {
       struct RClass* _class_uv_ip4addr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
-      struct sockaddr_in* saddr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
+      struct sockaddr_in* saddr = (struct sockaddr_in*)mrb_malloc(mrb, sizeof(struct sockaddr_in));
       if (!saddr) {
         mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
       }
@@ -1283,7 +1283,7 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
   case AF_INET6:
     {
       struct RClass* _class_uv_ip6addr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
-      struct sockaddr_in6* saddr = (struct sockaddr_in6*)malloc(sizeof(struct sockaddr_in6));
+      struct sockaddr_in6* saddr = (struct sockaddr_in6*)mrb_malloc(mrb, sizeof(struct sockaddr_in6));
       if (!saddr) {
         mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
       }
@@ -1407,7 +1407,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "connect_cb"), b);
 
-  req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  req = (uv_connect_t*) mrb_malloc(mrb, sizeof(uv_connect_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -1415,7 +1415,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
   req->data = context;
   err = uv_tcp_connect(req, &context->any.tcp, ((const struct sockaddr *) addr), connect_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -1775,7 +1775,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self, int version)
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "udp_send_cb"), b);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
-  req = (uv_udp_send_t*) malloc(sizeof(uv_udp_send_t));
+  req = (uv_udp_send_t*) mrb_malloc(mrb, sizeof(uv_udp_send_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -1784,7 +1784,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self, int version)
 
   err = uv_udp_send(req, &context->any.udp, &buf, 1, ((const struct sockaddr *) addr), udp_send_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -1992,7 +1992,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "connect_cb"), b);
 
-  req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+  req = (uv_connect_t*) mrb_malloc(mrb, sizeof(uv_connect_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2134,7 +2134,7 @@ _uv_fs_open_cb(uv_fs_t* req)
     mrb_yield_argv(mrb, proc, 1, args);
   }
   uv_fs_req_cleanup(req);
-  free(req);
+  mrb_free(mrb, req);
 }
 
 static void
@@ -2182,7 +2182,7 @@ _uv_fs_cb(uv_fs_t* req)
   }
 leave:
   uv_fs_req_cleanup(req);
-  free(req);
+  mrb_free(mrb, req);
 }
 
 static mrb_value
@@ -2233,7 +2233,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   DATA_PTR(c) = context;
   DATA_TYPE(c) = &uv_context_type;
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2241,7 +2241,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   req->data = context;
   context->any.fs = uv_fs_open(uv_default_loop(), req, RSTRING_PTR(arg_filename), arg_flags, arg_mode, fs_cb);
   if (context->any.fs < 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(context->any.fs));
   }
 
@@ -2271,7 +2271,7 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2308,7 +2308,7 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2320,7 +2320,7 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
     arg_offset = 0;
   r = uv_fs_write(uv_default_loop(), req, context->any.fs, RSTRING_PTR(arg_data), arg_length, arg_offset, fs_cb);
   if (r < 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(r));
   }
   return mrb_fixnum_value(r);
@@ -2352,27 +2352,27 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  buf = malloc(arg_length);
+  buf = mrb_malloc(mrb, arg_length);
   if (!buf) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
-    free(buf);
+    mrb_free(mrb, buf);
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
   len = uv_fs_read(uv_default_loop(), req, context->any.fs, buf, arg_length, arg_offset, fs_cb);
   if (len == -1) {
-    free(buf);
-    free(req);
+    mrb_free(mrb, buf);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, "read error");
   }
   ai = mrb_gc_arena_save(mrb);
   str = mrb_str_new(mrb, buf, len);
   mrb_gc_arena_restore(mrb, ai);
-  free(buf);
+  mrb_free(mrb, buf);
   return str;
 }
 
@@ -2397,7 +2397,7 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2405,7 +2405,7 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_unlink(uv_default_loop(), req, RSTRING_PTR(arg_path), fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2433,7 +2433,7 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2441,7 +2441,7 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_mkdir(uv_default_loop(), req, RSTRING_PTR(arg_path), arg_mode, fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2468,7 +2468,7 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2476,7 +2476,7 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_rmdir(uv_default_loop(), req, RSTRING_PTR(arg_path), fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2504,7 +2504,7 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2512,7 +2512,7 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_readdir(uv_default_loop(), req, RSTRING_PTR(arg_path), arg_flags, fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2539,7 +2539,7 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2547,7 +2547,7 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_stat(uv_default_loop(), req, RSTRING_PTR(arg_path), fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2574,7 +2574,7 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2582,7 +2582,7 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_fstat(uv_default_loop(), req, arg_file, fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2609,7 +2609,7 @@ mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2617,7 +2617,7 @@ mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_lstat(uv_default_loop(), req, RSTRING_PTR(arg_path), fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2644,7 +2644,7 @@ mrb_uv_fs_rename(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2652,7 +2652,7 @@ mrb_uv_fs_rename(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_rename(uv_default_loop(), req, RSTRING_PTR(arg_path), RSTRING_PTR(arg_new_path), fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2679,7 +2679,7 @@ mrb_uv_fs_fsync(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2687,7 +2687,7 @@ mrb_uv_fs_fsync(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_fsync(uv_default_loop(), req, arg_file, fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2714,7 +2714,7 @@ mrb_uv_fs_fdatasync(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2722,7 +2722,7 @@ mrb_uv_fs_fdatasync(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_fdatasync(uv_default_loop(), req, arg_file, fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2749,7 +2749,7 @@ mrb_uv_fs_ftruncate(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2757,7 +2757,7 @@ mrb_uv_fs_ftruncate(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_ftruncate(uv_default_loop(), req, arg_file, arg_offset, fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2785,7 +2785,7 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2793,7 +2793,7 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_sendfile(uv_default_loop(), req, arg_infd, arg_outfd, arg_offset, arg_length, fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2821,7 +2821,7 @@ mrb_uv_fs_chmod(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2829,7 +2829,7 @@ mrb_uv_fs_chmod(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_chmod(uv_default_loop(), req, RSTRING_PTR(arg_path), arg_mode, fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -2856,7 +2856,7 @@ mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
+  req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
     mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
   }
@@ -2864,7 +2864,7 @@ mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_link(uv_default_loop(), req, RSTRING_PTR(arg_path), RSTRING_PTR(arg_new_path), fs_cb);
   if (err != 0) {
-    free(req);
+    mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   return mrb_nil_value();
@@ -3238,7 +3238,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "exit_cb"), b);
 
   uv_cwd(cwd, sizeof(cwd));
-  args = malloc(sizeof(char*) * (RARRAY_LEN(arg_args)+2));
+  args = mrb_malloc(mrb, sizeof(char*) * (RARRAY_LEN(arg_args)+2));
   args[0] = RSTRING_PTR(arg_file);
   for (i = 0; i < RARRAY_LEN(arg_args); i++) {
     args[i+1] = RSTRING_PTR(mrb_ary_entry(arg_args, i));
@@ -3293,7 +3293,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   opt.flags = 0;
 
   err = uv_spawn(context->loop, &context->any.process, &opt);
-  free(args);
+  mrb_free(mrb, args);
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
