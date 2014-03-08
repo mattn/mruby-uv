@@ -1917,7 +1917,7 @@ _uv_fs_open_cb(uv_fs_t* req)
   mrb_state* mrb = context->mrb;
   mrb_value proc;
   if (req->result < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, "open error");
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(req->result));
   }
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "fs_cb"));
   if (!mrb_nil_p(proc)) {
@@ -1938,7 +1938,7 @@ _uv_fs_cb(uv_fs_t* req)
   mrb_value proc;
   uv_fs_t close_req;
   if (req->result < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, "error");
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(req->result));
   }
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "fs_cb"));
 
@@ -2126,10 +2126,10 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
   len = uv_fs_read(uv_default_loop(), req, context->any.fs, buf, arg_length, arg_offset, fs_cb);
-  if (len == -1) {
+  if (len < 0) {
     mrb_free(mrb, buf);
     mrb_free(mrb, req);
-    mrb_raise(mrb, E_RUNTIME_ERROR, "read error");
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(len));
   }
   ai = mrb_gc_arena_save(mrb);
   str = mrb_str_new(mrb, buf, len);
