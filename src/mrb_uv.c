@@ -2073,7 +2073,7 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
 
   Data_Get_Struct(mrb, self, &uv_context_type, context);
 
-  mrb_get_args(mrb, "&S|i|i", &b, &arg_data, &arg_offset);
+  mrb_get_args(mrb, "&S|ii", &b, &arg_data, &arg_offset, &arg_length);
 
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
