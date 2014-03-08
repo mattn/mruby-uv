@@ -77,7 +77,6 @@ uv_context_free(mrb_state *mrb, void *p)
   if (context) {
     OBJECT_REMOVE(mrb, context->instance, "read_cb");
     OBJECT_REMOVE(mrb, context->instance, "write_cb");
-    OBJECT_REMOVE(mrb, context->instance, "context");
     context->instance = mrb_nil_value();
     context->mrb = NULL;
     context->loop = NULL;
@@ -100,16 +99,12 @@ mrb_uv_gc(mrb_state *mrb, mrb_value self)
   mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "$GC"));
   int i, l = RARRAY_LEN(uv_gc_table);
   for (i = 0; i < l; i++) {
-    mrb_value obj = mrb_ary_entry(uv_gc_table, i);
-    mrb_value ctx  = mrb_iv_get(mrb, obj, mrb_intern_lit(mrb, "context"));
-    if (!mrb_nil_p(ctx)) {
-      mrb_uv_context* context = NULL;
-      Data_Get_Struct(mrb, ctx, &uv_context_type, context);
-      if (!context || context->mrb == NULL) {
-        mrb_funcall(mrb, uv_gc_table, "delete_at", 1, mrb_fixnum_value(i));
-        i--;
-        l--;
-      }
+    mrb_uv_context* context = NULL;
+    Data_Get_Struct(mrb, mrb_ary_entry(uv_gc_table, i), &uv_context_type, context);
+    if (!context || context->mrb == NULL) {
+      mrb_funcall(mrb, uv_gc_table, "delete_at", 1, mrb_fixnum_value(i));
+      i--;
+      l--;
     }
   }
   mrb_gc_arena_restore(mrb, ai);
@@ -164,13 +159,11 @@ _uv_close_cb(uv_handle_t* handle)
 static mrb_value
 mrb_uv_close(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_close_cb close_cb = _uv_close_cb;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -197,14 +190,12 @@ _uv_shutdown_cb(uv_shutdown_t* req, int status)
 static mrb_value
 mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_shutdown_cb shutdown_cb = _uv_shutdown_cb;
   uv_shutdown_t* req;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -261,13 +252,11 @@ static mrb_value
 mrb_uv_read_start(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_read_cb read_cb = _uv_read_cb;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -289,11 +278,9 @@ static mrb_value
 mrb_uv_read_stop(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -327,15 +314,13 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_data = mrb_nil_value();
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_write_cb write_cb = _uv_write_cb;
   uv_buf_t buf;
   uv_write_t* req;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -420,9 +405,8 @@ mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
   }
   context->instance = c;
   context->loop = uv_default_loop();
-  mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return c;
 }
 
@@ -436,9 +420,8 @@ mrb_uv_loop_init(mrb_state *mrb, mrb_value self)
   context->instance = self;
   context->loop = uv_loop_new();
   context->loop->data = context;
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -446,12 +429,10 @@ static mrb_value
 mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_int arg_mode = UV_RUN_DEFAULT;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -467,11 +448,9 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -488,7 +467,6 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_loop = mrb_nil_value();
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
@@ -498,8 +476,7 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
-    value_context = mrb_iv_get(mrb, arg_loop, mrb_intern_lit(mrb, "context"));
-    Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+    Data_Get_Struct(mrb, arg_loop, &uv_context_type, loop_context);
     if (!loop_context) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
@@ -521,9 +498,8 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   context->any.timer.data = context;
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -531,11 +507,9 @@ static mrb_value
 mrb_uv_timer_again(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -563,13 +537,11 @@ mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_int arg_timeout = 0, arg_repeat = 0;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_timer_cb timer_cb = _uv_timer_cb;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -592,11 +564,9 @@ static mrb_value
 mrb_uv_timer_stop(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -616,7 +586,6 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_loop = mrb_nil_value();
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
@@ -626,8 +595,7 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
-    value_context = mrb_iv_get(mrb, arg_loop, mrb_intern_lit(mrb, "context"));
-    Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+    Data_Get_Struct(mrb, arg_loop, &uv_context_type, loop_context);
     if (!loop_context) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
@@ -648,9 +616,8 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   context->any.idle.data = context;
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -669,13 +636,11 @@ static mrb_value
 mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_idle_cb idle_cb = _uv_idle_cb;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -698,11 +663,9 @@ static mrb_value
 mrb_uv_idle_stop(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -733,7 +696,6 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_loop = mrb_nil_value();
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
@@ -747,8 +709,7 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
-    value_context = mrb_iv_get(mrb, arg_loop, mrb_intern_lit(mrb, "context"));
-    Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+    Data_Get_Struct(mrb, arg_loop, &uv_context_type, loop_context);
     if (!loop_context) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
@@ -774,9 +735,8 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   context->any.async.data = context;
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -784,11 +744,9 @@ static mrb_value
 mrb_uv_async_send(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -819,7 +777,6 @@ mrb_uv_prepare_init(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_loop = mrb_nil_value();
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
@@ -829,8 +786,7 @@ mrb_uv_prepare_init(mrb_state *mrb, mrb_value self)
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
-    value_context = mrb_iv_get(mrb, arg_loop, mrb_intern_lit(mrb, "context"));
-    Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+    Data_Get_Struct(mrb, arg_loop, &uv_context_type, loop_context);
     if (!loop_context) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
@@ -851,9 +807,8 @@ mrb_uv_prepare_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   context->any.prepare.data = context;
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -861,13 +816,11 @@ static mrb_value
 mrb_uv_prepare_start(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_prepare_cb prepare_cb = _uv_prepare_cb;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -889,11 +842,9 @@ static mrb_value
 mrb_uv_prepare_stop(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -923,20 +874,17 @@ mrb_uv_mutex_init(mrb_state *mrb, mrb_value self)
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
 static mrb_value
 mrb_uv_mutex_lock(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -948,11 +896,9 @@ mrb_uv_mutex_lock(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_mutex_unlock(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -964,11 +910,9 @@ mrb_uv_mutex_unlock(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_mutex_trylock(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -979,17 +923,15 @@ mrb_uv_mutex_trylock(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_mutex_destroy(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
   uv_mutex_destroy(&context->any.mutex);
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_nil_value());
+  // TODO: mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_nil_value());
   return mrb_nil_value();
 }
 
@@ -1054,9 +996,8 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_ip4addr_type, (void*) addr)));
+  DATA_PTR(self) = addr;
+  DATA_TYPE(self) = &uv_ip4addr_type;
   return self;
 }
 
@@ -1073,12 +1014,10 @@ static mrb_value
 mrb_uv_ip4addr_sin_addr(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_addr;
   struct sockaddr_in* addr = NULL;
   char name[256];
 
-  value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  Data_Get_Struct(mrb, self, &uv_ip4addr_type, addr);
   if (!addr) {
     return mrb_nil_value();
   }
@@ -1092,10 +1031,8 @@ mrb_uv_ip4addr_sin_addr(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_ip4addr_sin_port(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_addr;
   struct sockaddr_in* addr = NULL;
-  value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+  Data_Get_Struct(mrb, self, &uv_ip4addr_type, addr);
   return mrb_fixnum_value(htons(addr->sin_port));
 }
 
@@ -1160,9 +1097,8 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
   } else {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_ip6addr_type, (void*) addr)));
+  DATA_PTR(self) = addr;
+  DATA_TYPE(self) = &uv_ip6addr_type;
   return self;
 }
 
@@ -1179,12 +1115,10 @@ static mrb_value
 mrb_uv_ip6addr_sin_addr(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_addr;
   struct sockaddr_in6* addr = NULL;
   char name[256];
 
-  value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+  Data_Get_Struct(mrb, self, &uv_ip6addr_type, addr);
   if (!addr) {
     return mrb_nil_value();
   }
@@ -1198,10 +1132,8 @@ mrb_uv_ip6addr_sin_addr(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_ip6addr_sin_port(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_addr;
   struct sockaddr_in6* addr = NULL;
-  value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+  Data_Get_Struct(mrb, self, &uv_ip6addr_type, addr);
   return mrb_fixnum_value(htons(addr->sin6_port));
 }
 
@@ -1238,9 +1170,8 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
     struct RClass* _class_uv = mrb_module_get(mrb, "UV");
     struct RClass* _class_uv_addrinfo = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Addrinfo")));
     c = mrb_obj_new(mrb, _class_uv_addrinfo, 0, NULL);
-    mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-      Data_Wrap_Struct(mrb, mrb->object_class,
-      &uv_addrinfo_type, (void*) addr)));
+    DATA_PTR(c) = addr;
+    DATA_TYPE(c) = &uv_addrinfo_type;
     addr->addr = res;
   }
 
@@ -1293,49 +1224,44 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_addrinfo_flags(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
   mrb_uv_addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
+  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
   return mrb_fixnum_value(addr->addr->ai_flags);
 }
 
 static mrb_value
 mrb_uv_addrinfo_family(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
   mrb_uv_addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
+  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
   return mrb_fixnum_value(addr->addr->ai_family);
 }
 
 static mrb_value
 mrb_uv_addrinfo_socktype(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
   mrb_uv_addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
+  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
   return mrb_fixnum_value(addr->addr->ai_socktype);
 }
 
 static mrb_value
 mrb_uv_addrinfo_protocol(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
   mrb_uv_addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
+  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
   return mrb_fixnum_value(addr->addr->ai_protocol);
 }
 
 static mrb_value
 mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
   mrb_uv_addrinfo* addr = NULL;
   struct RClass* _class_uv;
   mrb_value c = mrb_nil_value();
   mrb_value args[1];
 
-  Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
+  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
 
   _class_uv = mrb_module_get(mrb, "UV");
 
@@ -1377,9 +1303,8 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_addrinfo_canonname(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
   mrb_uv_addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
+  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
   return mrb_str_new_cstr(mrb,
     addr->addr->ai_canonname ? addr->addr->ai_canonname : "");
 }
@@ -1387,18 +1312,16 @@ mrb_uv_addrinfo_canonname(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_addr = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
   mrb_uv_addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, value_addr, &uv_addrinfo_type, addr);
+  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
 
   if (addr->addr->ai_next) {
     struct RClass* _class_uv = mrb_module_get(mrb, "UV");
     struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Addrinfo")));
 
     mrb_value c = mrb_obj_new(mrb, _class_uv_ip4addr, 0, NULL);
-    mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-      Data_Wrap_Struct(mrb, mrb->object_class,
-      &uv_addrinfo_type, (void*) addr->addr->ai_next)));
+    DATA_PTR(c) = addr->addr->ai_next;
+    DATA_TYPE(c) = &uv_addrinfo_type;
     return c;
   }
   return mrb_nil_value();
@@ -1412,7 +1335,6 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_loop = mrb_nil_value();
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
@@ -1422,8 +1344,7 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
-    value_context = mrb_iv_get(mrb, arg_loop, mrb_intern_lit(mrb, "context"));
-    Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+    Data_Get_Struct(mrb, arg_loop, &uv_context_type, loop_context);
     if (!loop_context) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
@@ -1444,9 +1365,8 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   context->any.tcp.data = context;
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -1455,15 +1375,13 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
   mrb_value arg_addr;
-  mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_connect_cb connect_cb = _uv_connect_cb;
   struct sockaddr_storage* addr = NULL;
   uv_connect_t* req;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1476,12 +1394,11 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  value_addr = mrb_iv_get(mrb, arg_addr, mrb_intern_lit(mrb, "context"));
   if (version == 4) {
-    Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+    Data_Get_Struct(mrb, self, &uv_ip4addr_type, addr);
   }
   else {
-    Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+    Data_Get_Struct(mrb, self, &uv_ip6addr_type, addr);
   }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1523,12 +1440,10 @@ mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
   mrb_value arg_addr = mrb_nil_value();
-  mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
   struct sockaddr_storage* addr = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1541,12 +1456,11 @@ mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self, int version)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  value_addr = mrb_iv_get(mrb, arg_addr, mrb_intern_lit(mrb, "context"));
   if (version == 4) {
-    Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+    Data_Get_Struct(mrb, self, &uv_ip4addr_type, addr);
   }
   else {
-    Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+    Data_Get_Struct(mrb, self, &uv_ip6addr_type, addr);
   }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1576,13 +1490,11 @@ mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_int arg_backlog = 0;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_connection_cb connection_cb = _uv_connection_cb;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1604,7 +1516,7 @@ static mrb_value
 mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value c, value_context, value_new_context;
+  mrb_value c;
   mrb_uv_context* context = NULL;
   mrb_uv_context* new_context = NULL;
   struct RClass* _class_uv;
@@ -1612,8 +1524,7 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   int ai;
   mrb_value uv_gc_table;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1622,8 +1533,7 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   _class_uv_tcp = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "TCP")));
   c = mrb_obj_new(mrb, _class_uv_tcp, 0, NULL);
 
-  value_new_context = mrb_iv_get(mrb, c, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
+  Data_Get_Struct(mrb, c, &uv_context_type, new_context);
 
   new_context->instance = c;
   new_context->loop = context->loop;
@@ -1652,11 +1562,9 @@ static mrb_value
 mrb_uv_tcp_simultaneous_accepts_set(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_simultaneous_accepts;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1678,11 +1586,9 @@ static mrb_value
 mrb_uv_tcp_keepalive_set(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_keepalive, arg_delay;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1704,11 +1610,9 @@ static mrb_value
 mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_nodelay;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1726,7 +1630,6 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_loop = mrb_nil_value();
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
@@ -1736,8 +1639,7 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
     if (strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
-    value_context = mrb_iv_get(mrb, arg_loop, mrb_intern_lit(mrb, "context"));
-    Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+    Data_Get_Struct(mrb, arg_loop, &uv_context_type, loop_context);
     if (!loop_context) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
@@ -1759,9 +1661,8 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
   }
   context->any.udp.data = context;
 
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -1770,13 +1671,11 @@ mrb_uv_udp_bind(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
   mrb_value arg_addr = mrb_nil_value(), arg_flags = mrb_nil_value();
-  mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
   struct sockaddr_storage* addr = NULL;
   int flags = 0;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1794,12 +1693,11 @@ mrb_uv_udp_bind(mrb_state *mrb, mrb_value self, int version)
     else
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
-  value_addr = mrb_iv_get(mrb, arg_addr, mrb_intern_lit(mrb, "context"));
   if (version == 4) {
-    Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+    Data_Get_Struct(mrb, self, &uv_ip4addr_type, addr);
   }
   else {
-    Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+    Data_Get_Struct(mrb, self, &uv_ip6addr_type, addr);
   }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1840,7 +1738,6 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
   mrb_value arg_data = mrb_nil_value(), arg_addr = mrb_nil_value();
-  mrb_value value_context, value_addr;
   mrb_uv_context* context = NULL;
   struct sockaddr_storage* addr = NULL;
   mrb_value b = mrb_nil_value();
@@ -1848,8 +1745,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self, int version)
   uv_buf_t buf;
   uv_udp_send_t* req;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1865,12 +1761,11 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self, int version)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  value_addr = mrb_iv_get(mrb, arg_addr, mrb_intern_lit(mrb, "context"));
   if (version == 4) {
-    Data_Get_Struct(mrb, value_addr, &uv_ip4addr_type, addr);
+    Data_Get_Struct(mrb, self, &uv_ip4addr_type, addr);
   }
   else {
-    Data_Get_Struct(mrb, value_addr, &uv_ip6addr_type, addr);
+    Data_Get_Struct(mrb, self, &uv_ip6addr_type, addr);
   }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1960,13 +1855,11 @@ static mrb_value
 mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_udp_recv_cb udp_recv_cb = _uv_udp_recv_cb;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -1988,11 +1881,9 @@ static mrb_value
 mrb_uv_udp_recv_stop(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2012,7 +1903,6 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_loop = mrb_nil_value(), arg_ipc = mrb_nil_value();
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
@@ -2022,8 +1912,7 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
   if (!mrb_nil_p(arg_loop)) {
     if (!strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-      value_context = mrb_iv_get(mrb, arg_loop, mrb_intern_lit(mrb, "context"));
-      Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+      Data_Get_Struct(mrb, arg_loop, &uv_context_type, loop_context);
       if (!loop_context) {
         mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
       }
@@ -2054,9 +1943,8 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   context->any.pipe.data = context;
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -2065,11 +1953,9 @@ mrb_uv_pipe_open(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_int arg_file = 0;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2086,15 +1972,13 @@ static mrb_value
 mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_name;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_connect_cb connect_cb = _uv_connect_cb;
   char* name = NULL;
   uv_connect_t* req;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2125,12 +2009,10 @@ mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_name;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   char* name = "";
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2153,13 +2035,11 @@ mrb_uv_pipe_listen(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_int arg_backlog;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_connection_cb connection_cb = _uv_connection_cb;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2181,7 +2061,7 @@ static mrb_value
 mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value c, value_context, value_new_context;
+  mrb_value c;
   mrb_uv_context* context = NULL;
   mrb_uv_context* new_context = NULL;
   mrb_value args[1];
@@ -2190,8 +2070,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
   int ai;
   mrb_value uv_gc_table;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2201,8 +2080,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
   _class_uv_pipe = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Pipe")));
   c = mrb_obj_new(mrb, _class_uv_pipe, 1, args);
 
-  value_new_context = mrb_iv_get(mrb, c, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_new_context, &uv_context_type, new_context);
+  Data_Get_Struct(mrb, c, &uv_context_type, new_context);
   if (!new_context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2227,11 +2105,9 @@ static mrb_value
 mrb_uv_pipe_pending_instances(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_count = 0;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2314,10 +2190,8 @@ leave:
 static mrb_value
 mrb_uv_fs_fd(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2344,7 +2218,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
 
   _class_uv = mrb_module_get(mrb, "UV");
   _class_uv_fs = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "FS")));
-  c = mrb_obj_new(mrb, _class_uv_fs, 0, NULL);
+  c = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, _class_uv_fs));
 
   context = uv_context_alloc(mrb);
   if (!context) {
@@ -2358,9 +2232,8 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   context->instance = c;
   context->loop = uv_default_loop();
 
-  mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(c) = context;
+  DATA_TYPE(c) = &uv_context_type;
 
   req = (uv_fs_t*) malloc(sizeof(uv_fs_t));
   if (!req) {
@@ -2384,14 +2257,12 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   uv_fs_t* req;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2418,15 +2289,13 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   mrb_value arg_data = mrb_nil_value();
   mrb_int arg_length = -1;
   mrb_int arg_offset = 0;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   uv_fs_t* req;
   int r;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -2464,7 +2333,6 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_length = BUFSIZ;
   mrb_int arg_offset = 0;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
@@ -2474,8 +2342,7 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   int ai;
   mrb_value str;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3026,7 +2893,6 @@ mrb_uv_fs_poll_init(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_loop = mrb_nil_value();
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
@@ -3035,8 +2901,7 @@ mrb_uv_fs_poll_init(mrb_state *mrb, mrb_value self)
   if (!mrb_nil_p(arg_loop)) {
     if (!strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-      value_context = mrb_iv_get(mrb, arg_loop, mrb_intern_lit(mrb, "context"));
-      Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+      Data_Get_Struct(mrb, arg_loop, &uv_context_type, loop_context);
       if (!loop_context) {
         mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
       }
@@ -3060,9 +2925,8 @@ mrb_uv_fs_poll_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   context->any.fs_poll.data = context;
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -3071,13 +2935,11 @@ mrb_uv_fs_poll_start(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_path;
   mrb_int arg_interval;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_poll_cb fs_poll_cb = _uv_fs_poll_cb;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3095,11 +2957,9 @@ mrb_uv_fs_poll_start(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_fs_poll_stop(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3128,7 +2988,6 @@ mrb_uv_signal_init(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_loop = mrb_nil_value();
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
@@ -3137,8 +2996,7 @@ mrb_uv_signal_init(mrb_state *mrb, mrb_value self)
   if (!mrb_nil_p(arg_loop)) {
     if (!strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-      value_context = mrb_iv_get(mrb, arg_loop, mrb_intern_lit(mrb, "context"));
-      Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+      Data_Get_Struct(mrb, arg_loop, &uv_context_type, loop_context);
       if (!loop_context) {
         mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
       }
@@ -3162,9 +3020,8 @@ mrb_uv_signal_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   context->any.signal.data = context;
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -3172,13 +3029,11 @@ static mrb_value
 mrb_uv_signal_start(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_signum;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_signal_cb signal_cb = _uv_signal_cb;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3196,11 +3051,9 @@ mrb_uv_signal_start(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_signal_stop(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3217,7 +3070,6 @@ mrb_uv_tty_init(mrb_state *mrb, mrb_value self)
   int err;
   mrb_value arg_loop = mrb_nil_value();
   mrb_int arg_file, arg_readable;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_uv_context* loop_context = NULL;
   uv_loop_t* loop;
@@ -3226,8 +3078,7 @@ mrb_uv_tty_init(mrb_state *mrb, mrb_value self)
   if (!mrb_nil_p(arg_loop)) {
     if (!strcmp(mrb_obj_classname(mrb, arg_loop), "UV::Loop")) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-      value_context = mrb_iv_get(mrb, arg_loop, mrb_intern_lit(mrb, "context"));
-      Data_Get_Struct(mrb, value_context, &uv_context_type, loop_context);
+      Data_Get_Struct(mrb, arg_loop, &uv_context_type, loop_context);
       if (!loop_context) {
         mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
       }
@@ -3251,9 +3102,8 @@ mrb_uv_tty_init(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   context->any.tty.data = context;
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
@@ -3261,13 +3111,11 @@ static mrb_value
 mrb_uv_tty_set_mode(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_mode;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
   mrb_get_args(mrb, "i", &arg_mode);
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3286,13 +3134,11 @@ static mrb_value
 mrb_uv_tty_get_winsize(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   int width = 0, height = 0;
   mrb_value ary;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3346,9 +3192,8 @@ mrb_uv_process_init(mrb_state *mrb, mrb_value self)
   context->instance = self;
   context->loop = uv_default_loop();
 
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "options"), arg_opt);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "stdout_pipe"), mrb_nil_value());
@@ -3361,7 +3206,6 @@ mrb_uv_process_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_exit_cb exit_cb = _uv_exit_cb;
@@ -3377,8 +3221,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   uv_process_options_t opt = {0};
   char** args;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3405,9 +3248,8 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   args[i+1] = NULL;
 
   if (!mrb_nil_p(stdin_pipe)) {
-    mrb_value pipe_context = mrb_iv_get(mrb, stdin_pipe, mrb_intern_lit(mrb, "context"));
     mrb_uv_context* pcontext = NULL;
-    Data_Get_Struct(mrb, pipe_context, &uv_context_type, pcontext);
+    Data_Get_Struct(mrb, stdin_pipe, &uv_context_type, pcontext);
     if (!pcontext) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
@@ -3418,9 +3260,8 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
 
   if (!mrb_nil_p(stdout_pipe)) {
-    mrb_value pipe_context = mrb_iv_get(mrb, stdout_pipe, mrb_intern_lit(mrb, "context"));
     mrb_uv_context* pcontext = NULL;
-    Data_Get_Struct(mrb, pipe_context, &uv_context_type, pcontext);
+    Data_Get_Struct(mrb, stdout_pipe, &uv_context_type, pcontext);
     if (!pcontext) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
@@ -3431,9 +3272,8 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
 
   if (!mrb_nil_p(stderr_pipe)) {
-    mrb_value pipe_context = mrb_iv_get(mrb, stderr_pipe, mrb_intern_lit(mrb, "context"));
     mrb_uv_context* pcontext = NULL;
-    Data_Get_Struct(mrb, pipe_context, &uv_context_type, pcontext);
+    Data_Get_Struct(mrb, stderr_pipe, &uv_context_type, pcontext);
     if (!pcontext) {
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
     }
@@ -3467,13 +3307,11 @@ static mrb_value
 mrb_uv_process_kill(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_signum;
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
   mrb_get_args(mrb, "i", &arg_signum);
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3564,9 +3402,8 @@ mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "thread_proc"), b);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "thread_arg"), thread_arg);
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
 
   err = uv_thread_create(&context->any.thread, _uv_thread_proc, context);
   if (err != 0) {
@@ -3578,11 +3415,9 @@ mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_thread_join(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3620,20 +3455,17 @@ mrb_uv_barrier_init(mrb_state *mrb, mrb_value self)
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_obj_value(
-    Data_Wrap_Struct(mrb, mrb->object_class,
-    &uv_context_type, (void*) context)));
+  DATA_PTR(self) = context;
+  DATA_TYPE(self) = &uv_context_type;
   return self;
 }
 
 static mrb_value
 mrb_uv_barrier_wait(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
@@ -3645,17 +3477,15 @@ mrb_uv_barrier_wait(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_barrier_destroy(mrb_state *mrb, mrb_value self)
 {
-  mrb_value value_context;
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
   if (!context) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
   uv_barrier_destroy(&context->any.barrier);
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_nil_value());
+  // TODO: mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_nil_value());
   return mrb_nil_value();
 }
 /*********************************************************
@@ -3714,6 +3544,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_loop, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_delete, ARGS_NONE());
@@ -3722,6 +3553,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_timer = mrb_define_class_under(mrb, _class_uv, "Timer", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_timer, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "again", mrb_uv_timer_again, ARGS_NONE());
   // TODO: uv_timer_set_repeat
@@ -3734,6 +3566,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_idle = mrb_define_class_under(mrb, _class_uv, "Idle", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_idle, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_idle, "initialize", mrb_uv_idle_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "start", mrb_uv_idle_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_idle, "stop", mrb_uv_idle_stop, ARGS_NONE());
@@ -3743,6 +3576,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_async = mrb_define_class_under(mrb, _class_uv, "Async", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_async, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_async, "initialize", mrb_uv_async_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_async, "send", mrb_uv_async_send, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_async, "close", mrb_uv_close, ARGS_NONE());
@@ -3751,6 +3585,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_prepare = mrb_define_class_under(mrb, _class_uv, "Prepare", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_prepare, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_prepare, "initialize", mrb_uv_prepare_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_prepare, "start", mrb_uv_prepare_start, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_prepare, "stop", mrb_uv_prepare_stop, ARGS_NONE());
@@ -3760,6 +3595,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_addrinfo = mrb_define_class_under(mrb, _class_uv, "Addrinfo", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_addrinfo, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_addrinfo, "flags", mrb_uv_addrinfo_flags, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "family", mrb_uv_addrinfo_family, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "socktype", mrb_uv_addrinfo_socktype, ARGS_NONE());
@@ -3770,6 +3606,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_ip4addr, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(1) | ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_ip4addr, "sin_addr", mrb_uv_ip4addr_sin_addr, ARGS_NONE());
@@ -3777,6 +3614,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_ip6addr = mrb_define_class_under(mrb, _class_uv, "Ip6Addr", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_ip6addr, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_ip6addr, "initialize", mrb_uv_ip6addr_init, ARGS_REQ(1) | ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_ip6addr, "to_s", mrb_uv_ip6addr_to_s, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_ip6addr, "sin_addr", mrb_uv_ip6addr_sin_addr, ARGS_NONE());
@@ -3784,6 +3622,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_tcp = mrb_define_class_under(mrb, _class_uv, "TCP", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_tcp, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_NONE());
   // TODO: uv_tcp_open
   // TODO: uv_tcp_getsockname
@@ -3815,6 +3654,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_udp = mrb_define_class_under(mrb, _class_uv, "UDP", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_udp, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_NONE());
   // TODO: uv_udp_open
   // TODO: uv_udp_getsockname
@@ -3830,6 +3670,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_pipe = mrb_define_class_under(mrb, _class_uv, "Pipe", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_pipe, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_pipe, "initialize", mrb_uv_pipe_init, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "open", mrb_uv_pipe_open, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "connect", mrb_uv_pipe_connect, ARGS_REQ(2));
@@ -3847,6 +3688,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_mutex = mrb_define_class_under(mrb, _class_uv, "Mutex", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_mutex, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_mutex, "initialize", mrb_uv_mutex_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_mutex, "lock", mrb_uv_mutex_lock, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_mutex, "trylock", mrb_uv_mutex_trylock, ARGS_NONE());
@@ -3857,6 +3699,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_fs = mrb_define_class_under(mrb, _class_uv, "FS", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_fs, MRB_TT_DATA);
   mrb_define_const(mrb, _class_uv_fs, "O_RDONLY", mrb_fixnum_value(O_RDONLY));
   mrb_define_const(mrb, _class_uv_fs, "O_WRONLY", mrb_fixnum_value(O_WRONLY));
   mrb_define_const(mrb, _class_uv_fs, "O_RDWR", mrb_fixnum_value(O_RDWR));
@@ -3905,6 +3748,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_fs_poll = mrb_define_class_under(mrb, _class_uv_fs, "Poll", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_fs_poll, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_fs_poll, "initialize", mrb_uv_fs_poll_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_fs_poll, "start", mrb_uv_fs_poll_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs_poll, "stop", mrb_uv_fs_poll_stop, ARGS_NONE());
@@ -3912,6 +3756,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_signal = mrb_define_class_under(mrb, _class_uv, "Signal", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_signal, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_signal, "initialize", mrb_uv_signal_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_signal, "start", mrb_uv_signal_start, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_signal, "stop", mrb_uv_signal_stop, ARGS_NONE());
@@ -3934,6 +3779,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_tty = mrb_define_class_under(mrb, _class_uv, "TTY", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_tty, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_tty, "initialize", mrb_uv_tty_init, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tty, "set_mode", mrb_uv_tty_set_mode, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_tty, "reset_mode", mrb_uv_tty_reset_mode, ARGS_NONE());
@@ -3942,6 +3788,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_process = mrb_define_class_under(mrb, _class_uv, "Process", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_process, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_process, "initialize", mrb_uv_process_init, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_process, "spawn", mrb_uv_process_spawn, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "stdout_pipe=", mrb_uv_process_stdout_pipe_set, ARGS_REQ(1));
@@ -3957,12 +3804,14 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_thread = mrb_define_class_under(mrb, _class_uv, "Thread", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_thread, MRB_TT_DATA);
   mrb_define_module_function(mrb, _class_uv_thread, "self", mrb_uv_thread_self, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_thread, "initialize", mrb_uv_thread_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_thread, "join", mrb_uv_thread_join, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_barrier = mrb_define_class_under(mrb, _class_uv, "Barrier", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_barrier, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_barrier, "initialize", mrb_uv_barrier_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_barrier, "wait", mrb_uv_barrier_wait, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_barrier, "destroy", mrb_uv_barrier_destroy, ARGS_NONE());
