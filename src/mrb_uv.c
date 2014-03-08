@@ -151,7 +151,7 @@ _uv_close_cb(uv_handle_t* handle)
   if (!mrb) return;
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "close_cb"));
   if (!mrb_nil_p(proc)) {
-    mrb_funcall_argv(mrb, proc, NULL,0, NULL);
+    mrb_yield_argv(mrb, proc, 0, NULL);
   }
   context->mrb = NULL;
 }
