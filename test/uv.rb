@@ -46,14 +46,15 @@ assert_uv('UV::Async') do
 end
 
 assert_uv('UV::FS') do
+  test_str = 'helloworld'
   remove_uv_test_tmpfile
   UV::FS::mkdir("foo-bar") do
     f = UV::FS::open("foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD)
-    f.write("helloworld") do
+    f.write(test_str) do
       f.close do
         f = UV::FS::open("foo-bar/foo.txt", UV::FS::O_RDONLY, UV::FS::S_IREAD) do
           assert_equal 'hello', f.read(5)
-          assert_equal 'helloworld', f.read()
+          assert_equal test_str, f.read()
           f.close { remove_uv_test_tmpfile }
         end
       end
@@ -159,10 +160,11 @@ assert_uv('Process') do
 end
 
 assert_uv('UV::FS::readdir') do
+  test_str = 'helloworld'
   remove_uv_test_tmpfile
   UV::FS::mkdir("foo-bar") do
     f = UV::FS::open("foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD)
-    f.write("helloworld") do
+    f.write(test_str) do
       UV::FS::readdir("foo-bar", 0) do |x,a|
         assert_equal ['foo.txt'], a
         remove_uv_test_tmpfile
