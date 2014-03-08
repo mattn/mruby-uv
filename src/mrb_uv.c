@@ -396,7 +396,7 @@ mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
 
   struct RClass* _class_uv = mrb_module_get(mrb, "UV");
-  struct RClass* _class_uv_loop = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Loop")));
+  struct RClass* _class_uv_loop = mrb_class_get_under(mrb, _class_uv, "Loop");
   c = mrb_obj_new(mrb, _class_uv_loop, 0, NULL);
 
   context = uv_context_alloc(mrb);
@@ -965,7 +965,7 @@ mrb_uv_ip4_addr(mrb_state *mrb, mrb_value self)
   struct RClass* _class_uv_ip4addr;
   mrb_get_args(mrb, "*", &argv, &argc);
   _class_uv = mrb_module_get(mrb, "UV");
-  _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Ip4Addr")));
+  _class_uv_ip4addr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
   return mrb_obj_new(mrb, _class_uv_ip4addr, argc, argv);
 }
 
@@ -1066,7 +1066,7 @@ mrb_uv_ip6_addr(mrb_state *mrb, mrb_value self)
   struct RClass* _class_uv_ip6addr;
   mrb_get_args(mrb, "*", &argv, &argc);
   _class_uv = mrb_module_get(mrb, "UV");
-  _class_uv_ip6addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Ip6Addr")));
+  _class_uv_ip6addr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
   return mrb_obj_new(mrb, _class_uv_ip6addr, argc, argv);
 }
 
@@ -1168,7 +1168,7 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
   mrb_value c = mrb_nil_value();
   if (status != -1) {
     struct RClass* _class_uv = mrb_module_get(mrb, "UV");
-    struct RClass* _class_uv_addrinfo = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Addrinfo")));
+    struct RClass* _class_uv_addrinfo = mrb_class_get_under(mrb, _class_uv, "Addrinfo");
     c = mrb_obj_new(mrb, _class_uv_addrinfo, 0, NULL);
     DATA_PTR(c) = addr;
     DATA_TYPE(c) = &uv_addrinfo_type;
@@ -1268,8 +1268,7 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
   switch (addr->addr->ai_family) {
   case AF_INET:
     {
-      struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(
-          mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Ip4Addr")));
+      struct RClass* _class_uv_ip4addr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
       struct sockaddr_in* saddr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
       if (!saddr) {
         mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
@@ -1283,8 +1282,7 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
     break;
   case AF_INET6:
     {
-      struct RClass* _class_uv_ip6addr = mrb_class_ptr(mrb_const_get(
-          mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Ip6Addr")));
+      struct RClass* _class_uv_ip6addr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
       struct sockaddr_in6* saddr = (struct sockaddr_in6*)malloc(sizeof(struct sockaddr_in6));
       if (!saddr) {
         mrb_raise(mrb, E_RUNTIME_ERROR, "can't alloc memory");
@@ -1317,7 +1315,7 @@ mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
 
   if (addr->addr->ai_next) {
     struct RClass* _class_uv = mrb_module_get(mrb, "UV");
-    struct RClass* _class_uv_ip4addr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Addrinfo")));
+    struct RClass* _class_uv_ip4addr = mrb_class_get_under(mrb, _class_uv, "Addrinfo");
 
     mrb_value c = mrb_obj_new(mrb, _class_uv_ip4addr, 0, NULL);
     DATA_PTR(c) = addr->addr->ai_next;
@@ -1530,7 +1528,7 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   }
 
   _class_uv = mrb_module_get(mrb, "UV");
-  _class_uv_tcp = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "TCP")));
+  _class_uv_tcp = mrb_class_get_under(mrb, _class_uv, "TCP");
   c = mrb_obj_new(mrb, _class_uv_tcp, 0, NULL);
 
   Data_Get_Struct(mrb, c, &uv_context_type, new_context);
@@ -1822,13 +1820,13 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, const uv_buf_t* buf, const stru
     switch (addr->sa_family) {
       case AF_INET:
         /* IPv4 */
-        _class_uv_ipaddr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Ip4Addr")));
+        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
         data = Data_Wrap_Struct(mrb, mrb->object_class,
             &uv_ip4addr_nofree_type, (void *) addr);
         break;
       case AF_INET6:
         /* IPv6 */
-        _class_uv_ipaddr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Ip6Addr")));
+        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
         data = Data_Wrap_Struct(mrb, mrb->object_class,
             &uv_ip6addr_nofree_type, (void *) addr);
         break;
@@ -2077,7 +2075,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
 
   args[0] = mrb_fixnum_value(0);
   _class_uv = mrb_module_get(mrb, "UV");
-  _class_uv_pipe = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "Pipe")));
+  _class_uv_pipe = mrb_class_get_under(mrb, _class_uv, "Pipe");
   c = mrb_obj_new(mrb, _class_uv_pipe, 1, args);
 
   Data_Get_Struct(mrb, c, &uv_context_type, new_context);
@@ -2217,7 +2215,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "&Sii", &b, &arg_filename, &arg_flags, &arg_mode);
 
   _class_uv = mrb_module_get(mrb, "UV");
-  _class_uv_fs = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "FS")));
+  _class_uv_fs = mrb_class_get_under(mrb, _class_uv, "FS");
   c = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, _class_uv_fs));
 
   context = uv_context_alloc(mrb);
