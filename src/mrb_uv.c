@@ -1393,10 +1393,10 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
   }
 
   if (version == 4) {
-    Data_Get_Struct(mrb, self, &uv_ip4addr_type, addr);
+    Data_Get_Struct(mrb, arg_addr, &uv_ip4addr_type, addr);
   }
   else {
-    Data_Get_Struct(mrb, self, &uv_ip6addr_type, addr);
+    Data_Get_Struct(mrb, arg_addr, &uv_ip6addr_type, addr);
   }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1455,10 +1455,10 @@ mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self, int version)
   }
 
   if (version == 4) {
-    Data_Get_Struct(mrb, self, &uv_ip4addr_type, addr);
+    Data_Get_Struct(mrb, arg_addr, &uv_ip4addr_type, addr);
   }
   else {
-    Data_Get_Struct(mrb, self, &uv_ip6addr_type, addr);
+    Data_Get_Struct(mrb, arg_addr, &uv_ip6addr_type, addr);
   }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1692,10 +1692,10 @@ mrb_uv_udp_bind(mrb_state *mrb, mrb_value self, int version)
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
   if (version == 4) {
-    Data_Get_Struct(mrb, self, &uv_ip4addr_type, addr);
+    Data_Get_Struct(mrb, arg_addr, &uv_ip4addr_type, addr);
   }
   else {
-    Data_Get_Struct(mrb, self, &uv_ip6addr_type, addr);
+    Data_Get_Struct(mrb, arg_addr, &uv_ip6addr_type, addr);
   }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1760,10 +1760,10 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self, int version)
   }
 
   if (version == 4) {
-    Data_Get_Struct(mrb, self, &uv_ip4addr_type, addr);
+    Data_Get_Struct(mrb, arg_addr, &uv_ip4addr_type, addr);
   }
   else {
-    Data_Get_Struct(mrb, self, &uv_ip6addr_type, addr);
+    Data_Get_Struct(mrb, arg_addr, &uv_ip6addr_type, addr);
   }
   if (!addr) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -3282,7 +3282,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
 
   opt.file = RSTRING_PTR(arg_file);
-  opt.args = uv_setup_args(RARRAY_LEN(arg_args)+1, args);
+  opt.args = uv_setup_args(RARRAY_LEN(arg_args), args);
   opt.env = environ;
   opt.cwd = cwd;
   opt.exit_cb = exit_cb;
