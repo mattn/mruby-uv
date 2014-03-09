@@ -1917,7 +1917,7 @@ _uv_fs_open_cb(uv_fs_t* req)
   mrb_state* mrb = context->mrb;
   mrb_value proc;
   if (req->result < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, "open error");
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(req->result));
   }
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "fs_cb"));
   if (!mrb_nil_p(proc)) {
@@ -1938,7 +1938,7 @@ _uv_fs_cb(uv_fs_t* req)
   mrb_value proc;
   uv_fs_t close_req;
   if (req->result < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, "error");
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(req->result));
   }
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "fs_cb"));
 
@@ -2070,10 +2070,11 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   uv_fs_cb fs_cb = _uv_fs_cb;
   uv_fs_t* req;
   int r;
+  uv_buf_t buf;
 
   Data_Get_Struct(mrb, self, &uv_context_type, context);
 
-  mrb_get_args(mrb, "&S|i|i", &b, &arg_data, &arg_offset);
+  mrb_get_args(mrb, "&S|ii", &b, &arg_data, &arg_offset, &arg_length);
 
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
@@ -2087,7 +2088,9 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
     arg_length = RSTRING_LEN(arg_data);
   if (arg_offset < 0)
     arg_offset = 0;
-  r = uv_fs_write(uv_default_loop(), req, context->any.fs, RSTRING_PTR(arg_data), arg_length, arg_offset, fs_cb);
+  buf.base = RSTRING_PTR(arg_data);
+  buf.len = arg_length;
+  r = uv_fs_write(uv_default_loop(), req, context->any.fs, &buf, 1, arg_offset, fs_cb);
   if (r < 0) {
     mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(r));
@@ -2103,8 +2106,8 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   mrb_uv_context* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  char* buf;
-  size_t len;
+  uv_buf_t buf;
+  int len;
   uv_fs_t* req;
   int ai;
   mrb_value str;
@@ -2118,23 +2121,24 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  buf = mrb_malloc(mrb, arg_length);
+  buf.base = mrb_malloc(mrb, arg_length);
+  buf.len = arg_length;
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   if (!req) {
-    mrb_free(mrb, buf);
+    mrb_free(mrb, buf.base);
   }
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
-  len = uv_fs_read(uv_default_loop(), req, context->any.fs, buf, arg_length, arg_offset, fs_cb);
-  if (len == -1) {
-    mrb_free(mrb, buf);
+  len = uv_fs_read(uv_default_loop(), req, context->any.fs, &buf, 1, arg_offset, fs_cb);
+  if (len < 0) {
+    mrb_free(mrb, buf.base);
     mrb_free(mrb, req);
-    mrb_raise(mrb, E_RUNTIME_ERROR, "read error");
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(len));
   }
   ai = mrb_gc_arena_save(mrb);
-  str = mrb_str_new(mrb, buf, len);
+  str = mrb_str_new(mrb, buf.base, len);
   mrb_gc_arena_restore(mrb, ai);
-  mrb_free(mrb, buf);
+  mrb_free(mrb, buf.base);
   return str;
 }
 

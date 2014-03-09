@@ -6,6 +6,10 @@ def assert_uv(name, &block)
   end
 end
 
+def remove_uv_test_tmpfile
+  UV::FS::unlink 'foo-bar/foo.txt' rescue nil
+  UV::FS::rmdir 'foo-bar' rescue nil
+end
 
 assert_uv('UV::getaddrinfo') do
   UV::getaddrinfo("www.google.com", "http") do |x, a|
@@ -42,18 +46,16 @@ assert_uv('UV::Async') do
 end
 
 assert_uv('UV::FS') do
+  test_str = 'helloworld'
+  remove_uv_test_tmpfile
   UV::FS::mkdir("foo-bar") do
     f = UV::FS::open("foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD)
-    f.write("helloworld") do
+    f.write(test_str) do
       f.close do
         f = UV::FS::open("foo-bar/foo.txt", UV::FS::O_RDONLY, UV::FS::S_IREAD) do
           assert_equal 'hello', f.read(5)
-          assert_equal 'helloworld', f.read()
-          f.close() do
-            UV::FS::unlink("foo-bar/foo.txt") do
-              UV::FS::rmdir("foo-bar")
-            end
-          end
+          assert_equal test_str, f.read()
+          f.close { remove_uv_test_tmpfile }
         end
       end
     end
@@ -142,6 +144,7 @@ assert_uv('UV::Pipe') do
 end
 
 assert_uv('Process') do
+  remove_uv_test_tmpfile
   UV::FS::mkdir 'foo-bar'
 
   ps = UV::Process.new 'file' => 'grep', 'args' => []
@@ -149,7 +152,7 @@ assert_uv('Process') do
 
   ps.spawn do |sig|
     assert_equal 2, sig
-    UV::FS::rmdir 'foo-bar'
+    remove_uv_test_tmpfile
   end
   ps.stdout_pipe.read_start do |b|
     assert_nil b
@@ -157,14 +160,14 @@ assert_uv('Process') do
 end
 
 assert_uv('UV::FS::readdir') do
+  test_str = 'helloworld'
+  remove_uv_test_tmpfile
   UV::FS::mkdir("foo-bar") do
     f = UV::FS::open("foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD)
-    f.write("helloworld") do
+    f.write(test_str) do
       UV::FS::readdir("foo-bar", 0) do |x,a|
         assert_equal ['foo.txt'], a
-        UV::FS::unlink("foo-bar/foo.txt") do
-          UV::FS::rmdir("foo-bar")
-        end
+        remove_uv_test_tmpfile
       end
     end
   end
