@@ -2899,6 +2899,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   mrb_value stdout_pipe;
   mrb_value stderr_pipe;
   char cwd[PATH_MAX] = {0};
+  size_t cwd_size = sizeof(cwd);
   int i, err;
   uv_stdio_container_t stdio[3];
   uv_process_options_t opt = {0};
@@ -2919,7 +2920,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "exit_cb"), b);
 
-  uv_cwd(cwd, sizeof(cwd));
+  uv_cwd(cwd, &cwd_size);
   args = mrb_malloc(mrb, sizeof(char*) * (RARRAY_LEN(arg_args)+2));
   args[0] = RSTRING_PTR(arg_file);
   for (i = 0; i < RARRAY_LEN(arg_args); i++) {
