@@ -3485,7 +3485,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_fs = mrb_define_class_under(mrb, _class_uv, "FS", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_fs, MRB_TT_DATA);
-  mrb_include_module(mrb, _class_uv_fs, _class_uv_handle);
   mrb_define_const(mrb, _class_uv_fs, "O_RDONLY", mrb_fixnum_value(O_RDONLY));
   mrb_define_const(mrb, _class_uv_fs, "O_WRONLY", mrb_fixnum_value(O_WRONLY));
   mrb_define_const(mrb, _class_uv_fs, "O_RDWR", mrb_fixnum_value(O_RDWR));
@@ -3502,6 +3501,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_const(mrb, _class_uv_fs, "S_IREAD", mrb_fixnum_value(S_IREAD));
   mrb_define_module_function(mrb, _class_uv_fs, "fd", mrb_uv_fs_fd, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv_fs, "open", mrb_uv_fs_open, ARGS_REQ(2));
+  mrb_define_module_function(mrb, _class_uv_fs, "close", mrb_uv_fs_close, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs, "write", mrb_uv_fs_write, ARGS_REQ(1) | ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_fs, "read", mrb_uv_fs_read, ARGS_REQ(0) | ARGS_OPT(2));
   mrb_define_module_function(mrb, _class_uv_fs, "unlink", mrb_uv_fs_unlink, ARGS_REQ(1));
