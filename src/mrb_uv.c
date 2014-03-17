@@ -3657,6 +3657,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
 void
 mrb_mruby_uv_gem_final(mrb_state* mrb) {
+  mrb_uv_gc(mrb, mrb_nil_value());
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */
