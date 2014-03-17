@@ -905,9 +905,9 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_ip4addr_to_s(mrb_state *mrb, mrb_value self)
 {
-  mrb_value str = mrb_funcall(mrb, self, "sin_addr", 0, NULL);
+  mrb_value str = mrb_funcall(mrb, self, "sin_addr", 0);
   mrb_str_cat2(mrb, str, ":");
-  mrb_str_concat(mrb, str, mrb_funcall(mrb, self, "sin_port", 0, NULL));
+  mrb_str_concat(mrb, str, mrb_funcall(mrb, self, "sin_port", 0));
   return str;
 }
 
@@ -1006,9 +1006,9 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_ip6addr_to_s(mrb_state *mrb, mrb_value self)
 {
-  mrb_value str = mrb_funcall(mrb, self, "sin_addr", 0, NULL);
+  mrb_value str = mrb_funcall(mrb, self, "sin_addr", 0);
   mrb_str_cat2(mrb, str, ":");
-  mrb_str_concat(mrb, str, mrb_funcall(mrb, self, "sin_port", 0, NULL));
+  mrb_str_concat(mrb, str, mrb_funcall(mrb, self, "sin_port", 0));
   return str;
 }
 
@@ -1087,12 +1087,11 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
   mrb_value node, service;
   mrb_value b = mrb_nil_value();
   uv_getaddrinfo_cb getaddrinfo_cb = _uv_getaddrinfo_cb;
-  struct addrinfo hint = {0};
   mrb_uv_addrinfo* addr;
   uv_getaddrinfo_t* req;
   int ret;
 
-  mrb_get_args(mrb, "SS|o&", &node, &service, &hint, &b);
+  mrb_get_args(mrb, "SS&", &node, &service, &b);
 
   addr = (mrb_uv_addrinfo*) mrb_malloc(mrb, sizeof(mrb_uv_addrinfo));
   memset(addr, 0, sizeof(mrb_uv_addrinfo));
@@ -1112,7 +1111,7 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
     getaddrinfo_cb,
     RSTRING_PTR(node),
     RSTRING_PTR(service),
-    &hint);
+    NULL);
   return mrb_fixnum_value(ret);
 }
 
