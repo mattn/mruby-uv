@@ -52,9 +52,9 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   file libuv_lib => header do |t|
     Dir.chdir(libuv_dir) do
       e = {
-        'CC' => "#{spec.build.cc.command} #{spec.build.cc.flags.join(' ')}",
-        'CXX' => "#{spec.build.cxx.command} #{spec.build.cxx.flags.join(' ')}",
-        'LD' => "#{spec.build.linker.command} #{spec.build.linker.flags.join(' ')}",
+        'CC' => spec.build.cc.command,
+        'CXX' => spec.build.cxx.command,
+        'LD' => spec.build.linker.command,
         'AR' => spec.build.archiver.command }
       _pp 'autotools', libuv_dir
       run_command e, './autogen.sh' if File.exists? 'autogen.sh'
