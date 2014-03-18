@@ -11,6 +11,12 @@ def remove_uv_test_tmpfile
   UV::FS::rmdir 'foo-bar' rescue nil
 end
 
+assert('UV.guess_handle') do
+  assert_equal :tty, UV.guess_handle(0)
+  assert_equal :tty, UV.guess_handle(1)
+  assert_equal :tty, UV.guess_handle(2)
+end
+
 assert_uv('UV::getaddrinfo') do
   UV::getaddrinfo("www.google.com", "http") do |x, a|
     next unless a

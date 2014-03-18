@@ -3278,6 +3278,32 @@ mrb_uv_barrier_destroy(mrb_state *mrb, mrb_value self)
   // TODO: mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_nil_value());
   return mrb_nil_value();
 }
+
+static mrb_value
+mrb_uv_guess_handle(mrb_state *mrb, mrb_value self)
+{
+  mrb_int fd;
+  mrb_get_args(mrb, "i", &fd);
+
+  uv_handle_type h = uv_guess_handle(fd);
+
+  if(h < 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(h));
+  }
+
+  switch(h) {
+  case UV_FILE: return mrb_symbol_value(mrb_intern_lit(mrb, "file"));
+
+#define XX(t, l) case UV_ ## t: return mrb_symbol_value(mrb_intern_lit(mrb, #l));
+  UV_HANDLE_TYPE_MAP(XX)
+#undef XX
+
+  default:
+  case UV_UNKNOWN_HANDLE:
+    return mrb_symbol_value(mrb_intern_lit(mrb, "unknown"));
+  }
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -3317,6 +3343,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "guess_handle", mrb_uv_guess_handle, MRB_ARGS_REQ(1));
 
   // TODO
   //mrb_define_module_function(mrb, _class_uv, "dlopen", mrb_uv_dlopen, ARGS_NONE());
@@ -3601,7 +3628,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   /* TODO
-  uv_guess_handle
   uv_poll_init
   uv_poll_init_socket
   uv_poll_start
