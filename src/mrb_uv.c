@@ -3304,6 +3304,94 @@ mrb_uv_guess_handle(mrb_state *mrb, mrb_value self)
   }
 }
 
+void
+mrb_uv_sem_free(mrb_state *mrb, void *p)
+{
+  if(!p) { return; }
+
+  uv_sem_destroy((uv_sem_t*)p);
+  mrb_free(mrb, p);
+}
+
+static struct mrb_data_type sem_type = {
+  "uv_sem", mrb_uv_sem_free
+};
+
+static mrb_value
+mrb_uv_sem_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_int v;
+  uv_sem_t* s;
+  int res;
+  mrb_get_args(mrb, "i", &v);
+
+  s = (uv_sem_t*)mrb_malloc(mrb, sizeof(uv_sem_t));
+  if((res = uv_sem_init(s, v)) < 0) {
+    mrb_free(mrb, s);
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(res));
+  }
+
+  DATA_TYPE(self) = &sem_type;
+  DATA_PTR(self) = s;
+  return self;
+}
+
+static uv_sem_t*
+get_uv_sem(mrb_state *mrb, mrb_value v)
+{
+  uv_sem_t *ret;
+  if(!DATA_PTR(v)) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "already destroyed semaphore");
+  }
+  Data_Get_Struct(mrb, v, &sem_type, ret);
+  return ret;
+}
+
+static mrb_value
+mrb_uv_sem_destroy(mrb_state *mrb, mrb_value self)
+{
+  uv_sem_t *sem = get_uv_sem(mrb, self);
+  uv_sem_destroy(sem);
+  mrb_free(mrb, DATA_PTR(self));
+  DATA_PTR(self) = NULL;
+  return self;
+}
+
+static mrb_value
+mrb_uv_sem_post(mrb_state *mrb, mrb_value self)
+{
+  uv_sem_t *sem = get_uv_sem(mrb, self);
+  return uv_sem_post(sem), self;
+}
+
+static mrb_value
+mrb_uv_sem_wait(mrb_state *mrb, mrb_value self)
+{
+  uv_sem_t *sem = get_uv_sem(mrb, self);
+  return uv_sem_wait(sem), self;
+}
+
+static mrb_value
+mrb_uv_sem_trywait(mrb_state *mrb, mrb_value self)
+{
+  int res;
+  uv_sem_t *sem = get_uv_sem(mrb, self);
+  res = uv_sem_trywait(sem);
+  if(res == UV_EAGAIN) {
+    return mrb_false_value();
+  }
+  if(res < 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(res));
+  }
+  return mrb_true_value();
+}
+
+static mrb_value
+mrb_uv_sem_destroyed(mrb_state *mrb, mrb_value self)
+{
+  return mrb_bool_value(DATA_PTR(self) == NULL);
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -3333,6 +3421,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_thread;
   struct RClass* _class_uv_barrier;
   struct RClass* _class_uv_handle;
+  struct RClass* _class_uv_semaphore;
   mrb_value uv_gc_table;
 
   _class_uv = mrb_define_module(mrb, "UV");
@@ -3627,6 +3716,16 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_barrier, "destroy", mrb_uv_barrier_destroy, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
+  _class_uv_semaphore = mrb_define_class_under(mrb, _class_uv, "Semaphore", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_semaphore, MRB_TT_DATA);
+  mrb_define_method(mrb, _class_uv_semaphore, "initialize", mrb_uv_sem_init, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_semaphore, "destroy", mrb_uv_sem_destroy, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_semaphore, "post", mrb_uv_sem_post, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_semaphore, "wait", mrb_uv_sem_wait, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_semaphore, "try_wait", mrb_uv_sem_trywait, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_semaphore, "destroyed?", mrb_uv_sem_destroyed, MRB_ARGS_NONE());
+  mrb_gc_arena_restore(mrb, ai);
+
   /* TODO
   uv_poll_init
   uv_poll_init_socket
@@ -3664,11 +3763,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_rwlock_wrlock
   uv_rwlock_trywrlock
   uv_rwlock_wrunlock
-  uv_sem_init
-  uv_sem_destroy
-  uv_sem_post
-  uv_sem_wait
-  uv_sem_trywait
   uv_cond_init
   uv_cond_destroy
   uv_cond_signal

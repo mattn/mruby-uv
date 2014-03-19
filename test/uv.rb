@@ -308,3 +308,19 @@ assert_uv('UV::UDP server/client') do
     c.close
   end
 end
+
+assert('UV::Semaphore') do
+  sem = UV::Semaphore.new 3
+  sem.wait
+  sem.wait
+  assert_true sem.try_wait
+  assert_false sem.try_wait
+
+  sem.post
+  assert_true sem.try_wait
+  assert_false sem.try_wait
+
+  assert_false sem.destroyed?
+  sem.destroy
+  assert_true sem.destroyed?
+end
