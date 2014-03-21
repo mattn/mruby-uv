@@ -1481,14 +1481,10 @@ mrb_uv_tcp_getpeername(mrb_state *mrb, mrb_value self)
   struct RClass* _class_uv;
   struct RClass* _class_uv_ipaddr;
   struct RData *data;
-  mrb_value value_context, value_data, value_result = mrb_nil_value();
+  mrb_value value_data, value_result = mrb_nil_value();
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
-  if (!context) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-  }
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
 
   len = sizeof(addr);
   err = uv_tcp_getpeername(&context->any.tcp, (struct sockaddr *)&addr, &len);
@@ -1498,14 +1494,14 @@ mrb_uv_tcp_getpeername(mrb_state *mrb, mrb_value self)
   switch (addr.ss_family) {
     case AF_INET:
     case AF_INET6:
-      _class_uv = mrb_class_get(mrb, "UV");
+      _class_uv = mrb_module_get(mrb, "UV");
       if (addr.ss_family == AF_INET) {
-        _class_uv_ipaddr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
+        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
         data = Data_Wrap_Struct(mrb, mrb->object_class,
             &uv_ip4addr_nofree_type, (void *) &addr);
       }
       else {
-        _class_uv_ipaddr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip6Addr")));
+        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
         data = Data_Wrap_Struct(mrb, mrb->object_class,
             &uv_ip6addr_nofree_type, (void *) &addr);
       }
@@ -1525,14 +1521,10 @@ mrb_uv_getsockname(mrb_state *mrb, mrb_value self, int tcp)
   struct RClass* _class_uv;
   struct RClass* _class_uv_ipaddr;
   struct RData *data;
-  mrb_value value_context, value_data, value_result = mrb_nil_value();
+  mrb_value value_data, value_result = mrb_nil_value();
   mrb_uv_context* context = NULL;
 
-  value_context = mrb_iv_get(mrb, self, mrb_intern(mrb, "context"));
-  Data_Get_Struct(mrb, value_context, &uv_context_type, context);
-  if (!context) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-  }
+  Data_Get_Struct(mrb, self, &uv_context_type, context);
 
   len = sizeof(addr);
   if (tcp) {
@@ -1547,14 +1539,14 @@ mrb_uv_getsockname(mrb_state *mrb, mrb_value self, int tcp)
   switch (addr.ss_family) {
     case AF_INET:
     case AF_INET6:
-      _class_uv = mrb_class_get(mrb, "UV");
+      _class_uv = mrb_module_get(mrb, "UV");
       if (addr.ss_family == AF_INET) {
-        _class_uv_ipaddr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip4Addr")));
+        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
         data = Data_Wrap_Struct(mrb, mrb->object_class,
             &uv_ip4addr_nofree_type, (void *) &addr);
       }
       else {
-        _class_uv_ipaddr = mrb_class_ptr(mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern(mrb, "Ip6Addr")));
+        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
         data = Data_Wrap_Struct(mrb, mrb->object_class,
             &uv_ip6addr_nofree_type, (void *) &addr);
       }
