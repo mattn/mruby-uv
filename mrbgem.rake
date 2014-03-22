@@ -66,5 +66,9 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   file "#{dir}/src/mrb_uv.c" => libuv_lib
   spec.cc.include_paths << "#{libuv_dir}/include"
   spec.linker.library_paths << File.dirname(libuv_lib)
-  spec.linker.libraries << ['uv', 'pthread', 'rt', 'm']
+  if `uname`.chomp =~ /darwin/i
+    spec.linker.libraries << ['uv', 'pthread', 'm']
+  else
+    spec.linker.libraries << ['uv', 'pthread', 'rt', 'm']
+  end
 end
