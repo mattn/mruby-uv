@@ -208,9 +208,11 @@ assert_uv('UV::TCP IPv4 server/client') do
 
   s = UV::TCP.new
   s.bind UV::ip4_addr '127.0.0.1', 8888
+  assert_equal '127.0.0.1:8888', s.getsockname.to_s
   s.listen(5) do |x|
     return if x != 0
     c = s.accept
+    assert_equal '127.0.0.1', c.getpeername.to_s[0, 9]
     c.write test_str
     s.close
   end
@@ -237,6 +239,7 @@ assert_uv('UV::TCP IPv6 server/client') do
 
   s = UV::TCP.new
   s.bind6 UV::ip6_addr '::1', 8888
+  assert_equal '::1:8888', s.getsockname.to_s
   s.listen(5) do |x|
     return if x != 0
     c = s.accept
@@ -275,6 +278,7 @@ assert_uv('UV::UDP server/client') do
 
   r6 = UV::UDP.new()
   r6.bind6(UV::ip6_addr('::1', 8888))
+  assert_equal '::1:8888', r6.getsockname.to_s
   r6.recv_start do |data, addr, flags|
     assert_equal test_str, data
     r6.close
@@ -282,6 +286,7 @@ assert_uv('UV::UDP server/client') do
 
   r = UV::UDP.new()
   r.bind(UV::ip4_addr('127.0.0.1', 8888))
+  assert_equal '127.0.0.1:8888', r.getsockname.to_s
   r.recv_start do |data, addr, flags|
     assert_equal test_str, data
     r.close
