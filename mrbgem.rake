@@ -63,7 +63,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
     end
   end
 
-  file "#{dir}/src/mrb_uv.c" => libuv_lib
+  Dir.glob("#{dir}/src/*.c") { |f| file f => libuv_lib }
   spec.cc.include_paths << "#{libuv_dir}/include"
   spec.linker.library_paths << File.dirname(libuv_lib)
   if `uname`.chomp =~ /darwin/i
