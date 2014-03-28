@@ -20,6 +20,7 @@ extern const struct mrb_data_type mrb_uv_ip6addr_nofree_type;
 extern const struct mrb_data_type mrb_uv_loop_type;
 
 void mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV);
+void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV);
 
 mrb_value mrb_uv_data_get(mrb_state *mrb, mrb_value self);
 mrb_value mrb_uv_data_set(mrb_state *mrb, mrb_value self);
