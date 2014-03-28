@@ -1223,7 +1223,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   mrb_value stdin_pipe;
   mrb_value stdout_pipe;
   mrb_value stderr_pipe;
-  char cwd[PATH_MAX] = {0};
+  char cwd[PATH_MAX];
   size_t cwd_size = sizeof(cwd);
   int i, err;
   uv_stdio_container_t stdio[3];
