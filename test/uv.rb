@@ -332,3 +332,11 @@ assert('UV.loadavg') do
   assert_true avg[1] > 0.0
   assert_true avg[2] > 0.0
 end
+
+assert('UV.version') do
+  assert_true UV.version.kind_of? Fixnum
+end
+
+assert('UV.version_string') do
+  assert_true UV.version_string.kind_of? String
+end
