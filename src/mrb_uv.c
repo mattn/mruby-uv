@@ -156,6 +156,46 @@ mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value
+mrb_uv_loop_alive(mrb_state *mrb, mrb_value self)
+{
+  uv_loop_t* loop;
+  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  return mrb_bool_value(uv_loop_alive(loop));
+}
+
+static mrb_value
+mrb_uv_stop(mrb_state *mrb, mrb_value self)
+{
+  uv_loop_t *loop;
+  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  return uv_stop(loop), self;
+}
+
+static mrb_value
+mrb_uv_update_time(mrb_state *mrb, mrb_value self)
+{
+  uv_loop_t *loop;
+  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  return uv_update_time(loop), self;
+}
+
+static mrb_value
+mrb_uv_backend_fd(mrb_state *mrb, mrb_value self)
+{
+  uv_loop_t *loop;
+  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  return mrb_fixnum_value(uv_backend_fd(loop));
+}
+
+static mrb_value
+mrb_uv_backend_timeout(mrb_state *mrb, mrb_value self)
+{
+  uv_loop_t *loop;
+  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  return mrb_fixnum_value(uv_backend_timeout(loop));
+}
+
 /*********************************************************
  * UV::Ip4Addr
  *********************************************************/
@@ -1334,6 +1374,11 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_delete, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "alive?", mrb_uv_loop_alive, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "stop", mrb_uv_stop, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "update_time", mrb_uv_update_time, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "backend_fd", mrb_uv_backend_fd, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "backend_timeout", mrb_uv_backend_timeout, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_addrinfo = mrb_define_class_under(mrb, _class_uv, "Addrinfo", mrb->object_class);
