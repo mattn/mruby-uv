@@ -340,3 +340,11 @@ end
 assert('UV.version_string') do
   assert_true UV.version_string.kind_of? String
 end
+
+assert('UV.exepath') do
+  assert_equal 'mrbtest', UV.exepath[-7, 7]
+end
+
+assert('UV.cwd') do
+  assert_true UV.cwd.kind_of? String
+end

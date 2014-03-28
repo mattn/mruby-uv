@@ -610,7 +610,7 @@ static mrb_value
 mrb_uv_exepath(mrb_state *mrb, mrb_value self)
 {
   char buf[PATH_MAX];
-  size_t s;
+  size_t s = sizeof(buf);
   int err = uv_exepath(buf, &s);
   if (err < 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
@@ -622,7 +622,7 @@ static mrb_value
 mrb_uv_cwd(mrb_state *mrb, mrb_value self)
 {
   char buf[PATH_MAX];
-  size_t s;
+  size_t s = sizeof(buf);
   int err = uv_cwd(buf, &s);
   if (err < 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
