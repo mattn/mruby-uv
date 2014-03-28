@@ -1281,12 +1281,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "guess_handle", mrb_uv_guess_handle, MRB_ARGS_REQ(1));
 
-  // TODO
-  //mrb_define_module_function(mrb, _class_uv, "dlopen", mrb_uv_dlopen, ARGS_NONE());
-  //mrb_define_module_function(mrb, _class_uv, "dlclose", mrb_uv_dlclose, ARGS_NONE());
-  // TODO: uv_dlsym
-  // TODO: uv_dlerror
-
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
   mrb_define_const(mrb, _class_uv, "UV_RUN_NOWAIT", mrb_fixnum_value(UV_RUN_NOWAIT));
@@ -1429,6 +1423,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   mrb_mruby_uv_gem_init_handle(mrb, _class_uv);
   mrb_mruby_uv_gem_init_thread(mrb, _class_uv);
+  mrb_mruby_uv_gem_init_dl(mrb, _class_uv);
 
   uv_gc_table = mrb_ary_new(mrb);
   mrb_define_const(mrb, _class_uv, "$GC", uv_gc_table);
