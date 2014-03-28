@@ -1736,6 +1736,22 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value
+mrb_uv_readable(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle* ctx;
+  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, ctx);
+  return mrb_bool_value(uv_is_readable((uv_stream_t*)&ctx->handle));
+}
+
+static mrb_value
+mrb_uv_writable(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle* ctx;
+  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, ctx);
+  return mrb_bool_value(uv_is_writable((uv_stream_t*)&ctx->handle));
+}
+
 void
 mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
 {
@@ -1770,6 +1786,8 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_stream, "shutdown", mrb_uv_shutdown, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_stream, "read_start", mrb_uv_read_start, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_stream, "read_stop", mrb_uv_read_stop, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stream, "readable?", mrb_uv_readable, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stream, "writable?", mrb_uv_writable, MRB_ARGS_NONE());
 
   _class_uv_tty = mrb_define_class_under(mrb, UV, "TTY", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_tty, MRB_TT_DATA);
