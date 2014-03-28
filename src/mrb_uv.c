@@ -196,6 +196,18 @@ mrb_uv_backend_timeout(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(uv_backend_timeout(loop));
 }
 
+static mrb_value
+mrb_uv_loadavg(mrb_state *mrb, mrb_value self)
+{
+  mrb_value ret = mrb_ary_new_capa(mrb, 3);
+  double avg[3];
+  uv_loadavg(avg);
+  mrb_ary_push(mrb, ret, mrb_float_value(mrb, avg[0]));
+  mrb_ary_push(mrb, ret, mrb_float_value(mrb, avg[1]));
+  mrb_ary_push(mrb, ret, mrb_float_value(mrb, avg[2]));
+  return ret;
+}
+
 /*********************************************************
  * UV::Ip4Addr
  *********************************************************/
@@ -1356,6 +1368,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "exepath", mrb_uv_exepath, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "cwd", mrb_uv_cwd, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "chdir", mrb_uv_chdir, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, _class_uv, "loadavg", mrb_uv_loadavg, MRB_ARGS_NONE());
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));

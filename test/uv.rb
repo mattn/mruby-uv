@@ -324,3 +324,11 @@ assert('UV::Semaphore') do
   sem.destroy
   assert_true sem.destroyed?
 end
+
+assert('UV.loadavg') do
+  avg = UV.loadavg
+  assert_equal 3, avg.length
+  assert_true avg[0] > 0.0
+  assert_true avg[1] > 0.0
+  assert_true avg[2] > 0.0
+end
