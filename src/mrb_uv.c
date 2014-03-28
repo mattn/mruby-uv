@@ -643,6 +643,19 @@ mrb_uv_chdir(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static mrb_value
+mrb_uv_kill(mrb_state *mrb, mrb_value self)
+{
+  mrb_int pid, sig;
+  int err;
+  mrb_get_args(mrb, "ii", &pid, &sig);
+  err = uv_kill(pid, sig);
+  if(err < 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+  }
+  return self;
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -672,6 +685,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "cwd", mrb_uv_cwd, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "chdir", mrb_uv_chdir, MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv, "loadavg", mrb_uv_loadavg, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "kill", mrb_uv_kill, MRB_ARGS_REQ(2));
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
@@ -732,7 +746,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_check_init
   uv_check_start
   uv_check_stop
-  uv_kill
   uv_queue_work
   uv_cancel
   uv_setup_args
