@@ -691,6 +691,10 @@ _uv_fs_cb(uv_fs_t* req)
        args[0] = mrb_fixnum_value(req->result);
        mrb_yield_argv(mrb, proc, 1, args);
     }
+    if (req->fs_type == UV_FS_CLOSE) {
+      mrb_free(mrb, context);
+      DATA_PTR(context->instance) = NULL;
+    }
     break;
   }
 leave:
