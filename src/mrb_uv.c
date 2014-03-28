@@ -743,12 +743,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_free_cpu_info
   uv_interface_addresses
   uv_free_interface_addresses
-  uv_loadavg
   uv_inet_ntop
   uv_inet_pton
-  uv_exepath
-  uv_cwd
-  uv_chdir
   uv_get_free_memory
   uv_get_total_memory
   uv_hrtime
