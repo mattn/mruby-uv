@@ -705,7 +705,9 @@ leave:
 static mrb_value
 mrb_uv_fs_fd(mrb_state *mrb, mrb_value self)
 {
-  return mrb_fixnum_value((intptr_t)DATA_PTR(self));
+  mrb_uv_file *ctx;
+  Data_Get_Struct(mrb, self, &mrb_uv_file_type, ctx);
+  return mrb_fixnum_value(ctx->fd);
 }
 
 static mrb_value
