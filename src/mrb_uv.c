@@ -1255,6 +1255,43 @@ mrb_uv_guess_handle(mrb_state *mrb, mrb_value self)
   }
 }
 
+static mrb_value
+mrb_uv_exepath(mrb_state *mrb, mrb_value self)
+{
+  char buf[PATH_MAX];
+  size_t s;
+  int err = uv_exepath(buf, &s);
+  if (err < 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+  }
+  return mrb_str_new(mrb, buf, s);
+}
+
+static mrb_value
+mrb_uv_cwd(mrb_state *mrb, mrb_value self)
+{
+  char buf[PATH_MAX];
+  size_t s;
+  int err = uv_cwd(buf, &s);
+  if (err < 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+  }
+  return mrb_str_new(mrb, buf, s);
+}
+
+static mrb_value
+mrb_uv_chdir(mrb_state *mrb, mrb_value self)
+{
+  int err;
+  char *z;
+  mrb_get_args(mrb, "z", &z);
+  err = uv_chdir(z);
+  if (err < 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+  }
+  return self;
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -1280,6 +1317,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "guess_handle", mrb_uv_guess_handle, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, _class_uv, "exepath", mrb_uv_exepath, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "cwd", mrb_uv_cwd, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "chdir", mrb_uv_chdir, MRB_ARGS_REQ(1));
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
