@@ -16,44 +16,6 @@
 #define mrb_module_get mrb_class_get
 #endif
 
-#define OBJECT_GET(mrb, instance, name) \
-  mrb_iv_get(mrb, instance, mrb_intern_lit(mrb, name))
-
-#define OBJECT_SET(mrb, instance, name, value) \
-  mrb_iv_set(mrb, instance, mrb_intern_lit(mrb, name), value)
-
-#define OBJECT_REMOVE(mrb, instance, name) \
-  mrb_iv_remove(mrb, instance, mrb_intern_lit(mrb, name))
-
-mrb_uv_context*
-mrb_uv_context_alloc(mrb_state* mrb)
-{
-  mrb_uv_context* context = (mrb_uv_context*) mrb_malloc(mrb, sizeof(mrb_uv_context));
-  if (!context) return NULL;
-  memset(context, 0, sizeof(mrb_uv_context));
-  context->loop = uv_default_loop();
-  context->mrb = mrb;
-  return context;
-}
-
-static void
-uv_context_free(mrb_state *mrb, void *p)
-{
-  mrb_uv_context* context = (mrb_uv_context*) p;
-  if (context) {
-    OBJECT_REMOVE(mrb, context->instance, "read_cb");
-    OBJECT_REMOVE(mrb, context->instance, "write_cb");
-    context->instance = mrb_nil_value();
-    context->mrb = NULL;
-    context->loop = NULL;
-  }
-  mrb_free(mrb, p);
-}
-
-const struct mrb_data_type mrb_uv_context_type = {
-  "uv_context", uv_context_free,
-};
-
 /*********************************************************
  * main
  *********************************************************/
@@ -65,9 +27,7 @@ mrb_uv_gc(mrb_state *mrb, mrb_value self)
   mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "$GC"));
   int i, l = RARRAY_LEN(uv_gc_table);
   for (i = 0; i < l; i++) {
-    mrb_uv_context* context = NULL;
-    Data_Get_Struct(mrb, mrb_ary_entry(uv_gc_table, i), &mrb_uv_context_type, context);
-    if (!context || context->mrb == NULL) {
+    if (DATA_PTR(mrb_ary_entry(uv_gc_table, i)) == NULL) {
       mrb_funcall(mrb, uv_gc_table, "delete_at", 1, mrb_fixnum_value(i));
       i--;
       l--;
@@ -126,33 +86,43 @@ mrb_uv_data_set(mrb_state *mrb, mrb_value self)
 /*********************************************************
  * UV::Loop
  *********************************************************/
+static void
+mrb_uv_loop_free(mrb_state *mrb, void *p)
+{
+  if (p || p != uv_default_loop()) {
+    uv_loop_close((uv_loop_t*)p);
+    mrb_free(mrb, p);
+  }
+}
+
+const struct mrb_data_type mrb_uv_loop_type = {
+  "uv_loop", mrb_uv_loop_free
+};
+
 static mrb_value
 mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
 {
   mrb_value c;
-  mrb_uv_context* context = NULL;
 
   struct RClass* _class_uv = mrb_module_get(mrb, "UV");
   struct RClass* _class_uv_loop = mrb_class_get_under(mrb, _class_uv, "Loop");
   c = mrb_obj_new(mrb, _class_uv_loop, 0, NULL);
 
-  context = mrb_uv_context_alloc(mrb);
-  context->instance = c;
-  context->loop = uv_default_loop();
-  DATA_PTR(self) = context;
-  DATA_TYPE(self) = &mrb_uv_context_type;
+  DATA_PTR(self) = uv_default_loop();
+  DATA_TYPE(self) = &mrb_uv_loop_type;
   return c;
 }
 
 static mrb_value
 mrb_uv_loop_init(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = mrb_uv_context_alloc(mrb);
-  context->instance = self;
-  context->loop = uv_loop_new();
-  context->loop->data = context;
-  DATA_PTR(self) = context;
-  DATA_TYPE(self) = &mrb_uv_context_type;
+  uv_loop_t *l = (uv_loop_t*)mrb_malloc(mrb, sizeof(uv_loop_t));
+  int err = uv_loop_init(l);
+  if(err < 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+  }
+  DATA_PTR(self) = l;
+  DATA_TYPE(self) = &mrb_uv_loop_type;
   return self;
 }
 
@@ -160,13 +130,13 @@ static mrb_value
 mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_uv_context* context = NULL;
+  uv_loop_t* loop = NULL;
   mrb_int arg_mode = UV_RUN_DEFAULT;
 
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
+  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
 
   mrb_get_args(mrb, "|i", &arg_mode);
-  err = uv_run(context->loop, arg_mode);
+  err = uv_run(loop, arg_mode);
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
@@ -176,75 +146,85 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = NULL;
+  uv_loop_t* loop = NULL;
 
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
+  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
 
-  uv_loop_delete(context->loop);
+  uv_loop_close(loop);
+  mrb_free(mrb, loop);
+  DATA_PTR(self) = NULL;
   return mrb_nil_value();
 }
 
 /*********************************************************
  * UV::Mutex
  *********************************************************/
+void
+mrb_uv_mutex_free(mrb_state *mrb, void *p)
+{
+  if (p) {
+    uv_mutex_destroy((uv_mutex_t*)p);
+    mrb_free(mrb, p);
+  }
+}
+
+static const struct mrb_data_type mrb_uv_mutex_type = {
+  "uv_mutex", mrb_uv_mutex_free
+};
+
+static uv_mutex_t*
+get_mutex(mrb_state *mrb, mrb_value v)
+{
+  uv_mutex_t *ret;
+  if(!DATA_PTR(v)) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "already destroyed mutex");
+  }
+  Data_Get_Struct(mrb, v, &mrb_uv_mutex_type, ret);
+  return ret;
+}
+
 static mrb_value
 mrb_uv_mutex_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_context* context = NULL;
-  context = mrb_uv_context_alloc(mrb);
-  context->instance = self;
-  context->loop = uv_default_loop();
-  err = uv_mutex_init(&context->any.mutex);
-  if (err != 0) {
+  uv_mutex_t *m = (uv_mutex_t*)mrb_malloc(mrb, sizeof(uv_mutex_t));
+  int err = uv_mutex_init(m);
+  if (err < 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
-  DATA_PTR(self) = context;
-  DATA_TYPE(self) = &mrb_uv_context_type;
+  DATA_PTR(self) = m;
+  DATA_TYPE(self) = &mrb_uv_mutex_type;
   return self;
 }
 
 static mrb_value
 mrb_uv_mutex_lock(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
-
-  uv_mutex_lock(&context->any.mutex);
+  uv_mutex_t *m = get_mutex(mrb, self);
+  uv_mutex_lock(m);
   return mrb_nil_value();
 }
 
 static mrb_value
 mrb_uv_mutex_unlock(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
-
-  uv_mutex_unlock(&context->any.mutex);
+  uv_mutex_t *m = get_mutex(mrb, self);
+  uv_mutex_unlock(m);
   return mrb_nil_value();
 }
 
 static mrb_value
 mrb_uv_mutex_trylock(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
-
-  return mrb_fixnum_value(uv_mutex_trylock(&context->any.mutex));
+  return mrb_bool_value(uv_mutex_trylock(get_mutex(mrb, self)));
 }
 
 static mrb_value
 mrb_uv_mutex_destroy(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
-
-  uv_mutex_destroy(&context->any.mutex);
-  // TODO: mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_nil_value());
+  uv_mutex_t *m = get_mutex(mrb, self);
+  uv_mutex_destroy(m);
+  mrb_free(mrb, m);
+  DATA_PTR(self) = NULL;
   return mrb_nil_value();
 }
 
@@ -628,10 +608,32 @@ mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
 /*********************************************************
  * UV::FS
  *********************************************************/
+typedef struct {
+  mrb_state* mrb;
+  mrb_value instance;
+  uv_file fd;
+} mrb_uv_file;
+
+static void
+mrb_uv_fs_free(mrb_state *mrb, void *p)
+{
+  mrb_uv_file *ctx = (mrb_uv_file*)p;
+  if (ctx) {
+    uv_fs_t req;
+    req.data = ctx;
+    uv_fs_close(uv_default_loop(), &req, ctx->fd, NULL);
+    mrb_free(mrb, ctx);
+  }
+}
+
+static const struct mrb_data_type mrb_uv_file_type = {
+  "uv_file", mrb_uv_fs_free
+};
+
 static void
 _uv_fs_open_cb(uv_fs_t* req)
 {
-  mrb_uv_context* context = (mrb_uv_context*) req->data;
+  mrb_uv_file *context = (mrb_uv_file*)req->data;
   mrb_state* mrb = context->mrb;
   mrb_value proc;
   if (req->result < 0) {
@@ -640,7 +642,7 @@ _uv_fs_open_cb(uv_fs_t* req)
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "fs_cb"));
   if (!mrb_nil_p(proc)) {
     mrb_value args[1];
-    context->any.fs = req->result;
+    context->fd = req->result;
     args[0] = mrb_fixnum_value(req->result);
     mrb_yield_argv(mrb, proc, 1, args);
   }
@@ -651,7 +653,7 @@ _uv_fs_open_cb(uv_fs_t* req)
 static void
 _uv_fs_cb(uv_fs_t* req)
 {
-  mrb_uv_context* context = (mrb_uv_context*) req->data;
+  mrb_uv_file* context = (mrb_uv_file*) req->data;
   mrb_state* mrb = context->mrb;
   mrb_value proc;
   uv_fs_t close_req;
@@ -681,7 +683,7 @@ _uv_fs_cb(uv_fs_t* req)
     break;
   default:
     if (req->fs_type == UV_FS_READ && req->result == 0) {
-      uv_fs_close(context->loop, &close_req, context->any.fs, NULL);
+      uv_fs_close(uv_default_loop(), &close_req, context->fd, NULL);
       goto leave;
     }
     if (!mrb_nil_p(proc)) {
@@ -699,10 +701,7 @@ leave:
 static mrb_value
 mrb_uv_fs_fd(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = NULL;
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
-
-  return mrb_fixnum_value(context->any.fs);
+  return mrb_fixnum_value((intptr_t)DATA_PTR(self));
 }
 
 static mrb_value
@@ -715,7 +714,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   struct RClass* _class_uv;
   struct RClass* _class_uv_fs;
   mrb_value c;
-  mrb_uv_context* context;
+  mrb_uv_file* context;
   uv_fs_t* req;
   int ai;
   mrb_value uv_gc_table;
@@ -726,25 +725,24 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   _class_uv_fs = mrb_class_get_under(mrb, _class_uv, "FS");
   c = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, _class_uv_fs));
 
-  context = mrb_uv_context_alloc(mrb);
+  context = (mrb_uv_file*)mrb_malloc(mrb, sizeof(mrb_uv_file));
+  context->mrb = mrb;
+  context->instance = c;
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   }
   mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "fs_cb"), b);
 
-  context->instance = c;
-  context->loop = uv_default_loop();
-
   DATA_PTR(c) = context;
-  DATA_TYPE(c) = &mrb_uv_context_type;
+  DATA_TYPE(c) = &mrb_uv_file_type;
 
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
-  context->any.fs = uv_fs_open(uv_default_loop(), req, RSTRING_PTR(arg_filename), arg_flags, arg_mode, fs_cb);
-  if (context->any.fs < 0) {
+  context->fd = uv_fs_open(uv_default_loop(), req, RSTRING_PTR(arg_filename), arg_flags, arg_mode, fs_cb);
+  if (context->fd < 0) {
     mrb_free(mrb, req);
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(context->any.fs));
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(context->fd));
   }
 
   ai = mrb_gc_arena_save(mrb);
@@ -757,12 +755,12 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = NULL;
+  mrb_uv_file* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   uv_fs_t* req;
 
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
+  Data_Get_Struct(mrb, self, &mrb_uv_file_type, context);
 
   mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
@@ -773,7 +771,7 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
-  uv_fs_close(uv_default_loop(), req, context->any.fs, fs_cb);
+  uv_fs_close(uv_default_loop(), req, context->fd, fs_cb);
   return mrb_nil_value();
 }
 
@@ -783,14 +781,14 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   mrb_value arg_data = mrb_nil_value();
   mrb_int arg_length = -1;
   mrb_int arg_offset = 0;
-  mrb_uv_context* context = NULL;
+  mrb_uv_file* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   uv_fs_t* req;
   int r;
   uv_buf_t buf;
 
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
+  Data_Get_Struct(mrb, self, &mrb_uv_file_type, context);
 
   mrb_get_args(mrb, "&S|ii", &b, &arg_data, &arg_offset, &arg_length);
 
@@ -808,7 +806,7 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
     arg_offset = 0;
   buf.base = RSTRING_PTR(arg_data);
   buf.len = arg_length;
-  r = uv_fs_write(uv_default_loop(), req, context->any.fs, &buf, 1, arg_offset, fs_cb);
+  r = uv_fs_write(uv_default_loop(), req, context->fd, &buf, 1, arg_offset, fs_cb);
   if (r < 0) {
     mrb_free(mrb, req);
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(r));
@@ -821,7 +819,7 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_length = BUFSIZ;
   mrb_int arg_offset = 0;
-  mrb_uv_context* context = NULL;
+  mrb_uv_file* context = NULL;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   uv_buf_t buf;
@@ -830,7 +828,7 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   int ai;
   mrb_value str;
 
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
+  Data_Get_Struct(mrb, self, &mrb_uv_file_type, context);
 
   mrb_get_args(mrb, "&|i|i", &b, &arg_length, &arg_offset);
 
@@ -847,7 +845,7 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   }
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
-  len = uv_fs_read(uv_default_loop(), req, context->any.fs, &buf, 1, arg_offset, fs_cb);
+  len = uv_fs_read(uv_default_loop(), req, context->fd, &buf, 1, arg_offset, fs_cb);
   if (len < 0) {
     mrb_free(mrb, buf.base);
     mrb_free(mrb, req);
@@ -867,17 +865,16 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
   mrb_value arg_path;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -900,17 +897,16 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
   mrb_int arg_mode = 0755;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&S|i", &b, &arg_path, &arg_mode);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -932,17 +928,16 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
   mrb_value arg_path;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -965,17 +960,16 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
   mrb_int arg_flags;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&Si", &b, &arg_path, &arg_flags);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -997,17 +991,16 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
   mrb_value arg_path;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -1029,17 +1022,16 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
   mrb_int arg_file;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&i", &b, &arg_file);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -1061,17 +1053,16 @@ mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
   mrb_value arg_path;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&S", &b, &arg_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -1093,17 +1084,16 @@ mrb_uv_fs_rename(mrb_state *mrb, mrb_value self)
   mrb_value arg_path, arg_new_path;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&SS", &b, &arg_path, &arg_new_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -1125,17 +1115,16 @@ mrb_uv_fs_fsync(mrb_state *mrb, mrb_value self)
   mrb_int arg_file;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&i", &b, &arg_file);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -1157,17 +1146,16 @@ mrb_uv_fs_fdatasync(mrb_state *mrb, mrb_value self)
   mrb_int arg_file;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&i", &b, &arg_file);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -1189,17 +1177,16 @@ mrb_uv_fs_ftruncate(mrb_state *mrb, mrb_value self)
   mrb_int arg_file, arg_offset;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&ii", &b, &arg_file, &arg_offset);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -1221,7 +1208,7 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
   mrb_int arg_outfd, arg_infd, arg_offset, arg_length;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   // TODO: accept UV::FS object also.
@@ -1229,10 +1216,9 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -1255,17 +1241,16 @@ mrb_uv_fs_chmod(mrb_state *mrb, mrb_value self)
   mrb_int arg_mode;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&Si", &b, &arg_path, &arg_mode);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -1287,17 +1272,16 @@ mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
   mrb_value arg_path, arg_new_path;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_context context;
+  static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&SS", &b, &arg_path, &arg_new_path);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
-    memset(&context, 0, sizeof(mrb_uv_context));
+    memset(&context, 0, sizeof(mrb_uv_file));
     context.mrb = mrb;
     context.instance = self;
-    context.loop = uv_default_loop();
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
@@ -1315,10 +1299,28 @@ mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
 /*********************************************************
  * UV::Thread
  *********************************************************/
+typedef struct {
+  mrb_state *mrb;
+  mrb_value instance;
+  uv_thread_t thread;
+} mrb_uv_thread;
+
+static void
+mrb_uv_thread_free(mrb_state *mrb, void *p)
+{
+  if (p) {
+    mrb_free(mrb, p);
+  }
+}
+
+static const struct mrb_data_type mrb_uv_thread_type = {
+  "uv_thread", mrb_uv_thread_free
+};
+
 static void
 _uv_thread_proc(void *arg)
 {
-  mrb_uv_context* context = (mrb_uv_context*) arg;
+  mrb_uv_thread* context = (mrb_uv_thread*) arg;
   mrb_state* mrb = context->mrb;
   mrb_value proc, thread_arg;
   if (!mrb) return;
@@ -1337,20 +1339,19 @@ mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
   int err;
   mrb_value thread_arg = mrb_nil_value();
   mrb_value b = mrb_nil_value();
-  mrb_uv_context* context = NULL;
+  mrb_uv_thread* context = NULL;
 
   mrb_get_args(mrb, "&|o", &b, &thread_arg);
 
-  context = mrb_uv_context_alloc(mrb);
+  context = (mrb_uv_thread*)mrb_malloc(mrb, sizeof(mrb_uv_thread));
   context->instance = self;
-  context->loop = uv_default_loop();
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "thread_proc"), b);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "thread_arg"), thread_arg);
   DATA_PTR(self) = context;
-  DATA_TYPE(self) = &mrb_uv_context_type;
+  DATA_TYPE(self) = &mrb_uv_thread_type;
 
-  err = uv_thread_create(&context->any.thread, _uv_thread_proc, context);
+  err = uv_thread_create(&context->thread, _uv_thread_proc, context);
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
@@ -1360,11 +1361,11 @@ mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_thread_join(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = NULL;
+  mrb_uv_thread* context = NULL;
 
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
+  Data_Get_Struct(mrb, self, &mrb_uv_thread_type, context);
 
-  uv_thread_join(&context->any.thread);
+  uv_thread_join(&context->thread);
   return mrb_nil_value();
 }
 
@@ -1377,48 +1378,61 @@ mrb_uv_thread_self(mrb_state *mrb, mrb_value self)
 /*********************************************************
  * UV::Barrier
  *********************************************************/
+static void
+mrb_uv_barrier_free(mrb_state *mrb, void *p)
+{
+  if(p) {
+    uv_barrier_destroy((uv_barrier_t*)p);
+    mrb_free(mrb, p);
+  }
+}
+
+static const struct mrb_data_type barrier_type = {
+  "uv_barrier", mrb_uv_barrier_free
+};
+
+static uv_barrier_t*
+get_uv_barrier(mrb_state *mrb, mrb_value v)
+{
+  uv_barrier_t *ret;
+  if(!DATA_PTR(v)) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "already destroyed semaphore");
+  }
+  Data_Get_Struct(mrb, v, &barrier_type, ret);
+  return ret;
+}
+
 static mrb_value
 mrb_uv_barrier_init(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_int arg_count;
-  mrb_uv_context* context = NULL;
+  uv_barrier_t* context = NULL;
 
   mrb_get_args(mrb, "i", &arg_count);
 
-  context = mrb_uv_context_alloc(mrb);
-  context->instance = self;
-  context->loop = uv_default_loop();
+  context = (uv_barrier_t*)mrb_malloc(mrb, sizeof(uv_barrier_t));
 
-  err = uv_barrier_init(&context->any.barrier, arg_count);
+  err = uv_barrier_init(context, arg_count);
   if (err != 0) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
   DATA_PTR(self) = context;
-  DATA_TYPE(self) = &mrb_uv_context_type;
+  DATA_TYPE(self) = &barrier_type;
   return self;
 }
 
 static mrb_value
 mrb_uv_barrier_wait(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
-
-  uv_barrier_wait(&context->any.barrier);
+  uv_barrier_wait(get_uv_barrier(mrb, self));
   return mrb_nil_value();
 }
 
 static mrb_value
 mrb_uv_barrier_destroy(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_context* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_context_type, context);
-
-  uv_barrier_destroy(&context->any.barrier);
-  // TODO: mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "context"), mrb_nil_value());
+  uv_barrier_destroy(get_uv_barrier(mrb, self));
   return mrb_nil_value();
 }
 
