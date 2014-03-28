@@ -1238,10 +1238,6 @@ mrb_uv_guess_handle(mrb_state *mrb, mrb_value self)
 
   uv_handle_type h = uv_guess_handle(fd);
 
-  if(h < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(h));
-  }
-
   switch(h) {
   case UV_FILE: return mrb_symbol_value(mrb_intern_lit(mrb, "file"));
 
