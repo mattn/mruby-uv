@@ -101,6 +101,7 @@ assert_uv('UV::Pipe') do
       c = s.accept()
       c.write "helloworld\r\n"
       c.close()
+      s.close
     end
 
     client = UV::Pipe.new(0)
