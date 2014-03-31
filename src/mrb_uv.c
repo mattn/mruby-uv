@@ -682,7 +682,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_addrinfo;
   struct RClass* _class_uv_ip4addr;
   struct RClass* _class_uv_ip6addr;
-  struct RClass* _class_uv_fs;
   mrb_value uv_gc_table;
 
   _class_uv = mrb_define_module(mrb, "UV");
