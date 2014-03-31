@@ -171,6 +171,7 @@ assert_uv('UV::FS::readdir') do
 end
 
 assert_uv('UV::Signal') do
+  skip if UV::IS_WINDOWS
   s = UV::Signal.new
   s.start(UV::Signal::SIGINT) do |x|
     assert_equal UV::Signal::SIGINT, x
@@ -313,9 +314,9 @@ end
 assert('UV.loadavg') do
   avg = UV.loadavg
   assert_equal 3, avg.length
-  assert_true avg[0] > 0.0
-  assert_true avg[1] > 0.0
-  assert_true avg[2] > 0.0
+  assert_true avg[0] >= 0.0
+  assert_true avg[1] >= 0.0
+  assert_true avg[2] >= 0.0
 end
 
 assert('UV.version') do
@@ -327,7 +328,11 @@ assert('UV.version_string') do
 end
 
 assert('UV.exepath') do
-  assert_equal 'mrbtest', UV.exepath[-7, 7]
+  if UV::IS_WINDOWS
+    assert_equal 'mrbtest.exe', UV.exepath[-11, 11]
+  else
+    assert_equal 'mrbtest', UV.exepath[-7, 7]
+  end
 end
 
 assert('UV.cwd') do
