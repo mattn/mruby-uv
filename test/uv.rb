@@ -11,6 +11,12 @@ def remove_uv_test_tmpfile
   UV::FS::rmdir 'foo-bar' rescue nil
 end
 
+assert('UV.guess_handle') do
+  assert_equal :tty, UV.guess_handle(0)
+  assert_equal :tty, UV.guess_handle(1)
+  assert_equal :tty, UV.guess_handle(2)
+end
+
 assert_uv('UV::getaddrinfo') do
   UV::getaddrinfo("www.google.com", "http") do |x, a|
     next unless a
@@ -301,4 +307,44 @@ assert_uv('UV::UDP server/client') do
   c.send(test_str, UV::ip4_addr('127.0.0.1', 8888)) do |x|
     c.close
   end
+end
+
+assert('UV::Semaphore') do
+  sem = UV::Semaphore.new 3
+  sem.wait
+  sem.wait
+  assert_true sem.try_wait
+  assert_false sem.try_wait
+
+  sem.post
+  assert_true sem.try_wait
+  assert_false sem.try_wait
+
+  assert_false sem.destroyed?
+  sem.destroy
+  assert_true sem.destroyed?
+end
+
+assert('UV.loadavg') do
+  avg = UV.loadavg
+  assert_equal 3, avg.length
+  assert_true avg[0] > 0.0
+  assert_true avg[1] > 0.0
+  assert_true avg[2] > 0.0
+end
+
+assert('UV.version') do
+  assert_true UV.version.kind_of? Fixnum
+end
+
+assert('UV.version_string') do
+  assert_true UV.version_string.kind_of? String
+end
+
+assert('UV.exepath') do
+  assert_equal 'mrbtest', UV.exepath[-7, 7]
+end
+
+assert('UV.cwd') do
+  assert_true UV.cwd.kind_of? String
 end

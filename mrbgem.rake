@@ -52,9 +52,9 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   file libuv_lib => header do |t|
     Dir.chdir(libuv_dir) do
       e = {
-        'CC' => "#{spec.build.cc.command} #{spec.build.cc.flags.join(' ')}",
-        'CXX' => "#{spec.build.cxx.command} #{spec.build.cxx.flags.join(' ')}",
-        'LD' => "#{spec.build.linker.command} #{spec.build.linker.flags.join(' ')}",
+        'CC' => spec.build.cc.command,
+        'CXX' => spec.build.cxx.command,
+        'LD' => spec.build.linker.command,
         'AR' => spec.build.archiver.command }
       _pp 'autotools', libuv_dir
       run_command e, './autogen.sh' if File.exists? 'autogen.sh'
@@ -63,8 +63,12 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
     end
   end
 
-  file "#{dir}/src/mrb_uv.c" => libuv_lib
+  Dir.glob("#{dir}/src/*.c") { |f| file f => libuv_lib }
   spec.cc.include_paths << "#{libuv_dir}/include"
   spec.linker.library_paths << File.dirname(libuv_lib)
-  spec.linker.libraries << ['uv', 'pthread', 'rt', 'm']
+  if `uname`.chomp =~ /darwin/i
+    spec.linker.libraries << ['uv', 'pthread', 'm']
+  else
+    spec.linker.libraries << ['uv', 'pthread', 'rt', 'm']
+  end
 end
