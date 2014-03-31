@@ -2,8 +2,8 @@
 #include <signal.h>
 
 static mrb_value raise_signal(mrb_state* mrb, mrb_value self) {
-  (void)self;
   mrb_int sig;
+  (void)self;
   mrb_get_args(mrb, "i", &sig);
   return mrb_fixnum_value(raise(sig));
 }
