@@ -64,8 +64,9 @@ static mrb_value
 mrb_f_uv_dlopen(mrb_state *mrb, mrb_value self)
 {
   char *z;
+  mrb_value ret;
   mrb_get_args(mrb, "z", &z);
-  mrb_value ret = mrb_uv_dlopen(mrb, z);
+  ret = mrb_uv_dlopen(mrb, z);
   DATA_TYPE(self) = DATA_TYPE(ret);
   DATA_PTR(self) = DATA_PTR(ret);
   DATA_TYPE(ret) = NULL;
