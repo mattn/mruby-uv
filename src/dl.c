@@ -1,4 +1,5 @@
 #include "mrb_uv.h"
+#include "mruby/uv.h"
 
 
 static void
