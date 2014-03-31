@@ -589,9 +589,10 @@ static mrb_value
 mrb_uv_guess_handle(mrb_state *mrb, mrb_value self)
 {
   mrb_int fd;
+  uv_handle_type h;
   mrb_get_args(mrb, "i", &fd);
 
-  uv_handle_type h = uv_guess_handle(fd);
+  h = uv_guess_handle(fd);
 
   switch(h) {
   case UV_FILE: return mrb_symbol_value(mrb_intern_lit(mrb, "file"));
