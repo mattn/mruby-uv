@@ -103,15 +103,15 @@ assert_uv('UV::Pipe') do
       c.close()
     end
 
-    c = UV::Pipe.new(0)
-    c.connect('\\\\.\\pipe\\mruby-uv') do |x|
+    client = UV::Pipe.new(0)
+    client.connect('\\\\.\\pipe\\mruby-uv') do |x|
       if x == 0
-        c.read_start do |b|
+        client.read_start do |b|
           assert_equal "helloworld\r\n", b.to_s
           client.close
         end
       else
-        c.close
+        client.close
       end
     end
   else
@@ -133,7 +133,7 @@ assert_uv('UV::Pipe') do
           client.close
         end
       else
-        c.close
+        client.close
       end
     end
   end
