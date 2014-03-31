@@ -1394,14 +1394,12 @@ mrb_uv_timer_again(mrb_state *mrb, mrb_value self)
 }
 
 static void
-_uv_timer_cb(uv_timer_t* timer, int status)
+_uv_timer_cb(uv_timer_t* timer)
 {
-  mrb_value args[1];
   mrb_uv_handle* context = (mrb_uv_handle*) timer->data;
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "timer_cb"));
-  args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(mrb, proc, 1, args);
+  mrb_yield_argv(mrb, proc, 0, NULL);
 }
 
 static mrb_value
