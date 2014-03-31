@@ -890,14 +890,12 @@ mrb_uv_udp_getsockname(mrb_state *mrb, mrb_value self)
  * UV::Prepare
  *********************************************************/
 static void
-_uv_prepare_cb(uv_prepare_t* prepare, int status)
+_uv_prepare_cb(uv_prepare_t* prepare)
 {
-  mrb_value args[1];
   mrb_uv_handle* context = (mrb_uv_handle*) prepare->data;
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "prepare_cb"));
-  args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(mrb, proc, 1, args);
+  mrb_yield_argv(mrb, proc, 0, NULL);
 }
 
 static mrb_value
@@ -966,14 +964,12 @@ mrb_uv_prepare_stop(mrb_state *mrb, mrb_value self)
  * UV::Async
  *********************************************************/
 static void
-_uv_async_cb(uv_async_t* async, int status)
+_uv_async_cb(uv_async_t* async)
 {
-  mrb_value args[1];
   mrb_uv_handle* context = (mrb_uv_handle*) async->data;
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "async_cb"));
-  args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(mrb, proc, 1, args);
+  mrb_yield_argv(mrb, proc, 0, NULL);
 }
 
 static mrb_value
@@ -1052,14 +1048,12 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
 }
 
 static void
-_uv_idle_cb(uv_idle_t* idle, int status)
+_uv_idle_cb(uv_idle_t* idle)
 {
-  mrb_value args[1];
   mrb_uv_handle* context = (mrb_uv_handle*) idle->data;
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "idle_cb"));
-  args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(mrb, proc, 1, args);
+  mrb_yield_argv(mrb, proc, 0, NULL);
 }
 
 static mrb_value
