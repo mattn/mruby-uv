@@ -1186,7 +1186,6 @@ mrb_uv_process_init(mrb_state *mrb, mrb_value self)
   mrb_value arg_opt = mrb_nil_value();
   mrb_value arg_file;
   mrb_value arg_args;
-  mrb_uv_handle* context;
 
   mrb_get_args(mrb, "H", &arg_opt);
   if (mrb_nil_p(arg_opt)) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
@@ -1195,7 +1194,7 @@ mrb_uv_process_init(mrb_state *mrb, mrb_value self)
   arg_args = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "args"));
   if (mrb_type(arg_args) != MRB_TT_ARRAY) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_process_t), self);
+  mrb_uv_handle_alloc(mrb, sizeof(uv_process_t), self);
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "options"), arg_opt);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "stdout_pipe"), mrb_nil_value());
