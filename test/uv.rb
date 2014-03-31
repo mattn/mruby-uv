@@ -28,16 +28,14 @@ end
 assert_uv('UV::Async') do
   async_called = false
   a = UV::Async.new do |async_state|
-    assert_equal 0, async_state
     async_called = true
   end
 
   t = UV::Timer.new
   p = UV::Prepare.new
   repeat_count = 0
-  p.start do |x|
-    t.start(10, 10) do |timer_status|
-      assert_equal 0, timer_status
+  p.start do
+    t.start(10, 10) do
       a.send
       repeat_count += 1
       if repeat_count >= 3
@@ -71,8 +69,7 @@ end
 assert_uv('UV::Idle') do
   i = UV::Idle.new
   idle_count = 0
-  i.start do |x|
-    assert_equal 0, x
+  i.start do
     idle_count += 1
     if idle_count >= 3
       i.close
@@ -84,8 +81,7 @@ assert('UV::Loop') do
   l = UV::Loop.new
   t = UV::Timer.new l
   i = 3
-  t.start(10, 10) do |x|
-    assert_equal 0, x
+  t.start(10, 10) do
     i -= 1
     if i < 0
       t.stop
@@ -101,12 +97,11 @@ assert_uv('UV::Pipe') do
     s = UV::Pipe.new(0)
     s.bind('\\\\.\\pipe\\mruby-uv')
     s.listen(1) do |x|
-      return if x != 0
+      #return if x != 0
       c = s.accept()
       puts "connected"
       t = UV::Timer.new()
-      t.start(10, 10) do |timer_status|
-        assert_equal 0, timer_status
+      t.start(10, 10) do
         puts "helloworld\n"
         begin
           c.write "helloworld\r\n"
@@ -187,8 +182,7 @@ assert_uv('UV::Signal') do
   end
 
   t = UV::Timer.new
-  t.start(10, 0) do |x|
-    assert_equal 0, x
+  t.start(10, 0) do
     raise_signal UV::Signal::SIGINT
     t.close
   end
@@ -198,9 +192,7 @@ assert_uv('UV::TCP IPv4 server/client') do
   test_str = "helloworld\r\n"
 
   t = UV::Timer.new
-  t.start(10, 0) do |x|
-    assert_equal 0, x
-
+  t.start(10, 0) do
     c = UV::TCP.new
     c.connect(UV.ip4_addr('127.0.0.1', 8888)) do |connect_status|
       assert_equal 0, connect_status
@@ -228,9 +220,7 @@ assert_uv('UV::TCP IPv6 server/client') do
   test_str = "helloworl\r\n"
 
   t = UV::Timer.new
-  t.start(10, 0) do |x|
-    assert_equal 0, x
-
+  t.start(10, 0) do
     c = UV::TCP.new
     c.connect6(UV.ip6_addr('::1', 8888)) do |connect_status|
       assert_equal 0, connect_status
@@ -258,8 +248,7 @@ end
 assert_uv('UV::Timer') do
   t = UV::Timer.new
   c = 3
-  t.start(10, 10) do |x|
-    assert_equal 0, x
+  t.start(10, 10) do
     c -= 1
     if c < 0
       t.stop
