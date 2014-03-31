@@ -96,28 +96,19 @@ assert_uv('UV::Pipe') do
   if UV::IS_WINDOWS
     s = UV::Pipe.new(0)
     s.bind('\\\\.\\pipe\\mruby-uv')
-    s.listen(1) do |x|
-      #return if x != 0
+    s.listen(5) do |x|
+      return if x != 0
       c = s.accept()
-      puts "connected"
-      t = UV::Timer.new()
-      t.start(10, 10) do
-        puts "helloworld\n"
-        begin
-          c.write "helloworld\r\n"
-        rescue RuntimeError
-          c.close()
-          t.stop()
-          t = nil
-        end
-      end
+      c.write "helloworld\r\n"
+      c.close()
     end
 
     c = UV::Pipe.new(0)
     c.connect('\\\\.\\pipe\\mruby-uv') do |x|
       if x == 0
         c.read_start do |b|
-          puts b.to_s
+          assert_equal "helloworld\r\n", b.to_s
+          client.close
         end
       else
         c.close
@@ -136,9 +127,13 @@ assert_uv('UV::Pipe') do
 
     client = UV::Pipe.new(1)
     client.connect('/tmp/mruby-uv') do |x|
-      client.read_start do |b|
-        assert_equal "helloworld\r\n", b.to_s
-        client.close
+      if x == 0
+        client.read_start do |b|
+          assert_equal "helloworld\r\n", b.to_s
+          client.close
+        end
+      else
+        c.close
       end
     end
   end
