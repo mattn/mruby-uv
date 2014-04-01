@@ -89,7 +89,7 @@ mrb_uv_data_set(mrb_state *mrb, mrb_value self)
 static void
 mrb_uv_loop_free(mrb_state *mrb, void *p)
 {
-  if (p || p != uv_default_loop()) {
+  if (p && p != uv_default_loop()) {
     uv_loop_close((uv_loop_t*)p);
     mrb_free(mrb, p);
   }
