@@ -1571,6 +1571,26 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value
+mrb_uv_try_write(mrb_state *mrb, mrb_value self)
+{
+  uv_buf_t buf;
+  mrb_value str;
+  mrb_uv_handle *context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  int err;
+
+  mrb_get_args(mrb, "S", &str);
+  buf = uv_buf_init(RSTRING_PTR(str), RSTRING_LEN(str));
+  err = uv_try_write((uv_stream_t*)&context->handle, &buf, 1);
+  if (err < 0) {
+    mrb_uv_error(mrb, err);
+  } else if (err == 0) {
+    return mrb_symbol_value(mrb_intern_lit(mrb, "need_queue"));
+  } else {
+    return mrb_fixnum_value(err);
+  }
+}
+
 static void
 _uv_shutdown_cb(uv_shutdown_t* req, int status)
 {
@@ -1648,6 +1668,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   _class_uv_stream = mrb_define_module_under(mrb, UV, "Stream");
   mrb_include_module(mrb, _class_uv_stream, _class_uv_handle);
   mrb_define_method(mrb, _class_uv_stream, "write", mrb_uv_write, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_stream, "try_write", mrb_uv_try_write, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_stream, "shutdown", mrb_uv_shutdown, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_stream, "read_start", mrb_uv_read_start, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_stream, "read_stop", mrb_uv_read_stop, MRB_ARGS_NONE());
