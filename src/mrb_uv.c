@@ -12,10 +12,6 @@
 #define PATH_MAX MAX_PATH
 #endif
 
-#ifndef MRUBY_VERSION
-#define mrb_module_get mrb_class_get
-#endif
-
 /*********************************************************
  * main
  *********************************************************/

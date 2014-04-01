@@ -13,6 +13,10 @@
 #include <mruby/class.h>
 #include <mruby/variable.h>
 
+#ifndef MRUBY_VERSION
+#define mrb_module_get mrb_class_get
+#endif
+
 extern const struct mrb_data_type mrb_uv_ip4addr_type;
 extern const struct mrb_data_type mrb_uv_ip6addr_type;
 extern const struct mrb_data_type mrb_uv_ip4addr_nofree_type;
