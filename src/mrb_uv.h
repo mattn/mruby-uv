@@ -33,4 +33,8 @@ mrb_value mrb_uv_data_set(mrb_state *mrb, mrb_value self);
 
 void* mrb_uv_get_ptr(mrb_state*, mrb_value, struct mrb_data_type const*);
 
+mrb_value mrb_uv_gc_table_get(mrb_state *mrb);
+void mrb_uv_gc_table_clean(mrb_state *mrb);
+void mrb_uv_gc_protect(mrb_state *mrb, mrb_value v);
+
 #endif

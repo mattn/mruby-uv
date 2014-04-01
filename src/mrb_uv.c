@@ -15,22 +15,38 @@
 /*********************************************************
  * main
  *********************************************************/
+
+mrb_value
+mrb_uv_gc_table_get(mrb_state *mrb)
+{
+  return mrb_const_get(mrb, mrb_obj_value(mrb_module_get(mrb, "UV")), mrb_intern_lit(mrb, "$GC"));
+}
+
+void
+mrb_uv_gc_table_clean(mrb_state *mrb)
+{
+  int i, new_i;
+  mrb_value t = mrb_uv_gc_table_get(mrb);
+  mrb_value *ary = RARRAY_PTR(t);
+  for (i = 0, new_i = 0; i < RARRAY_LEN(t); ++i) {
+    if (DATA_PTR(ary[i])) {
+      ary[new_i++] = ary[i];
+    }
+  }
+  RARRAY_LEN(t) = new_i;
+}
+
+void
+mrb_uv_gc_protect(mrb_state *mrb, mrb_value v)
+{
+  mrb_assert(mrb_type(v) == MRB_TT_DATA);
+  mrb_ary_push(mrb, mrb_uv_gc_table_get(mrb), v);
+}
+
 static mrb_value
 mrb_uv_gc(mrb_state *mrb, mrb_value self)
 {
-  int ai = mrb_gc_arena_save(mrb);
-  struct RClass* _class_uv = mrb_module_get(mrb, "UV");
-  mrb_value uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "$GC"));
-  int i, l = RARRAY_LEN(uv_gc_table);
-  for (i = 0; i < l; i++) {
-    if (DATA_PTR(mrb_ary_entry(uv_gc_table, i)) == NULL) {
-      mrb_funcall(mrb, uv_gc_table, "delete_at", 1, mrb_fixnum_value(i));
-      i--;
-      l--;
-    }
-  }
-  mrb_gc_arena_restore(mrb, ai);
-  return mrb_nil_value();
+  return mrb_uv_gc_table_clean(mrb), self;
 }
 
 static mrb_value
@@ -809,7 +825,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
 void
 mrb_mruby_uv_gem_final(mrb_state* mrb) {
-  mrb_uv_gc(mrb, mrb_nil_value());
+  mrb_uv_gc_table_clean(mrb);
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */

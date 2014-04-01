@@ -460,10 +460,7 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
   }
 
-  ai = mrb_gc_arena_save(mrb);
-  uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "$GC"));
-  mrb_ary_push(mrb, uv_gc_table, c);
-  mrb_gc_arena_restore(mrb, ai);
+  mrb_uv_gc_protect(mrb, c);
   return c;
 }
 
