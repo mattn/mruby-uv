@@ -154,7 +154,7 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
+mrb_uv_loop_close(mrb_state *mrb, mrb_value self)
 {
   uv_loop_t* loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
 
@@ -728,7 +728,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   MRB_SET_INSTANCE_TT(_class_uv_loop, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_delete, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_close, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "close", mrb_uv_loop_close, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "alive?", mrb_uv_loop_alive, MRB_ARGS_NONE());
