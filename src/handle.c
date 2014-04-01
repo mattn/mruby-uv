@@ -40,6 +40,7 @@ mrb_uv_handle_alloc(mrb_state* mrb, size_t size, mrb_value instance)
   context->mrb = mrb;
   context->instance = instance;
   context->handle.data = context;
+  context->handle.type = UV_UNKNOWN_HANDLE;
   mrb_assert(mrb_type(instance) == MRB_TT_DATA);
   DATA_PTR(instance) = context;
   DATA_TYPE(instance) = &mrb_uv_handle_type;
