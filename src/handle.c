@@ -1,3 +1,4 @@
+#include "mruby/uv.h"
 #include "mrb_uv.h"
 
 
@@ -165,7 +166,7 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
 
   err = uv_pipe_init(loop, (uv_pipe_t*)&context->handle, ipc);
   if (err < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -180,7 +181,7 @@ mrb_uv_pipe_open(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "i", &arg_file);
   err = uv_pipe_open((uv_pipe_t*)&context->handle, arg_file);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -229,7 +230,7 @@ mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
 
   err = uv_pipe_bind((uv_pipe_t*)&context->handle, name ? name : "");
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -251,7 +252,7 @@ mrb_uv_pipe_listen(mrb_state *mrb, mrb_value self)
 
   err = uv_listen((uv_stream_t*) &context->handle, arg_backlog, connection_cb);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -278,7 +279,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
 
   err = uv_accept((uv_stream_t*) &context->handle, (uv_stream_t*) &new_context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
 
   ai = mrb_gc_arena_save(mrb);
@@ -317,7 +318,7 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
 
   err = uv_tcp_init(loop, (uv_tcp_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -359,7 +360,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
   err = uv_tcp_connect(req, (uv_tcp_t*)&context->handle, ((const struct sockaddr *) addr), connect_cb);
   if (err != 0) {
     mrb_free(mrb, req);
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -401,7 +402,7 @@ mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self, int version)
 
   err = uv_tcp_bind((uv_tcp_t*)&context->handle, ((const struct sockaddr *) addr), version == 4? 0 : UV_TCP_IPV6ONLY);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -435,7 +436,7 @@ mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
 
   err = uv_listen((uv_stream_t*) &context->handle, arg_backlog, connection_cb);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -460,7 +461,7 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
 
   err = uv_accept((uv_stream_t*) &context->handle, (uv_stream_t*) &new_context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
 
   mrb_uv_gc_protect(mrb, c);
@@ -538,7 +539,7 @@ mrb_uv_tcp_getpeername(mrb_state *mrb, mrb_value self)
   len = sizeof(addr);
   err = uv_tcp_getpeername((uv_tcp_t*)&context->handle, (struct sockaddr *)&addr, &len);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   switch (addr.ss_family) {
     case AF_INET:
@@ -581,7 +582,7 @@ mrb_uv_getsockname(mrb_state *mrb, mrb_value self, int tcp)
     err = uv_udp_getsockname((uv_udp_t*)&context->handle, (struct sockaddr *)&addr, &len);
   }
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   switch (addr.ss_family) {
     case AF_INET:
@@ -629,7 +630,7 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
 
   err = uv_udp_init(loop, (uv_udp_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -665,7 +666,7 @@ mrb_uv_udp_bind(mrb_state *mrb, mrb_value self, int version)
 
   err = uv_udp_bind((uv_udp_t*)&context->handle, ((const struct sockaddr *) addr), flags);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -733,7 +734,7 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self, int version)
   err = uv_udp_send(req, (uv_udp_t*)&context->handle, &buf, 1, ((const struct sockaddr *) addr), udp_send_cb);
   if (err != 0) {
     mrb_free(mrb, req);
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -813,7 +814,7 @@ mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
 
   err = uv_udp_recv_start((uv_udp_t*)&context->handle, _uv_alloc_cb, udp_recv_cb);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -826,7 +827,7 @@ mrb_uv_udp_recv_stop(mrb_state *mrb, mrb_value self)
 
   err = uv_udp_recv_stop((uv_udp_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -864,7 +865,7 @@ mrb_uv_prepare_init(mrb_state *mrb, mrb_value self)
 
   err = uv_prepare_init(loop, (uv_prepare_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -885,7 +886,7 @@ mrb_uv_prepare_start(mrb_state *mrb, mrb_value self)
 
   err = uv_prepare_start((uv_prepare_t*)&context->handle, prepare_cb);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -898,7 +899,7 @@ mrb_uv_prepare_stop(mrb_state *mrb, mrb_value self)
 
   err = uv_prepare_stop((uv_prepare_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -937,7 +938,7 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
 
   err = uv_async_init(loop, (uv_async_t*)&context->handle, async_cb);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -950,7 +951,7 @@ mrb_uv_async_send(mrb_state *mrb, mrb_value self)
 
   err = uv_async_send((uv_async_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -973,7 +974,7 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
 
   err = uv_idle_init(loop, (uv_idle_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -1004,7 +1005,7 @@ mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
 
   err = uv_idle_start((uv_idle_t*)&context->handle, idle_cb);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -1017,7 +1018,7 @@ mrb_uv_idle_stop(mrb_state *mrb, mrb_value self)
 
   err = uv_idle_stop((uv_idle_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -1041,7 +1042,7 @@ mrb_uv_tty_init(mrb_state *mrb, mrb_value self)
 
   err = uv_tty_init(loop, (uv_tty_t*)&context->handle, arg_file, arg_readable);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -1074,7 +1075,7 @@ mrb_uv_tty_get_winsize(mrb_state *mrb, mrb_value self)
 
   err = uv_tty_get_winsize((uv_tty_t*)&context->handle, &width, &height);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   ary = mrb_ary_new(mrb);
   mrb_ary_push(mrb, ary, mrb_fixnum_value(width));
@@ -1200,7 +1201,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   err = uv_spawn(uv_default_loop(), (uv_process_t*)&context->handle, &opt);
   mrb_free(mrb, args);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -1279,7 +1280,7 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
 
   err = uv_timer_init(loop, (uv_timer_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -1292,7 +1293,7 @@ mrb_uv_timer_again(mrb_state *mrb, mrb_value self)
 
   err = uv_timer_again((uv_timer_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -1324,7 +1325,7 @@ mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
   err = uv_timer_start((uv_timer_t*)&context->handle, timer_cb,
       arg_timeout, arg_repeat);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -1337,7 +1338,7 @@ mrb_uv_timer_stop(mrb_state *mrb, mrb_value self)
 
   err = uv_timer_stop((uv_timer_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -1373,7 +1374,7 @@ mrb_uv_fs_poll_init(mrb_state *mrb, mrb_value self)
 
   err = uv_fs_poll_init(loop, (uv_fs_poll_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -1435,7 +1436,7 @@ mrb_uv_signal_init(mrb_state *mrb, mrb_value self)
 
   err = uv_signal_init(loop, (uv_signal_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -1506,7 +1507,7 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
 
   err = uv_read_start((uv_stream_t*)&context->handle, _uv_alloc_cb, read_cb);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -1519,7 +1520,7 @@ mrb_uv_read_stop(mrb_state *mrb, mrb_value self)
 
   err = uv_read_stop((uv_stream_t*)&context->handle);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -1565,7 +1566,7 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   err = uv_write(req, (uv_stream_t*)&context->handle, &buf, 1, write_cb);
   if (err != 0) {
     mrb_free(mrb, req);
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }

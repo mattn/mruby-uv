@@ -26,7 +26,7 @@ mrb_uv_dlopen(mrb_state *mrb, char const *name)
   DATA_PTR(ret) = lib;
   err = uv_dlopen(name, lib);
   if (err == -1) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_dlerror(lib));
+    mrb_raise(mrb, E_UV_ERROR, uv_dlerror(lib));
   }
 
   return ret;
@@ -40,7 +40,7 @@ mrb_uv_dlsym(mrb_state *mrb, mrb_value dl, char const *name)
   uv_lib_t *lib = (uv_lib_t*)mrb_uv_get_ptr(mrb, dl, &dl_type);
   err = uv_dlsym(lib, name, &p);
   if(err == -1) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_dlerror(lib));
+    mrb_raise(mrb, E_UV_ERROR, uv_dlerror(lib));
   }
   return p;
 }

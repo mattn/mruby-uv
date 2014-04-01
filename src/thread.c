@@ -1,3 +1,4 @@
+#include "mruby/uv.h"
 #include "mrb_uv.h"
 
 
@@ -23,7 +24,7 @@ mrb_uv_mutex_init(mrb_state *mrb, mrb_value self)
   uv_mutex_t *m = (uv_mutex_t*)mrb_malloc(mrb, sizeof(uv_mutex_t));
   int err = uv_mutex_init(m);
   if (err < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   DATA_PTR(self) = m;
   DATA_TYPE(self) = &mrb_uv_mutex_type;
@@ -119,7 +120,7 @@ mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
 
   err = uv_thread_create(&context->thread, _uv_thread_proc, context);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -170,7 +171,7 @@ mrb_uv_barrier_init(mrb_state *mrb, mrb_value self)
 
   err = uv_barrier_init(context, arg_count);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   DATA_PTR(self) = context;
   DATA_TYPE(self) = &barrier_type;
@@ -211,13 +212,13 @@ mrb_uv_sem_init(mrb_state *mrb, mrb_value self)
 {
   mrb_int v;
   uv_sem_t* s;
-  int res;
+  int err;
   mrb_get_args(mrb, "i", &v);
 
   s = (uv_sem_t*)mrb_malloc(mrb, sizeof(uv_sem_t));
-  if((res = uv_sem_init(s, v)) < 0) {
+  if((err = uv_sem_init(s, v)) < 0) {
     mrb_free(mrb, s);
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(res));
+    mrb_uv_error(mrb, err);
   }
 
   DATA_TYPE(self) = &sem_type;
@@ -252,14 +253,14 @@ mrb_uv_sem_wait(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_sem_trywait(mrb_state *mrb, mrb_value self)
 {
-  int res;
+  int err;
   uv_sem_t *sem = (uv_sem_t*)mrb_uv_get_ptr(mrb, self, &sem_type);
-  res = uv_sem_trywait(sem);
-  if(res == UV_EAGAIN) {
+  err = uv_sem_trywait(sem);
+  if(err == UV_EAGAIN) {
     return mrb_false_value();
   }
-  if(res < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(res));
+  if(err < 0) {
+    mrb_uv_error(mrb, err);
   }
   return mrb_true_value();
 }

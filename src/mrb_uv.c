@@ -1,3 +1,4 @@
+#include "mruby/uv.h"
 #include "mrb_uv.h"
 
 #define _GNU_SOURCE
@@ -105,7 +106,7 @@ mrb_uv_loop_free(mrb_state *mrb, void *p)
   if (l && l != uv_default_loop()) {
     int err = uv_loop_close(l);
     if (err < 0) {
-      mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+      mrb_uv_error(mrb, err);
     }
     mrb_free(mrb, p);
   }
@@ -135,7 +136,7 @@ mrb_uv_loop_init(mrb_state *mrb, mrb_value self)
   uv_loop_t *l = (uv_loop_t*)mrb_malloc(mrb, sizeof(uv_loop_t));
   int err = uv_loop_init(l);
   if(err < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   DATA_PTR(self) = l;
   DATA_TYPE(self) = &mrb_uv_loop_type;
@@ -152,7 +153,7 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "|i", &arg_mode);
   err = uv_run(loop, arg_mode);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_nil_value();
 }
@@ -165,7 +166,7 @@ mrb_uv_loop_close(mrb_state *mrb, mrb_value self)
 
   err = uv_loop_close(loop);
   if (err < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   mrb_free(mrb, loop);
   DATA_PTR(self) = NULL;
@@ -264,7 +265,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
   if (mrb_type(arg_host) == MRB_TT_STRING && !mrb_nil_p(arg_port) && mrb_fixnum_p(arg_port)) {
     int err = uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port), &vaddr);
     if (err != 0) {
-      mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+      mrb_uv_error(mrb, err);
     }
     addr = (struct sockaddr_in*) mrb_malloc(mrb, sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in));
@@ -307,7 +308,7 @@ mrb_uv_ip4addr_sin_addr(mrb_state *mrb, mrb_value self)
   }
   err = uv_ip4_name(addr, name, sizeof(name));
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_str_new(mrb, name, strlen(name));
 }
@@ -365,7 +366,7 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
   if (mrb_type(arg_host) == MRB_TT_STRING && !mrb_nil_p(arg_port) && mrb_fixnum_p(arg_port)) {
     int err = uv_ip6_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port), &vaddr);
     if (err != 0) {
-      mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+      mrb_uv_error(mrb, err);
     }
     addr = (struct sockaddr_in6*) mrb_malloc(mrb, sizeof(struct sockaddr_in6));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in6));
@@ -408,7 +409,7 @@ mrb_uv_ip6addr_sin_addr(mrb_state *mrb, mrb_value self)
   }
   err = uv_ip6_name(addr, name, sizeof(name));
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_str_new(mrb, name, strlen(name));
 }
@@ -625,7 +626,7 @@ mrb_uv_exepath(mrb_state *mrb, mrb_value self)
   size_t s = sizeof(buf);
   int err = uv_exepath(buf, &s);
   if (err < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_str_new(mrb, buf, s);
 }
@@ -637,7 +638,7 @@ mrb_uv_cwd(mrb_state *mrb, mrb_value self)
   size_t s = sizeof(buf);
   int err = uv_cwd(buf, &s);
   if (err < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return mrb_str_new(mrb, buf, s);
 }
@@ -650,7 +651,7 @@ mrb_uv_chdir(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "z", &z);
   err = uv_chdir(z);
   if (err < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -663,7 +664,7 @@ mrb_uv_kill(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "ii", &pid, &sig);
   err = uv_kill(pid, sig);
   if(err < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_error(mrb, err);
   }
   return self;
 }
@@ -690,6 +691,15 @@ mrb_uv_get_ptr(mrb_state *mrb, mrb_value v, struct mrb_data_type const *t)
   return mrb_data_get_ptr(mrb, v, t);
 }
 
+void mrb_uv_error(mrb_state *mrb, int err)
+{
+  mrb_value argv[2];
+  mrb_assert(err < 0);
+  argv[0] = mrb_str_new_cstr(mrb, uv_strerror(err));
+  argv[1] = mrb_symbol_value(mrb_intern_cstr(mrb, uv_err_name(err)));
+  mrb_exc_raise(mrb, mrb_obj_new(mrb, E_UV_ERROR, 2, argv));
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -703,7 +713,10 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_addrinfo;
   struct RClass* _class_uv_ip4addr;
   struct RClass* _class_uv_ip6addr;
+  struct RClass* _class_uv_error;
   mrb_value uv_gc_table;
+
+  _class_uv_error = mrb_define_class(mrb, "UVError", E_NAME_ERROR);
 
   _class_uv = mrb_define_module(mrb, "UV");
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
