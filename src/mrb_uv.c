@@ -839,6 +839,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 void
 mrb_mruby_uv_gem_final(mrb_state* mrb) {
   mrb_uv_gc_table_clean(mrb);
+  uv_loop_close(uv_default_loop());
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */
