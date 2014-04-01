@@ -101,8 +101,7 @@ leave:
 static mrb_value
 mrb_uv_fs_fd(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_file *ctx;
-  Data_Get_Struct(mrb, self, &mrb_uv_file_type, ctx);
+  mrb_uv_file *ctx = (mrb_uv_file*)mrb_uv_get_ptr(mrb, self, &mrb_uv_file_type);
   return mrb_fixnum_value(ctx->fd);
 }
 
@@ -157,12 +156,10 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_file* context = NULL;
+  mrb_uv_file* context = (mrb_uv_file*)mrb_uv_get_ptr(mrb, self, &mrb_uv_file_type);
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   uv_fs_t* req;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_file_type, context);
 
   mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
@@ -183,14 +180,12 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   mrb_value arg_data = mrb_nil_value();
   mrb_int arg_length = -1;
   mrb_int arg_offset = 0;
-  mrb_uv_file* context = NULL;
+  mrb_uv_file* context = (mrb_uv_file*)mrb_uv_get_ptr(mrb, self, &mrb_uv_file_type);
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   uv_fs_t* req;
   int r;
   uv_buf_t buf;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_file_type, context);
 
   mrb_get_args(mrb, "&S|ii", &b, &arg_data, &arg_offset, &arg_length);
 
@@ -221,7 +216,7 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_length = BUFSIZ;
   mrb_int arg_offset = 0;
-  mrb_uv_file* context = NULL;
+  mrb_uv_file* context = (mrb_uv_file*)mrb_uv_get_ptr(mrb, self, &mrb_uv_file_type);
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   uv_buf_t buf;
@@ -229,8 +224,6 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   uv_fs_t* req;
   int ai;
   mrb_value str;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_file_type, context);
 
   mrb_get_args(mrb, "&|i|i", &b, &arg_length, &arg_offset);
 

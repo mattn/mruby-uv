@@ -27,4 +27,6 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV);
 mrb_value mrb_uv_data_get(mrb_state *mrb, mrb_value self);
 mrb_value mrb_uv_data_set(mrb_state *mrb, mrb_value self);
 
+void* mrb_uv_get_ptr(mrb_state*, mrb_value, struct mrb_data_type const*);
+
 #endif

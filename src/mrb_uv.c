@@ -669,6 +669,16 @@ mrb_uv_version_string(mrb_state *mrb, mrb_value self)
   return mrb_str_new_cstr(mrb, uv_version_string());
 }
 
+void*
+mrb_uv_get_ptr(mrb_state *mrb, mrb_value v, struct mrb_data_type const *t)
+{
+  mrb_assert(mrb_type(v) == MRB_TT_DATA);
+  if (!DATA_PTR(v)) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "already destroyed data");
+  }
+  return mrb_data_get_ptr(mrb, v, t);
+}
+
 /*********************************************************
  * register
  *********************************************************/

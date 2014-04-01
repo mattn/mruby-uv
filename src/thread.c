@@ -17,17 +17,6 @@ static const struct mrb_data_type mrb_uv_mutex_type = {
   "uv_mutex", mrb_uv_mutex_free
 };
 
-static uv_mutex_t*
-get_mutex(mrb_state *mrb, mrb_value v)
-{
-  uv_mutex_t *ret;
-  if(!DATA_PTR(v)) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, "already destroyed mutex");
-  }
-  Data_Get_Struct(mrb, v, &mrb_uv_mutex_type, ret);
-  return ret;
-}
-
 static mrb_value
 mrb_uv_mutex_init(mrb_state *mrb, mrb_value self)
 {
@@ -44,7 +33,7 @@ mrb_uv_mutex_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_mutex_lock(mrb_state *mrb, mrb_value self)
 {
-  uv_mutex_t *m = get_mutex(mrb, self);
+  uv_mutex_t *m = (uv_mutex_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_mutex_type);
   uv_mutex_lock(m);
   return mrb_nil_value();
 }
@@ -52,7 +41,7 @@ mrb_uv_mutex_lock(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_mutex_unlock(mrb_state *mrb, mrb_value self)
 {
-  uv_mutex_t *m = get_mutex(mrb, self);
+  uv_mutex_t *m = (uv_mutex_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_mutex_type);
   uv_mutex_unlock(m);
   return mrb_nil_value();
 }
@@ -60,13 +49,13 @@ mrb_uv_mutex_unlock(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_mutex_trylock(mrb_state *mrb, mrb_value self)
 {
-  return mrb_bool_value(uv_mutex_trylock(get_mutex(mrb, self)));
+  return mrb_bool_value(uv_mutex_trylock((uv_mutex_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_mutex_type)));
 }
 
 static mrb_value
 mrb_uv_mutex_destroy(mrb_state *mrb, mrb_value self)
 {
-  uv_mutex_t *m = get_mutex(mrb, self);
+  uv_mutex_t *m = (uv_mutex_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_mutex_type);
   uv_mutex_destroy(m);
   mrb_free(mrb, m);
   DATA_PTR(self) = NULL;
@@ -168,17 +157,6 @@ static const struct mrb_data_type barrier_type = {
   "uv_barrier", mrb_uv_barrier_free
 };
 
-static uv_barrier_t*
-get_uv_barrier(mrb_state *mrb, mrb_value v)
-{
-  uv_barrier_t *ret;
-  if(!DATA_PTR(v)) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, "already destroyed semaphore");
-  }
-  Data_Get_Struct(mrb, v, &barrier_type, ret);
-  return ret;
-}
-
 static mrb_value
 mrb_uv_barrier_init(mrb_state *mrb, mrb_value self)
 {
@@ -202,14 +180,14 @@ mrb_uv_barrier_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_barrier_wait(mrb_state *mrb, mrb_value self)
 {
-  uv_barrier_wait(get_uv_barrier(mrb, self));
+  uv_barrier_wait((uv_barrier_t*)mrb_uv_get_ptr(mrb, self, &barrier_type));
   return mrb_nil_value();
 }
 
 static mrb_value
 mrb_uv_barrier_destroy(mrb_state *mrb, mrb_value self)
 {
-  uv_barrier_destroy(get_uv_barrier(mrb, self));
+  uv_barrier_destroy((uv_barrier_t*)mrb_uv_get_ptr(mrb, self, &barrier_type));
   return mrb_nil_value();
 }
 
@@ -245,21 +223,10 @@ mrb_uv_sem_init(mrb_state *mrb, mrb_value self)
   return self;
 }
 
-static uv_sem_t*
-get_uv_sem(mrb_state *mrb, mrb_value v)
-{
-  uv_sem_t *ret;
-  if(!DATA_PTR(v)) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, "already destroyed semaphore");
-  }
-  Data_Get_Struct(mrb, v, &sem_type, ret);
-  return ret;
-}
-
 static mrb_value
 mrb_uv_sem_destroy(mrb_state *mrb, mrb_value self)
 {
-  uv_sem_t *sem = get_uv_sem(mrb, self);
+  uv_sem_t *sem = (uv_sem_t*)mrb_uv_get_ptr(mrb, self, &sem_type);
   uv_sem_destroy(sem);
   mrb_free(mrb, DATA_PTR(self));
   DATA_PTR(self) = NULL;
@@ -269,14 +236,14 @@ mrb_uv_sem_destroy(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_sem_post(mrb_state *mrb, mrb_value self)
 {
-  uv_sem_t *sem = get_uv_sem(mrb, self);
+  uv_sem_t *sem = (uv_sem_t*)mrb_uv_get_ptr(mrb, self, &sem_type);
   return uv_sem_post(sem), self;
 }
 
 static mrb_value
 mrb_uv_sem_wait(mrb_state *mrb, mrb_value self)
 {
-  uv_sem_t *sem = get_uv_sem(mrb, self);
+  uv_sem_t *sem = (uv_sem_t*)mrb_uv_get_ptr(mrb, self, &sem_type);
   return uv_sem_wait(sem), self;
 }
 
@@ -284,7 +251,7 @@ static mrb_value
 mrb_uv_sem_trywait(mrb_state *mrb, mrb_value self)
 {
   int res;
-  uv_sem_t *sem = get_uv_sem(mrb, self);
+  uv_sem_t *sem = (uv_sem_t*)mrb_uv_get_ptr(mrb, self, &sem_type);
   res = uv_sem_trywait(sem);
   if(res == UV_EAGAIN) {
     return mrb_false_value();

@@ -37,11 +37,7 @@ mrb_uv_dlsym(mrb_state *mrb, mrb_value dl, char const *name)
 {
   int err;
   void *p;
-  uv_lib_t *lib;
-  Data_Get_Struct(mrb, dl, &dl_type, lib);
-  if (!lib) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, "getting symbol from closed libraray");
-  }
+  uv_lib_t *lib = (uv_lib_t*)mrb_uv_get_ptr(mrb, dl, &dl_type);
   err = uv_dlsym(lib, name, &p);
   if(err == -1) {
     mrb_raise(mrb, E_RUNTIME_ERROR, uv_dlerror(lib));
@@ -52,13 +48,10 @@ mrb_uv_dlsym(mrb_state *mrb, mrb_value dl, char const *name)
 void
 mrb_uv_dlclose(mrb_state *mrb, mrb_value dl)
 {
-  uv_lib_t *lib;
-  Data_Get_Struct(mrb, dl, &dl_type, lib);
-  if (lib) {
-    uv_dlclose(lib);
-    mrb_free(mrb, DATA_PTR(dl));
-    DATA_PTR(dl) = NULL;
-  }
+  uv_lib_t *lib = (uv_lib_t*)mrb_uv_get_ptr(mrb, dl, &dl_type);
+  uv_dlclose(lib);
+  mrb_free(mrb, DATA_PTR(dl));
+  DATA_PTR(dl) = NULL;
 }
 
 static mrb_value
