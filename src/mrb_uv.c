@@ -142,10 +142,8 @@ static mrb_value
 mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 {
   int err;
-  uv_loop_t* loop = NULL;
+  uv_loop_t* loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
   mrb_int arg_mode = UV_RUN_DEFAULT;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
 
   mrb_get_args(mrb, "|i", &arg_mode);
   err = uv_run(loop, arg_mode);
@@ -158,9 +156,7 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
 {
-  uv_loop_t* loop = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  uv_loop_t* loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
 
   uv_loop_close(loop);
   mrb_free(mrb, loop);
@@ -171,40 +167,35 @@ mrb_uv_loop_delete(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_loop_alive(mrb_state *mrb, mrb_value self)
 {
-  uv_loop_t* loop;
-  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  uv_loop_t* loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
   return mrb_bool_value(uv_loop_alive(loop));
 }
 
 static mrb_value
 mrb_uv_stop(mrb_state *mrb, mrb_value self)
 {
-  uv_loop_t *loop;
-  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  uv_loop_t *loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
   return uv_stop(loop), self;
 }
 
 static mrb_value
 mrb_uv_update_time(mrb_state *mrb, mrb_value self)
 {
-  uv_loop_t *loop;
-  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  uv_loop_t *loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
   return uv_update_time(loop), self;
 }
 
 static mrb_value
 mrb_uv_backend_fd(mrb_state *mrb, mrb_value self)
 {
-  uv_loop_t *loop;
-  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  uv_loop_t *loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
   return mrb_fixnum_value(uv_backend_fd(loop));
 }
 
 static mrb_value
 mrb_uv_backend_timeout(mrb_state *mrb, mrb_value self)
 {
-  uv_loop_t *loop;
-  Data_Get_Struct(mrb, self, &mrb_uv_loop_type, loop);
+  uv_loop_t *loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
   return mrb_fixnum_value(uv_backend_timeout(loop));
 }
 
