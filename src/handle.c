@@ -23,7 +23,7 @@ static void
 mrb_uv_handle_free(mrb_state *mrb, void *p)
 {
   mrb_uv_handle* context = (mrb_uv_handle*) p;
-  if (context) {
+  if (context && !uv_is_closing(&context->handle)) {
     uv_close(&context->handle, NULL);
     mrb_free(mrb, p);
   }
@@ -96,11 +96,11 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
 
-  if (!uv_is_active(&context->handle)) return mrb_nil_value();
+  if (uv_is_closing(&context->handle)) return mrb_nil_value();
 
   mrb_get_args(mrb, "&", &b);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "close_cb"), b);
-  uv_close(&context->handle, _uv_close_cb);
+  uv_close(&context->handle, mrb_nil_p(b)? NULL : _uv_close_cb);
   return mrb_nil_value();
 }
 
