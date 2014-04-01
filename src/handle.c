@@ -3,6 +3,16 @@
 
 extern char **environ;
 
+static uv_loop_t*
+get_loop(mrb_state *mrb, mrb_value v)
+{
+  if(mrb_nil_p(v)) {
+    return uv_default_loop();
+  } else {
+    return (uv_loop_t*)mrb_uv_get_ptr(mrb, v, &mrb_uv_loop_type);
+  }
+}
+
 typedef struct {
   mrb_state* mrb;
   mrb_value instance;
@@ -142,11 +152,7 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
   int ipc = 0;
 
   mrb_get_args(mrb, "o|o", &arg_ipc, &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
   if (!mrb_nil_p(arg_ipc)) {
     if (mrb_fixnum_p(arg_ipc))
       ipc = mrb_fixnum(arg_ipc);
@@ -304,11 +310,7 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_tcp_t), self);
 
@@ -620,11 +622,7 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_udp_t), self);
 
@@ -859,11 +857,7 @@ mrb_uv_prepare_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_prepare_t), self);
 
@@ -930,14 +924,8 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_async_cb async_cb = _uv_async_cb;
 
-  if (mrb_get_args(mrb, "&|o", &b, &arg_loop) == 1) {
-    mrb_value obj = mrb_funcall(mrb, arg_loop, "inspect", 0);
-    fwrite(RSTRING_PTR(obj), RSTRING_LEN(obj), 1, stdout);
-
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  mrb_get_args(mrb, "&|o", &b, &arg_loop);
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_async_t), self);
 
@@ -978,11 +966,7 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_idle_t), self);
 
@@ -1050,11 +1034,7 @@ mrb_uv_tty_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "ii|o", &arg_file, &arg_readable, &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_tty_t), self);
 
@@ -1292,11 +1272,7 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_timer_t), self);
 
@@ -1390,11 +1366,7 @@ mrb_uv_fs_poll_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_fs_poll_t), self);
 
@@ -1456,11 +1428,7 @@ mrb_uv_signal_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_signal_t), self);
 
