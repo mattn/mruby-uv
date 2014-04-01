@@ -188,6 +188,8 @@ static mrb_value
 mrb_uv_barrier_destroy(mrb_state *mrb, mrb_value self)
 {
   uv_barrier_destroy((uv_barrier_t*)mrb_uv_get_ptr(mrb, self, &barrier_type));
+  mrb_free(mrb, DATA_PTR(self));
+  DATA_PTR(self) = NULL;
   return mrb_nil_value();
 }
 
