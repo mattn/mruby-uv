@@ -1,6 +1,8 @@
 #ifndef MRUBY_UV_H
 #define MRUBY_UV_H
 
+#include "mruby.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
