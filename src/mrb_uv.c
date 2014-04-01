@@ -101,8 +101,12 @@ mrb_uv_data_set(mrb_state *mrb, mrb_value self)
 static void
 mrb_uv_loop_free(mrb_state *mrb, void *p)
 {
-  if (p && p != uv_default_loop()) {
-    uv_loop_close((uv_loop_t*)p);
+  uv_loop_t *l = (uv_loop_t*)p;
+  if (l && l != uv_default_loop()) {
+    int err = uv_loop_close(l);
+    if (err < 0) {
+      mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    }
     mrb_free(mrb, p);
   }
 }
@@ -157,8 +161,12 @@ static mrb_value
 mrb_uv_loop_close(mrb_state *mrb, mrb_value self)
 {
   uv_loop_t* loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
+  int err;
 
-  uv_loop_close(loop);
+  err = uv_loop_close(loop);
+  if (err < 0) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+  }
   mrb_free(mrb, loop);
   DATA_PTR(self) = NULL;
   return mrb_nil_value();
