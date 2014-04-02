@@ -380,3 +380,11 @@ assert('UV.queue_work') do
   UV.run
   assert_equal 1, c
 end
+
+assert('UV.resident_set_memory') do
+  assert_true UV.resident_set_memory.kind_of? Numeric
+end
+
+assert('UV.uptime') do
+  assert_true UV.uptime.kind_of? Numeric
+end

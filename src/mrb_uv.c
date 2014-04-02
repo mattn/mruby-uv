@@ -959,6 +959,30 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static mrb_value
+mrb_uv_resident_set_memory(mrb_state *mrb, mrb_value self)
+{
+  size_t rss;
+  int err;
+  err = uv_resident_set_memory(&rss);
+  if (err < 0) {
+    mrb_uv_error(mrb, err);
+  }
+  return mrb_float_value(mrb, (mrb_float)rss);
+}
+
+static mrb_value
+mrb_uv_uptime(mrb_state *mrb, mrb_value self)
+{
+  double t;
+  int err;
+  err = uv_uptime(&t);
+  if (err < 0) {
+    mrb_uv_error(mrb, err);
+  }
+  return mrb_float_value(mrb, (mrb_float)t);
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -1003,6 +1027,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "cpu_info", mrb_uv_cpu_info, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "interface_addresses", mrb_uv_interface_addresses, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "queue_work", mrb_uv_queue_work, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "resident_set_memory", mrb_uv_resident_set_memory, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "uptime", mrb_uv_uptime, MRB_ARGS_NONE());
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
@@ -1066,7 +1092,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_check_stop
   uv_cancel
   uv_setup_args
-  uv_uptime
   uv_inet_ntop
   uv_inet_pton
   uv_rwlock_init
