@@ -712,6 +712,29 @@ mrb_uv_disable_stdio_inheritance(mrb_state *mrb, mrb_value self)
   return uv_disable_stdio_inheritance(), self;
 }
 
+static mrb_value
+mrb_uv_process_title(mrb_state *mrb, mrb_value self)
+{
+  char buf[PATH_MAX];
+  int err;
+
+  err = uv_get_process_title(buf, PATH_MAX);
+  if (err < 0) {
+    mrb_uv_error(mrb, err);
+  }
+  return mrb_str_new_cstr(mrb, buf);
+}
+
+static mrb_value
+mrb_uv_process_title_set(mrb_state *mrb, mrb_value self)
+{
+  char *z;
+  mrb_get_args(mrb, "z", &z);
+
+  uv_set_process_title(z);
+  return mrb_uv_process_title(mrb, self);
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -750,6 +773,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "total_memory", mrb_uv_total_memory, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "hrtime", mrb_uv_hrtime, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "disable_stdio_inheritance", mrb_uv_disable_stdio_inheritance, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "process_title", mrb_uv_process_title, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "process_title=", mrb_uv_process_title_set, MRB_ARGS_NONE());
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));

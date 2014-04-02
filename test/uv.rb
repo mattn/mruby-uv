@@ -351,3 +351,11 @@ end
 assert('UV.hrtime') do
   assert_true UV.hrtime.kind_of? Numeric
 end
+
+assert('UV.process_title') do
+  assert_true UV.process_title.kind_of? String
+end
+
+assert('UV.process_title=') do
+  assert_true (UV.process_title = 'test').kind_of? String
+end
