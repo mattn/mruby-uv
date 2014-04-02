@@ -1005,19 +1005,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_queue_work
   uv_cancel
   uv_setup_args
-  uv_set_process_title
-  uv_get_process_title
   uv_uptime
-  uv_cpu_info
-  uv_free_cpu_info
-  uv_interface_addresses
-  uv_free_interface_addresses
   uv_inet_ntop
   uv_inet_pton
-  uv_get_free_memory
-  uv_get_total_memory
-  uv_hrtime
-  uv_disable_stdio_inheritance
   uv_rwlock_init
   uv_rwlock_destroy
   uv_rwlock_rdlock
