@@ -22,10 +22,7 @@ static mrb_value
 mrb_uv_mutex_init(mrb_state *mrb, mrb_value self)
 {
   uv_mutex_t *m = (uv_mutex_t*)mrb_malloc(mrb, sizeof(uv_mutex_t));
-  int err = uv_mutex_init(m);
-  if (err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_mutex_init(m));
   DATA_PTR(self) = m;
   DATA_TYPE(self) = &mrb_uv_mutex_type;
   return self;
@@ -103,7 +100,6 @@ _uv_thread_proc(void *arg)
 static mrb_value
 mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value thread_arg = mrb_nil_value();
   mrb_value b = mrb_nil_value();
   mrb_uv_thread* context = NULL;
@@ -118,10 +114,7 @@ mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
   DATA_PTR(self) = context;
   DATA_TYPE(self) = &mrb_uv_thread_type;
 
-  err = uv_thread_create(&context->thread, _uv_thread_proc, context);
-  if (err != 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_thread_create(&context->thread, _uv_thread_proc, context));
   return self;
 }
 
@@ -161,7 +154,6 @@ static const struct mrb_data_type barrier_type = {
 static mrb_value
 mrb_uv_barrier_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_int arg_count;
   uv_barrier_t* context = NULL;
 
@@ -169,10 +161,7 @@ mrb_uv_barrier_init(mrb_state *mrb, mrb_value self)
 
   context = (uv_barrier_t*)mrb_malloc(mrb, sizeof(uv_barrier_t));
 
-  err = uv_barrier_init(context, arg_count);
-  if (err != 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_barrier_init(context, arg_count));
   DATA_PTR(self) = context;
   DATA_TYPE(self) = &barrier_type;
   return self;
@@ -212,15 +201,10 @@ mrb_uv_sem_init(mrb_state *mrb, mrb_value self)
 {
   mrb_int v;
   uv_sem_t* s;
-  int err;
   mrb_get_args(mrb, "i", &v);
 
   s = (uv_sem_t*)mrb_malloc(mrb, sizeof(uv_sem_t));
-  if((err = uv_sem_init(s, v)) < 0) {
-    mrb_free(mrb, s);
-    mrb_uv_error(mrb, err);
-  }
-
+  mrb_uv_check_error(mrb, uv_sem_init(s, v));
   DATA_TYPE(self) = &sem_type;
   DATA_PTR(self) = s;
   return self;
@@ -260,7 +244,7 @@ mrb_uv_sem_trywait(mrb_state *mrb, mrb_value self)
     return mrb_false_value();
   }
   if(err < 0) {
-    mrb_uv_error(mrb, err);
+    mrb_uv_check_error(mrb, err);
   }
   return mrb_true_value();
 }

@@ -92,10 +92,7 @@ mrb_uv_loop_free(mrb_state *mrb, void *p)
 {
   uv_loop_t *l = (uv_loop_t*)p;
   if (l && l != uv_default_loop()) {
-    int err = uv_loop_close(l);
-    if (err < 0) {
-      mrb_uv_error(mrb, err);
-    }
+    mrb_uv_check_error(mrb, uv_loop_close(l));
     mrb_free(mrb, p);
   }
 }
@@ -122,10 +119,7 @@ static mrb_value
 mrb_uv_loop_init(mrb_state *mrb, mrb_value self)
 {
   uv_loop_t *l = (uv_loop_t*)mrb_malloc(mrb, sizeof(uv_loop_t));
-  int err = uv_loop_init(l);
-  if(err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_loop_init(l));
   DATA_PTR(self) = l;
   DATA_TYPE(self) = &mrb_uv_loop_type;
   return self;
@@ -134,15 +128,11 @@ mrb_uv_loop_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 {
-  int err;
   uv_loop_t* loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
   mrb_int arg_mode = UV_RUN_DEFAULT;
 
   mrb_get_args(mrb, "|i", &arg_mode);
-  err = uv_run(loop, arg_mode);
-  if (err != 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_run(loop, arg_mode));
   return mrb_nil_value();
 }
 
@@ -150,12 +140,8 @@ static mrb_value
 mrb_uv_loop_close(mrb_state *mrb, mrb_value self)
 {
   uv_loop_t* loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
-  int err;
 
-  err = uv_loop_close(loop);
-  if (err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_loop_close(loop));
   mrb_free(mrb, loop);
   DATA_PTR(self) = NULL;
   return mrb_nil_value();
@@ -251,10 +237,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "o|o", &arg_host, &arg_port);
   if (mrb_type(arg_host) == MRB_TT_STRING && !mrb_nil_p(arg_port) && mrb_fixnum_p(arg_port)) {
-    int err = uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port), &vaddr);
-    if (err != 0) {
-      mrb_uv_error(mrb, err);
-    }
+    mrb_uv_check_error(mrb, uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port), &vaddr));
     addr = (struct sockaddr_in*) mrb_malloc(mrb, sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
@@ -286,7 +269,6 @@ mrb_uv_ip4addr_to_s(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_ip4addr_sin_addr(mrb_state *mrb, mrb_value self)
 {
-  int err;
   struct sockaddr_in* addr = NULL;
   char name[256];
 
@@ -294,10 +276,7 @@ mrb_uv_ip4addr_sin_addr(mrb_state *mrb, mrb_value self)
   if (!addr) {
     return mrb_nil_value();
   }
-  err = uv_ip4_name(addr, name, sizeof(name));
-  if (err != 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_ip4_name(addr, name, sizeof(name)));
   return mrb_str_new(mrb, name, strlen(name));
 }
 
@@ -352,10 +331,7 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "o|o", &arg_host, &arg_port);
   if (mrb_type(arg_host) == MRB_TT_STRING && !mrb_nil_p(arg_port) && mrb_fixnum_p(arg_port)) {
-    int err = uv_ip6_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port), &vaddr);
-    if (err != 0) {
-      mrb_uv_error(mrb, err);
-    }
+    mrb_uv_check_error(mrb, uv_ip6_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port), &vaddr));
     addr = (struct sockaddr_in6*) mrb_malloc(mrb, sizeof(struct sockaddr_in6));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in6));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
@@ -387,7 +363,6 @@ mrb_uv_ip6addr_to_s(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_ip6addr_sin_addr(mrb_state *mrb, mrb_value self)
 {
-  int err;
   struct sockaddr_in6* addr = NULL;
   char name[256];
 
@@ -395,10 +370,7 @@ mrb_uv_ip6addr_sin_addr(mrb_state *mrb, mrb_value self)
   if (!addr) {
     return mrb_nil_value();
   }
-  err = uv_ip6_name(addr, name, sizeof(name));
-  if (err != 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_ip6_name(addr, name, sizeof(name)));
   return mrb_str_new(mrb, name, strlen(name));
 }
 
@@ -612,10 +584,7 @@ mrb_uv_exepath(mrb_state *mrb, mrb_value self)
 {
   char buf[PATH_MAX];
   size_t s = sizeof(buf);
-  int err = uv_exepath(buf, &s);
-  if (err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_exepath(buf, &s));
   return mrb_str_new(mrb, buf, s);
 }
 
@@ -624,23 +593,16 @@ mrb_uv_cwd(mrb_state *mrb, mrb_value self)
 {
   char buf[PATH_MAX];
   size_t s = sizeof(buf);
-  int err = uv_cwd(buf, &s);
-  if (err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_cwd(buf, &s));
   return mrb_str_new(mrb, buf, s);
 }
 
 static mrb_value
 mrb_uv_chdir(mrb_state *mrb, mrb_value self)
 {
-  int err;
   char *z;
   mrb_get_args(mrb, "z", &z);
-  err = uv_chdir(z);
-  if (err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_chdir(z));
   return self;
 }
 
@@ -648,12 +610,8 @@ static mrb_value
 mrb_uv_kill(mrb_state *mrb, mrb_value self)
 {
   mrb_int pid, sig;
-  int err;
   mrb_get_args(mrb, "ii", &pid, &sig);
-  err = uv_kill(pid, sig);
-  if(err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_kill(pid, sig));
   return self;
 }
 
@@ -679,9 +637,14 @@ mrb_uv_get_ptr(mrb_state *mrb, mrb_value v, struct mrb_data_type const *t)
   return mrb_data_get_ptr(mrb, v, t);
 }
 
-void mrb_uv_error(mrb_state *mrb, int err)
+void mrb_uv_check_error(mrb_state *mrb, int err)
 {
   mrb_value argv[2];
+
+  if (err >= 0) {
+    return;
+  }
+
   mrb_assert(err < 0);
   argv[0] = mrb_str_new_cstr(mrb, uv_strerror(err));
   argv[1] = mrb_symbol_value(mrb_intern_cstr(mrb, uv_err_name(err)));
@@ -716,12 +679,8 @@ static mrb_value
 mrb_uv_process_title(mrb_state *mrb, mrb_value self)
 {
   char buf[PATH_MAX];
-  int err;
 
-  err = uv_get_process_title(buf, PATH_MAX);
-  if (err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_get_process_title(buf, PATH_MAX));
   return mrb_str_new_cstr(mrb, buf);
 }
 
@@ -739,13 +698,9 @@ static mrb_value
 mrb_uv_rusage(mrb_state *mrb, mrb_value self)
 {
   uv_rusage_t usage;
-  int err;
   mrb_value ret, tv;
 
-  err = uv_getrusage(&usage);
-  if (err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_getrusage(&usage));
 
   ret = mrb_hash_new_capa(mrb, 16);
 #define set_val(name) \
@@ -790,7 +745,7 @@ mrb_uv_cpu_info(mrb_state *mrb, mrb_value self)
 
   err = uv_cpu_info(&info, &info_count);
   if (err < 0) {
-    mrb_uv_error(mrb, err);
+    mrb_uv_check_error(mrb, err);
   }
 
   ret = mrb_ary_new_capa(mrb, info_count);
@@ -826,7 +781,7 @@ mrb_uv_interface_addresses(mrb_state *mrb, mrb_value self)
 
   err = uv_interface_addresses(&addr, &addr_count);
   if (err < 0) {
-    mrb_uv_error(mrb, err);
+    mrb_uv_check_error(mrb, err);
   }
 
   ret = mrb_ary_new_capa(mrb, addr_count);
@@ -924,7 +879,7 @@ mrb_uv_after_work_cb(uv_work_t *uv, int err)
   mrb_free(work->mrb, uv);
   DATA_PTR(work->object) = NULL;
   if (err < 0) {
-    mrb_uv_error(work->mrb, err);
+    mrb_uv_check_error(work->mrb, err);
   }
 }
 
@@ -949,7 +904,7 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
   if (err < 0) {
     mrb_free(mrb, work->uv);
     mrb_free(mrb, work);
-    mrb_uv_error(mrb, err);
+    mrb_uv_check_error(mrb, err);
   }
 
   work->object = mrb_obj_value(Data_Wrap_Struct(mrb, mrb->object_class, &mrb_uv_work_type, work));
@@ -963,11 +918,7 @@ static mrb_value
 mrb_uv_resident_set_memory(mrb_state *mrb, mrb_value self)
 {
   size_t rss;
-  int err;
-  err = uv_resident_set_memory(&rss);
-  if (err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_resident_set_memory(&rss));
   return mrb_float_value(mrb, (mrb_float)rss);
 }
 
@@ -975,11 +926,7 @@ static mrb_value
 mrb_uv_uptime(mrb_state *mrb, mrb_value self)
 {
   double t;
-  int err;
-  err = uv_uptime(&t);
-  if (err < 0) {
-    mrb_uv_error(mrb, err);
-  }
+  mrb_uv_check_error(mrb, uv_uptime(&t));
   return mrb_float_value(mrb, (mrb_float)t);
 }
 
