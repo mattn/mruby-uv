@@ -688,6 +688,18 @@ void mrb_uv_error(mrb_state *mrb, int err)
   mrb_exc_raise(mrb, mrb_obj_new(mrb, E_UV_ERROR, 2, argv));
 }
 
+static mrb_value
+mrb_uv_free_memory(mrb_state *mrb, mrb_value self)
+{
+  return mrb_float_value(mrb, (mrb_float)uv_get_free_memory());
+}
+
+static mrb_value
+mrb_uv_total_memory(mrb_state *mrb, mrb_value self)
+{
+  return mrb_float_value(mrb, (mrb_float)uv_get_total_memory());
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -722,6 +734,8 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "kill", mrb_uv_kill, MRB_ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "version", mrb_uv_version, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "version_string", mrb_uv_version_string, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "free_memory", mrb_uv_free_memory, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "total_memory", mrb_uv_total_memory, MRB_ARGS_NONE());
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));

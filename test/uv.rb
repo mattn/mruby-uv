@@ -338,3 +338,11 @@ end
 assert('UV.cwd') do
   assert_true UV.cwd.kind_of? String
 end
+
+assert('UV.free_memory') do
+  assert_true UV.free_memory.kind_of? Numeric
+end
+
+assert('UV.total_memory') do
+  assert_true UV.total_memory.kind_of? Numeric
+end
