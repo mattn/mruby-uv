@@ -1,6 +1,7 @@
 MRuby::Gem::Specification.new('mruby-uv') do |spec|
   spec.license = 'MIT'
   spec.authors = 'mattn'
+  spec.summary = 'libuv mruby binding'
 
   if ENV['OS'] == 'Windows_NT'
     spec.linker.libraries << ['uv', 'psapi', 'iphlpapi', 'ws2_32']
