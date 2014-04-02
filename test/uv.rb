@@ -347,3 +347,7 @@ assert('UV.total_memory') do
   assert_true UV.total_memory.kind_of? Numeric
   assert_true UV.free_memory <= UV.total_memory
 end
+
+assert('UV.hrtime') do
+  assert_true UV.hrtime.kind_of? Numeric
+end
