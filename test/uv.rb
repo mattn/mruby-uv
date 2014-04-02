@@ -1,3 +1,5 @@
+UV_INTERVAL = 2
+
 def assert_uv(name, &block)
   assert(name) do
     block.call
@@ -35,7 +37,7 @@ assert_uv('UV::Async') do
   p = UV::Prepare.new
   repeat_count = 0
   p.start do
-    t.start(10, 10) do
+    t.start(UV_INTERVAL, UV_INTERVAL) do
       a.send
       repeat_count += 1
       if repeat_count >= 3
@@ -81,7 +83,7 @@ assert('UV::Loop') do
   l = UV::Loop.new
   t = UV::Timer.new l
   i = 3
-  t.start(10, 10) do
+  t.start(UV_INTERVAL, UV_INTERVAL) do
     i -= 1
     if i < 0
       t.stop
@@ -179,7 +181,7 @@ assert_uv('UV::Signal') do
   end
 
   t = UV::Timer.new
-  t.start(10, 0) do
+  t.start(UV_INTERVAL, 0) do
     raise_signal UV::Signal::SIGWINCH
     t.close
   end
@@ -189,7 +191,7 @@ assert_uv('UV::TCP IPv4 server/client') do
   test_str = "helloworld\r\n"
 
   t = UV::Timer.new
-  t.start(10, 0) do
+  t.start(UV_INTERVAL, 0) do
     c = UV::TCP.new
     c.connect(UV.ip4_addr('127.0.0.1', 8888)) do |connect_status|
       assert_equal 0, connect_status
@@ -217,7 +219,7 @@ assert_uv('UV::TCP IPv6 server/client') do
   test_str = "helloworl\r\n"
 
   t = UV::Timer.new
-  t.start(10, 0) do
+  t.start(UV_INTERVAL, 0) do
     c = UV::TCP.new
     c.connect6(UV.ip6_addr('::1', 8888)) do |connect_status|
       assert_equal 0, connect_status
@@ -245,7 +247,7 @@ end
 assert_uv('UV::Timer') do
   t = UV::Timer.new
   c = 3
-  t.start(10, 10) do
+  t.start(UV_INTERVAL, UV_INTERVAL) do
     c -= 1
     if c < 0
       t.stop
@@ -396,7 +398,7 @@ assert_uv('UV::Prepare, UV::Check') do
   check = UV::Check.new
   timer = UV::Timer.new
 
-  timer.start(5, 5) do
+  timer.start(UV_INTERVAL, UV_INTERVAL) do
     timer.close if count >= 3
   end
 
