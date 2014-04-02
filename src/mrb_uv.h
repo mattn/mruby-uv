@@ -3,6 +3,12 @@
 
 #include <uv.h>
 
+#ifndef _MSC_VER
+#include <unistd.h>
+#else
+#define PATH_MAX MAX_PATH
+#endif
+
 #include <mruby.h>
 #include <mruby/data.h>
 #include <mruby/proc.h>

@@ -1,18 +1,6 @@
 #include "mruby/uv.h"
 #include "mrb_uv.h"
 
-#define _GNU_SOURCE
-#include <errno.h>
-#include <memory.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <limits.h>
-#ifndef _MSC_VER
-#include <unistd.h>
-#else
-#define PATH_MAX MAX_PATH
-#endif
-
 /*********************************************************
  * main
  *********************************************************/
