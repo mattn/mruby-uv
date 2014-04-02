@@ -373,3 +373,10 @@ end
 assert('UV.interface_addresses') do
   assert_true UV.interface_addresses.kind_of? Array
 end
+
+assert('UV.queue_work') do
+  c = 0
+  UV.queue_work { c += 1 }
+  UV.run
+  assert_equal 1, c
+end

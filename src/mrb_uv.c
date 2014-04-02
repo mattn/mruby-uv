@@ -898,6 +898,67 @@ mrb_uv_interface_addresses(mrb_state *mrb, mrb_value self)
   return ret;
 }
 
+typedef struct mrb_uv_work_t {
+  mrb_state *mrb;
+  mrb_value block;
+  mrb_value object;
+  uv_work_t *uv;
+} mrb_uv_work_t;
+
+static struct mrb_data_type const mrb_uv_work_type = {
+  "uv_work", NULL
+};
+
+static void
+mrb_uv_work_cb(uv_work_t *w)
+{
+  mrb_uv_work_t *data = (mrb_uv_work_t*)w->data;
+  mrb_yield_argv(data->mrb, data->block, 0, NULL);
+}
+
+static void
+mrb_uv_after_work_cb(uv_work_t *uv, int err)
+{
+  mrb_uv_work_t *work = (mrb_uv_work_t*)uv->data;
+  mrb_free(work->mrb, work);
+  mrb_free(work->mrb, uv);
+  DATA_PTR(work->object) = NULL;
+  if (err < 0) {
+    mrb_uv_error(work->mrb, err);
+  }
+}
+
+static mrb_value
+mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
+{
+  mrb_value blk;
+  mrb_uv_work_t *work;
+  int err;
+
+  mrb_get_args(mrb, "&", &blk);
+  if (mrb_nil_p(blk)) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "expected block to UV.queue_work");
+  }
+
+  work = (mrb_uv_work_t*)mrb_malloc(mrb, sizeof(mrb_uv_work_t));
+  work->mrb = mrb;
+  work->block = blk;
+  work->uv = (uv_work_t*)mrb_malloc(mrb, sizeof(uv_work_t));
+  work->uv->data = work;
+  err = uv_queue_work(uv_default_loop(), work->uv, mrb_uv_work_cb, mrb_uv_after_work_cb);
+  if (err < 0) {
+    mrb_free(mrb, work->uv);
+    mrb_free(mrb, work);
+    mrb_uv_error(mrb, err);
+  }
+
+  work->object = mrb_obj_value(Data_Wrap_Struct(mrb, mrb->object_class, &mrb_uv_work_type, work));
+  mrb_iv_set(mrb, work->object, mrb_intern_lit(mrb, "work_cb"), blk);
+  mrb_uv_gc_protect(mrb, work->object);
+
+  return self;
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -941,6 +1002,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "rusage", mrb_uv_rusage, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "cpu_info", mrb_uv_cpu_info, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "interface_addresses", mrb_uv_interface_addresses, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "queue_work", mrb_uv_queue_work, MRB_ARGS_NONE());
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
@@ -1002,7 +1064,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_check_init
   uv_check_start
   uv_check_stop
-  uv_queue_work
   uv_cancel
   uv_setup_args
   uv_uptime
