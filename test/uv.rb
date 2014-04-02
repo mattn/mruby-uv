@@ -173,14 +173,14 @@ end
 assert_uv('UV::Signal') do
   skip if UV::IS_WINDOWS
   s = UV::Signal.new
-  s.start(UV::Signal::SIGINT) do |x|
-    assert_equal UV::Signal::SIGINT, x
+  s.start(UV::Signal::SIGWINCH) do |x|
+    assert_equal UV::Signal::SIGWINCH, x
     s.close
   end
 
   t = UV::Timer.new
   t.start(10, 0) do
-    raise_signal UV::Signal::SIGINT
+    raise_signal UV::Signal::SIGWINCH
     t.close
   end
 end
