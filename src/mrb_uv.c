@@ -1034,9 +1034,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_poll_init_socket
   uv_poll_start
   uv_poll_stop
-  uv_check_init
-  uv_check_start
-  uv_check_stop
   uv_cancel
   uv_setup_args
   uv_inet_ntop

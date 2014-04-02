@@ -388,3 +388,28 @@ end
 assert('UV.uptime') do
   assert_true UV.uptime.kind_of? Numeric
 end
+
+assert_uv('UV::Prepare, UV::Check') do
+  prep_called = false
+  count = 0
+  prep = UV::Prepare.new
+  check = UV::Check.new
+  timer = UV::Timer.new
+
+  timer.start(5, 5) do
+    timer.close if count >= 3
+  end
+
+  prep.start do
+    prep.close if count >= 3
+    assert_false prep_called
+    prep_called = true
+  end
+
+  check.start do
+    check.close if count >= 3
+    assert_true prep_called
+    prep_called = false
+    count += 1
+  end
+end

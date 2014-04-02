@@ -1288,6 +1288,55 @@ mrb_uv_fs_poll_stop(mrb_state *mrb, mrb_value self)
 }
 
 /*********************************************************
+ * UV::Check
+ *********************************************************/
+static mrb_value
+mrb_uv_check_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value l = mrb_nil_value();
+  mrb_uv_handle *context;
+  mrb_get_args(mrb, "|o", &l);
+
+  context = mrb_uv_handle_alloc(mrb, sizeof(uv_check_t), self);
+  mrb_uv_check_error(mrb, uv_check_init(get_loop(mrb, l), &context->handle));
+  return self;
+}
+
+static void
+_uv_check_cb(uv_check_t *check)
+{
+  mrb_uv_handle *context = (mrb_uv_handle*)check->data;
+  mrb_state *mrb = context->mrb;
+  mrb_value p = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "check_cb"));
+  if (!mrb_nil_p(p)) {
+    mrb_yield_argv(mrb, p, 0, NULL);
+  }
+}
+
+static mrb_value
+mrb_uv_check_start(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_value b;
+  uv_check_cb cb;
+
+  mrb_get_args(mrb, "&", &b);
+  cb = mrb_nil_p(b)? NULL : _uv_check_cb;
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "check_cb"), b);
+
+  mrb_uv_check_error(mrb, uv_check_start((uv_check_t*)&context->handle, cb));
+  return self;
+}
+
+static mrb_value
+mrb_uv_check_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_uv_check_error(mrb, uv_check_stop((uv_check_t*)&context->handle));
+  return self;
+}
+
+/*********************************************************
  * UV::Signal
  *********************************************************/
 static void
@@ -1523,6 +1572,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   struct RClass* _class_uv_fs_poll;
   struct RClass* _class_uv_signal;
   struct RClass* _class_uv_stream;
+  struct RClass* _class_uv_check;
   int const ai = mrb_gc_arena_save(mrb);
 
   _class_uv_handle = mrb_define_module_under(mrb, UV, "Handle");
@@ -1684,4 +1734,11 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_pipe, "pending_instances=", mrb_uv_pipe_pending_instances, ARGS_REQ(1));
   mrb_gc_arena_restore(mrb, ai);
+
+  _class_uv_check = mrb_define_class_under(mrb, UV, "Check", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_check, MRB_TT_DATA);
+  mrb_include_module(mrb, _class_uv_check, _class_uv_handle);
+  mrb_define_method(mrb, _class_uv_check, "initialize", mrb_uv_check_init, MRB_ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_check, "start", mrb_uv_check_start, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_check, "stop", mrb_uv_check_stop, MRB_ARGS_NONE());
 }
