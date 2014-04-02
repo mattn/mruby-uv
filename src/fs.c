@@ -114,8 +114,6 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   mrb_value c;
   mrb_uv_file* context;
   uv_fs_t* req;
-  int ai;
-  mrb_value uv_gc_table;
 
   mrb_get_args(mrb, "&Sii", &b, &arg_filename, &arg_flags, &arg_mode);
 

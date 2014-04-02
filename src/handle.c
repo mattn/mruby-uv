@@ -417,8 +417,6 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   mrb_uv_handle* new_context = NULL;
   struct RClass* _class_uv;
   struct RClass* _class_uv_tcp;
-  int ai;
-  mrb_value uv_gc_table;
 
   _class_uv = mrb_module_get(mrb, "UV");
   _class_uv_tcp = mrb_class_get_under(mrb, _class_uv, "TCP");
@@ -1298,7 +1296,7 @@ mrb_uv_check_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "|o", &l);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_check_t), self);
-  mrb_uv_check_error(mrb, uv_check_init(get_loop(mrb, l), &context->handle));
+  mrb_uv_check_error(mrb, uv_check_init(get_loop(mrb, l), (uv_check_t*)&context->handle));
   return self;
 }
 
@@ -1503,7 +1501,8 @@ mrb_uv_try_write(mrb_state *mrb, mrb_value self)
   err = uv_try_write((uv_stream_t*)&context->handle, &buf, 1);
   if (err < 0) {
     mrb_uv_check_error(mrb, err);
-  } else if (err == 0) {
+  }
+  if (err == 0) {
     return mrb_symbol_value(mrb_intern_lit(mrb, "need_queue"));
   } else {
     return mrb_fixnum_value(err);
