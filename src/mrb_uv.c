@@ -735,6 +735,169 @@ mrb_uv_process_title_set(mrb_state *mrb, mrb_value self)
   return mrb_uv_process_title(mrb, self);
 }
 
+static mrb_value
+mrb_uv_rusage(mrb_state *mrb, mrb_value self)
+{
+  uv_rusage_t usage;
+  int err;
+  mrb_value ret, tv;
+
+  err = uv_getrusage(&usage);
+  if (err < 0) {
+    mrb_uv_error(mrb, err);
+  }
+
+  ret = mrb_hash_new_capa(mrb, 16);
+#define set_val(name) \
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, #name)), mrb_float_value(mrb, usage.ru_ ## name))
+
+  set_val(maxrss);
+  set_val(ixrss);
+  set_val(idrss);
+  set_val(isrss);
+  set_val(minflt);
+  set_val(majflt);
+  set_val(nswap);
+  set_val(inblock);
+  set_val(oublock);
+  set_val(msgsnd);
+  set_val(msgrcv);
+  set_val(nsignals);
+  set_val(nvcsw);
+  set_val(nivcsw);
+
+#undef set_val
+
+  tv = mrb_ary_new_capa(mrb, 2);
+  mrb_ary_push(mrb, tv, mrb_fixnum_value(usage.ru_utime.tv_sec));
+  mrb_ary_push(mrb, tv, mrb_fixnum_value(usage.ru_utime.tv_usec));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "utime")), tv);
+
+  tv = mrb_ary_new_capa(mrb, 2);
+  mrb_ary_push(mrb, tv, mrb_fixnum_value(usage.ru_stime.tv_sec));
+  mrb_ary_push(mrb, tv, mrb_fixnum_value(usage.ru_stime.tv_usec));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "stime")), tv);
+
+  return ret;
+}
+
+static mrb_value
+mrb_uv_cpu_info(mrb_state *mrb, mrb_value self)
+{
+  uv_cpu_info_t *info;
+  int info_count, err, i, ai;
+  mrb_value ret;
+
+  err = uv_cpu_info(&info, &info_count);
+  if (err < 0) {
+    mrb_uv_error(mrb, err);
+  }
+
+  ret = mrb_ary_new_capa(mrb, info_count);
+  ai = mrb_gc_arena_save(mrb);
+  for (i = 0; i < info_count; ++i) {
+    mrb_value c = mrb_hash_new_capa(mrb, 3), t = mrb_hash_new_capa(mrb, 5);
+
+    mrb_hash_set(mrb, t, mrb_symbol_value(mrb_intern_lit(mrb, "user")), mrb_float_value(mrb, info[i].cpu_times.user));
+    mrb_hash_set(mrb, t, mrb_symbol_value(mrb_intern_lit(mrb, "nice")), mrb_float_value(mrb, info[i].cpu_times.nice));
+    mrb_hash_set(mrb, t, mrb_symbol_value(mrb_intern_lit(mrb, "sys")), mrb_float_value(mrb, info[i].cpu_times.sys));
+    mrb_hash_set(mrb, t, mrb_symbol_value(mrb_intern_lit(mrb, "idle")), mrb_float_value(mrb, info[i].cpu_times.idle));
+    mrb_hash_set(mrb, t, mrb_symbol_value(mrb_intern_lit(mrb, "irq")), mrb_float_value(mrb, info[i].cpu_times.irq));
+
+    mrb_hash_set(mrb, c, mrb_symbol_value(mrb_intern_lit(mrb, "model")), mrb_str_new_cstr(mrb, info[i].model));
+    mrb_hash_set(mrb, c, mrb_symbol_value(mrb_intern_lit(mrb, "speed")), mrb_fixnum_value(info[i].speed));
+    mrb_hash_set(mrb, c, mrb_symbol_value(mrb_intern_lit(mrb, "cpu_times")), t);
+
+    mrb_ary_push(mrb, ret, c);
+    mrb_gc_arena_restore(mrb, ai);
+  }
+
+  uv_free_cpu_info(info, info_count);
+  return ret;
+}
+
+static mrb_value
+mrb_uv_interface_addresses(mrb_state *mrb, mrb_value self)
+{
+  uv_interface_address_t *addr;
+  int addr_count, err, i, ai;
+  mrb_value ret;
+  struct RClass *UV = mrb_module_get(mrb, "UV");
+
+  err = uv_interface_addresses(&addr, &addr_count);
+  if (err < 0) {
+    mrb_uv_error(mrb, err);
+  }
+
+  ret = mrb_ary_new_capa(mrb, addr_count);
+  ai = mrb_gc_arena_save(mrb);
+  for (i = 0; i < addr_count; ++i) {
+    int j;
+    mrb_value n = mrb_hash_new_capa(mrb, 5), phys = mrb_ary_new_capa(mrb, 6);
+
+    for (j = 0; j < 6; ++j) {
+      mrb_ary_push(mrb, phys, mrb_fixnum_value((uint8_t)addr[i].phys_addr[j]));
+    }
+
+    mrb_hash_set(mrb, n, mrb_symbol_value(mrb_intern_lit(mrb, "name")), mrb_str_new_cstr(mrb, addr[i].name));
+    mrb_hash_set(mrb, n, mrb_symbol_value(mrb_intern_lit(mrb, "is_internal")), mrb_bool_value(addr[i].is_internal));
+    mrb_hash_set(mrb, n, mrb_symbol_value(mrb_intern_lit(mrb, "phys_addr")), phys);
+    {
+      struct RClass *cls;
+      void *ptr;
+      struct mrb_data_type const *type;
+
+      switch(addr[i].address.address4.sin_family) {
+      case AF_INET:
+        cls = mrb_class_get_under(mrb, UV, "Ip4Addr");
+        ptr = mrb_malloc(mrb, sizeof(struct sockaddr_in));
+        *(struct sockaddr_in*)ptr = addr[i].address.address4;
+        type = &mrb_uv_ip4addr_type;
+        break;
+      case AF_INET6:
+        cls = mrb_class_get_under(mrb, UV, "Ip6Addr");
+        ptr = mrb_malloc(mrb, sizeof(struct sockaddr_in6));
+        *(struct sockaddr_in6*)ptr = addr[i].address.address6;
+        type = &mrb_uv_ip6addr_type;
+        break;
+      default: mrb_assert(FALSE);
+      }
+      mrb_hash_set(mrb, n, mrb_symbol_value(mrb_intern_lit(mrb, "address")),
+                   mrb_obj_value(Data_Wrap_Struct(mrb, cls, type, ptr)));
+    }
+
+    {
+      struct RClass *cls;
+      void *ptr;
+      struct mrb_data_type const *type;
+
+      switch(addr[i].netmask.netmask4.sin_family) {
+      case AF_INET:
+        cls = mrb_class_get_under(mrb, UV, "Ip4Addr");
+        ptr = mrb_malloc(mrb, sizeof(struct sockaddr_in));
+        *(struct sockaddr_in*)ptr = addr[i].netmask.netmask4;
+        type = &mrb_uv_ip4addr_type;
+        break;
+      case AF_INET6:
+        cls = mrb_class_get_under(mrb, UV, "Ip6Addr");
+        ptr = mrb_malloc(mrb, sizeof(struct sockaddr_in6));
+        *(struct sockaddr_in6*)ptr = addr[i].netmask.netmask6;
+        type = &mrb_uv_ip6addr_type;
+        break;
+      default: mrb_assert(FALSE);
+      }
+      mrb_hash_set(mrb, n, mrb_symbol_value(mrb_intern_lit(mrb, "netmask")),
+                   mrb_obj_value(Data_Wrap_Struct(mrb, cls, type, ptr)));
+    }
+
+    mrb_ary_push(mrb, ret, n);
+    mrb_gc_arena_restore(mrb, ai);
+  }
+
+  uv_free_interface_addresses(addr, addr_count);
+  return ret;
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -775,6 +938,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "disable_stdio_inheritance", mrb_uv_disable_stdio_inheritance, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "process_title", mrb_uv_process_title, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "process_title=", mrb_uv_process_title_set, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "rusage", mrb_uv_rusage, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "cpu_info", mrb_uv_cpu_info, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "interface_addresses", mrb_uv_interface_addresses, MRB_ARGS_NONE());
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));

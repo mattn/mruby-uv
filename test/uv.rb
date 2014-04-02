@@ -359,3 +359,17 @@ end
 assert('UV.process_title=') do
   assert_true (UV.process_title = 'test').kind_of? String
 end
+
+assert('UV.rusage') do
+  assert_true UV.rusage.kind_of? Hash
+end
+
+assert('UV.cpu_info') do
+  i = UV.cpu_info
+  assert_true i.kind_of? Array
+  assert_true i.length > 0
+end
+
+assert('UV.interface_addresses') do
+  assert_true UV.interface_addresses.kind_of? Array
+end
