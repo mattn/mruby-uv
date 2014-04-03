@@ -417,6 +417,8 @@ assert_uv('UV::Prepare, UV::Check') do
 end
 
 assert('UV::Once') do
+  assert_raise(ArgumentError) { UV::Once.new }
+
   c = 0
   o = UV::Once.new { c += 1 }
   o.run
