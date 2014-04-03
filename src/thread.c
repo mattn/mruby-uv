@@ -255,12 +255,72 @@ mrb_uv_sem_destroyed(mrb_state *mrb, mrb_value self)
   return mrb_bool_value(DATA_PTR(self) == NULL);
 }
 
+static struct {
+  uv_mutex_t lock;
+  mrb_state *mrb;
+  mrb_value block;
+} once_info;
+
+static void
+_uv_once_cb() {
+  mrb_assert(!mrb_nil_p(once_info.block));
+  mrb_yield_argv(once_info.mrb, once_info.block, 0, NULL);
+}
+
+static void
+mrb_uv_once_free(mrb_state *mrb, void *p)
+{
+  mrb_assert(p);
+  mrb_free(mrb, p);
+}
+
+static struct mrb_data_type const mrb_uv_once_type = {
+  "uv_once", mrb_uv_once_free
+};
+
+static mrb_value
+mrb_uv_once_init(mrb_state *mrb, mrb_value self)
+{
+  uv_once_t *once;
+  mrb_value b;
+  static uv_once_t const initial_once = UV_ONCE_INIT;
+
+  mrb_get_args(mrb, "&", &b);
+
+  if (mrb_nil_p(b)) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "block not passed to UV::Once initialization");
+  }
+
+  once = (uv_once_t*)mrb_malloc(mrb, sizeof(uv_once_t));
+  *once = initial_once;
+  DATA_PTR(self) = once;
+  DATA_TYPE(self) = &mrb_uv_once_type;
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "once_cb"), b);
+  return self;
+}
+
+static mrb_value
+mrb_uv_once(mrb_state *mrb, mrb_value self)
+{
+  uv_mutex_lock(&once_info.lock);
+  mrb_assert(mrb_nil_p(once_info.block));
+
+  once_info.mrb = mrb;
+  once_info.block = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "once_cb"));
+  uv_once((uv_once_t*)DATA_PTR(self), _uv_once_cb);
+  once_info.block = mrb_nil_value();
+
+  uv_mutex_unlock(&once_info.lock);
+  return self;
+}
+
 void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV)
 {
   struct RClass* _class_uv_thread;
   struct RClass* _class_uv_barrier;
   struct RClass* _class_uv_semaphore;
   struct RClass* _class_uv_mutex;
+  struct RClass* _class_uv_once;
   int const ai = mrb_gc_arena_save(mrb);
 
   _class_uv_thread = mrb_define_class_under(mrb, UV, "Thread", mrb->object_class);
@@ -295,4 +355,10 @@ void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_mutex, "unlock", mrb_uv_mutex_unlock, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_mutex, "destroy", mrb_uv_mutex_destroy, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
+
+  _class_uv_once = mrb_define_class_under(mrb, UV, "Once", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_once, MRB_TT_DATA);
+  mrb_define_method(mrb, _class_uv_once, "initialize", mrb_uv_once_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_once, "run", mrb_uv_once, MRB_ARGS_NONE());
+  mrb_uv_check_error(mrb, uv_mutex_init(&once_info.lock));
 }

@@ -46,29 +46,6 @@ mrb_uv_run(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(uv_run(uv_default_loop(), arg_mode));
 }
 
-/*
- * TODO: need to UV::Once object to avoid gc.
- */
-/*
-static void
-_uv_once_cb() {
-  mrb_value proc = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "$ONCE"));
-  mrb_yield_argv(mrb, proc, 0, NULL);
-}
-
-static mrb_value
-mrb_uv_once(mrb_state *mrb, mrb_value self)
-{
-  mrb_value b = mrb_nil_value();
-  mrb_get_args(mrb, "&", &b);
-  uv_once_t guard;
-  struct RClass* _class_uv = mrb_module_get(mrb, "UV");
-  mrb_define_const(mrb, _class_uv, "$ONCE", b);
-  uv_once(&guard, _uv_once_cb);
-  return mrb_nil_value();
-}
-*/
-
 mrb_value
 mrb_uv_data_get(mrb_state *mrb, mrb_value self)
 {
@@ -947,7 +924,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv = mrb_define_module(mrb, "UV");
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
-  //mrb_define_module_function(mrb, _class_uv, "once", mrb_uv_once, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, ARGS_REQ(2));

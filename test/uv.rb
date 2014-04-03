@@ -415,3 +415,12 @@ assert_uv('UV::Prepare, UV::Check') do
     count += 1
   end
 end
+
+assert('UV::Once') do
+  c = 0
+  o = UV::Once.new { c += 1 }
+  o.run
+  assert_equal 1, c
+  o.run
+  assert_equal 1, c
+end
