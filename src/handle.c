@@ -2,8 +2,6 @@
 #include "mrb_uv.h"
 
 
-extern char **environ;
-
 static uv_loop_t*
 get_loop(mrb_state *mrb, mrb_value v)
 {
@@ -1088,7 +1086,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
 
   opt.file = RSTRING_PTR(arg_file);
   opt.args = uv_setup_args(RARRAY_LEN(arg_args), args);
-  opt.env = environ;
+  opt.env = NULL; /* inherit parent */
   opt.cwd = cwd;
   opt.exit_cb = exit_cb;
   opt.stdio_count = 3;
