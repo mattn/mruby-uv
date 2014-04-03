@@ -23,9 +23,20 @@ mrb_uv_fs_free(mrb_state *mrb, void *p)
   }
 }
 
+
 static const struct mrb_data_type mrb_uv_file_type = {
   "uv_file", mrb_uv_fs_free
 };
+
+static uv_file
+mrb_uv_to_fd(mrb_state *mrb, mrb_value v)
+{
+  if (mrb_fixnum_p(v)) {
+    return mrb_fixnum(v);
+  }
+
+  return ((mrb_uv_file*)mrb_uv_get_ptr(mrb, v, &mrb_uv_file_type))->fd;
+}
 
 static void
 _uv_fs_open_cb(uv_fs_t* req)
@@ -593,13 +604,14 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_int arg_outfd, arg_infd, arg_offset, arg_length;
-  mrb_value b = mrb_nil_value();
+  mrb_value b = mrb_nil_value(), outfile, infile;
   uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_file context;
   uv_fs_t* req;
 
-  // TODO: accept UV::FS object also.
-  mrb_get_args(mrb, "&iiii", &b, &arg_infd, &arg_outfd, &arg_offset, &arg_length);
+  mrb_get_args(mrb, "&ooii", &b, &infile, &outfile, &arg_offset, &arg_length);
+  arg_infd = mrb_uv_to_fd(mrb, infile);
+  arg_outfd = mrb_uv_to_fd(mrb, outfile);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
   } else {
