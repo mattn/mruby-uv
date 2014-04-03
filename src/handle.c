@@ -1225,6 +1225,22 @@ mrb_uv_timer_stop(mrb_state *mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+static mrb_value
+mrb_uv_timer_repeat(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  return mrb_float_value(mrb, (mrb_float)uv_timer_get_repeat((uv_timer_t*)&ctx->handle));
+}
+
+static mrb_value
+mrb_uv_timer_repeat_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_float f;
+  mrb_get_args(mrb, "f", &f);
+  return uv_timer_set_repeat((uv_timer_t*)&ctx->handle, (uint64_t)f), mrb_float_value(mrb, f);
+}
+
 /*********************************************************
  * UV::FS::Poll
  *********************************************************/
@@ -1665,8 +1681,8 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_include_module(mrb, _class_uv_timer, _class_uv_handle);
   mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "again", mrb_uv_timer_again, ARGS_NONE());
-  // TODO: uv_timer_set_repeat
-  // TODO: uv_timer_get_repeat
+  mrb_define_method(mrb, _class_uv_timer, "repeat", mrb_uv_timer_repeat, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_timer, "repeat=", mrb_uv_timer_repeat_set, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_timer, "stop", mrb_uv_timer_stop, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
