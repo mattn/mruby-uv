@@ -776,6 +776,73 @@ mrb_uv_udp_getsockname(mrb_state *mrb, mrb_value self)
   return mrb_uv_getsockname(mrb, self, 0);
 }
 
+static mrb_value
+mrb_uv_udp_set_membership(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  char *multicast, *interface;
+  mrb_int mem;
+
+  mrb_get_args(mrb, "zzi", &multicast, &interface, &mem);
+  mrb_uv_check_error(mrb, uv_udp_set_membership((uv_udp_t*)&ctx->handle, multicast, interface, mem));
+  return self;
+}
+
+static mrb_value
+mrb_uv_udp_multicast_loop_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_bool b;
+
+  mrb_get_args(mrb, "b", &b);
+  mrb_uv_check_error(mrb, uv_udp_set_multicast_loop((uv_udp_t*)&ctx->handle, b));
+  return mrb_bool_value(b);
+}
+
+static mrb_value
+mrb_uv_udp_multicast_ttl_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_bool b;
+
+  mrb_get_args(mrb, "b", &b);
+  mrb_uv_check_error(mrb, uv_udp_set_multicast_ttl((uv_udp_t*)&ctx->handle, b));
+  return mrb_bool_value(b);
+}
+
+static mrb_value
+mrb_uv_udp_broadcast_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_bool b;
+
+  mrb_get_args(mrb, "b", &b);
+  mrb_uv_check_error(mrb, uv_udp_set_broadcast((uv_udp_t*)&ctx->handle, b));
+  return mrb_bool_value(b);
+}
+
+static mrb_value
+mrb_uv_udp_multicast_interface_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_value s;
+
+  mrb_get_args(mrb, "S", &s);
+  mrb_uv_check_error(mrb, uv_udp_set_multicast_interface((uv_udp_t*)&ctx->handle, mrb_string_value_ptr(mrb, s)));
+  return s;
+}
+
+static mrb_value
+mrb_uv_udp_ttl_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_int v;
+
+  mrb_get_args(mrb, "i", &v);
+  mrb_uv_check_error(mrb, uv_udp_set_ttl((uv_udp_t*)&ctx->handle, v));
+  return mrb_fixnum_value(v);
+}
+
 /*********************************************************
  * UV::Prepare
  *********************************************************/
@@ -1622,6 +1689,12 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_include_module(mrb, _class_uv_udp, _class_uv_handle);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_NONE());
   // TODO: uv_udp_open
+  mrb_define_method(mrb, _class_uv_udp, "set_membership", mrb_uv_udp_set_membership, ARGS_REQ(3));
+  mrb_define_method(mrb, _class_uv_udp, "multicast_loop=", mrb_uv_udp_multicast_loop_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "multicast_ttl=", mrb_uv_udp_multicast_ttl_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "multicast_interface=", mrb_uv_udp_multicast_interface_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "broadcast=", mrb_uv_udp_broadcast_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "ttl=", mrb_uv_udp_ttl_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send4, ARGS_REQ(2));
@@ -1629,6 +1702,8 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind4, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "bind6", mrb_uv_udp_bind6, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "getsockname", mrb_uv_udp_getsockname, ARGS_NONE());
+  mrb_define_const(mrb, _class_uv_udp, "LEAVE_GROUP", mrb_fixnum_value(UV_LEAVE_GROUP));
+  mrb_define_const(mrb, _class_uv_udp, "JOIN_GROUP", mrb_fixnum_value(UV_JOIN_GROUP));
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_process = mrb_define_class_under(mrb, UV, "Process", mrb->object_class);
@@ -1715,11 +1790,6 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_include_module(mrb, _class_uv_tcp, _class_uv_stream);
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_NONE());
   // TODO: uv_tcp_open
-  // TODO: uv_udp_set_membership
-  // TODO: uv_udp_set_multicast_loop
-  // TODO: uv_udp_set_multicast_ttl
-  // TODO: uv_udp_set_broadcast
-  // TODO: uv_udp_set_ttl
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect4, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "connect6", mrb_uv_tcp_connect6, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind4, ARGS_REQ(1));
@@ -1727,11 +1797,8 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_tcp, "listen", mrb_uv_tcp_listen, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "accept", mrb_uv_tcp_accept, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts=", mrb_uv_tcp_simultaneous_accepts_set, ARGS_REQ(1));
-  //mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts", mrb_uv_tcp_simultaneous_accepts_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "keepalive=", mrb_uv_tcp_keepalive_set, ARGS_REQ(1));
-  //mrb_define_method(mrb, _class_uv_tcp, "keepalive", mrb_uv_tcp_keepalive_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "nodelay=", mrb_uv_tcp_nodelay_set, ARGS_REQ(1));
-  //mrb_define_method(mrb, _class_uv_tcp, "nodelay", mrb_uv_tcp_nodelay_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "getpeername", mrb_uv_tcp_getpeername, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "getsockname", mrb_uv_tcp_getsockname, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
