@@ -567,15 +567,15 @@ mrb_uv_guess_handle(mrb_state *mrb, mrb_value self)
   h = uv_guess_handle(fd);
 
   switch(h) {
-  case UV_FILE: return mrb_symbol_value(mrb_intern_lit(mrb, "file"));
+  case UV_FILE: return symbol_value_lit(mrb, "file");
 
-#define XX(t, l) case UV_ ## t: return mrb_symbol_value(mrb_intern_lit(mrb, #l));
+#define XX(t, l) case UV_ ## t: return symbol_value_lit(mrb, #l);
   UV_HANDLE_TYPE_MAP(XX)
 #undef XX
 
   default:
   case UV_UNKNOWN_HANDLE:
-    return mrb_symbol_value(mrb_intern_lit(mrb, "unknown"));
+    return symbol_value_lit(mrb, "unknown");
   }
 }
 
@@ -704,7 +704,7 @@ mrb_uv_rusage(mrb_state *mrb, mrb_value self)
 
   ret = mrb_hash_new_capa(mrb, 16);
 #define set_val(name) \
-  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, #name)), mrb_float_value(mrb, usage.ru_ ## name))
+  mrb_hash_set(mrb, ret, symbol_value_lit(mrb, #name), mrb_float_value(mrb, usage.ru_ ## name))
 
   set_val(maxrss);
   set_val(ixrss);
@@ -726,12 +726,12 @@ mrb_uv_rusage(mrb_state *mrb, mrb_value self)
   tv = mrb_ary_new_capa(mrb, 2);
   mrb_ary_push(mrb, tv, mrb_fixnum_value(usage.ru_utime.tv_sec));
   mrb_ary_push(mrb, tv, mrb_fixnum_value(usage.ru_utime.tv_usec));
-  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "utime")), tv);
+  mrb_hash_set(mrb, ret, symbol_value_lit(mrb, "utime"), tv);
 
   tv = mrb_ary_new_capa(mrb, 2);
   mrb_ary_push(mrb, tv, mrb_fixnum_value(usage.ru_stime.tv_sec));
   mrb_ary_push(mrb, tv, mrb_fixnum_value(usage.ru_stime.tv_usec));
-  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "stime")), tv);
+  mrb_hash_set(mrb, ret, symbol_value_lit(mrb, "stime"), tv);
 
   return ret;
 }
@@ -753,15 +753,15 @@ mrb_uv_cpu_info(mrb_state *mrb, mrb_value self)
   for (i = 0; i < info_count; ++i) {
     mrb_value c = mrb_hash_new_capa(mrb, 3), t = mrb_hash_new_capa(mrb, 5);
 
-    mrb_hash_set(mrb, t, mrb_symbol_value(mrb_intern_lit(mrb, "user")), mrb_float_value(mrb, info[i].cpu_times.user));
-    mrb_hash_set(mrb, t, mrb_symbol_value(mrb_intern_lit(mrb, "nice")), mrb_float_value(mrb, info[i].cpu_times.nice));
-    mrb_hash_set(mrb, t, mrb_symbol_value(mrb_intern_lit(mrb, "sys")), mrb_float_value(mrb, info[i].cpu_times.sys));
-    mrb_hash_set(mrb, t, mrb_symbol_value(mrb_intern_lit(mrb, "idle")), mrb_float_value(mrb, info[i].cpu_times.idle));
-    mrb_hash_set(mrb, t, mrb_symbol_value(mrb_intern_lit(mrb, "irq")), mrb_float_value(mrb, info[i].cpu_times.irq));
+    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "user"), mrb_float_value(mrb, info[i].cpu_times.user));
+    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "nice"), mrb_float_value(mrb, info[i].cpu_times.nice));
+    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "sys"), mrb_float_value(mrb, info[i].cpu_times.sys));
+    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "idle"), mrb_float_value(mrb, info[i].cpu_times.idle));
+    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "irq"), mrb_float_value(mrb, info[i].cpu_times.irq));
 
-    mrb_hash_set(mrb, c, mrb_symbol_value(mrb_intern_lit(mrb, "model")), mrb_str_new_cstr(mrb, info[i].model));
-    mrb_hash_set(mrb, c, mrb_symbol_value(mrb_intern_lit(mrb, "speed")), mrb_fixnum_value(info[i].speed));
-    mrb_hash_set(mrb, c, mrb_symbol_value(mrb_intern_lit(mrb, "cpu_times")), t);
+    mrb_hash_set(mrb, c, symbol_value_lit(mrb, "model"), mrb_str_new_cstr(mrb, info[i].model));
+    mrb_hash_set(mrb, c, symbol_value_lit(mrb, "speed"), mrb_fixnum_value(info[i].speed));
+    mrb_hash_set(mrb, c, symbol_value_lit(mrb, "cpu_times"), t);
 
     mrb_ary_push(mrb, ret, c);
     mrb_gc_arena_restore(mrb, ai);
@@ -794,9 +794,9 @@ mrb_uv_interface_addresses(mrb_state *mrb, mrb_value self)
       mrb_ary_push(mrb, phys, mrb_fixnum_value((uint8_t)addr[i].phys_addr[j]));
     }
 
-    mrb_hash_set(mrb, n, mrb_symbol_value(mrb_intern_lit(mrb, "name")), mrb_str_new_cstr(mrb, addr[i].name));
-    mrb_hash_set(mrb, n, mrb_symbol_value(mrb_intern_lit(mrb, "is_internal")), mrb_bool_value(addr[i].is_internal));
-    mrb_hash_set(mrb, n, mrb_symbol_value(mrb_intern_lit(mrb, "phys_addr")), phys);
+    mrb_hash_set(mrb, n, symbol_value_lit(mrb, "name"), mrb_str_new_cstr(mrb, addr[i].name));
+    mrb_hash_set(mrb, n, symbol_value_lit(mrb, "is_internal"), mrb_bool_value(addr[i].is_internal));
+    mrb_hash_set(mrb, n, symbol_value_lit(mrb, "phys_addr"), phys);
     {
       struct RClass *cls;
       void *ptr;
@@ -817,8 +817,7 @@ mrb_uv_interface_addresses(mrb_state *mrb, mrb_value self)
         break;
       default: mrb_assert(FALSE);
       }
-      mrb_hash_set(mrb, n, mrb_symbol_value(mrb_intern_lit(mrb, "address")),
-                   mrb_obj_value(Data_Wrap_Struct(mrb, cls, type, ptr)));
+      mrb_hash_set(mrb, n, symbol_value_lit(mrb, "address"), mrb_obj_value(Data_Wrap_Struct(mrb, cls, type, ptr)));
     }
 
     {
@@ -841,8 +840,7 @@ mrb_uv_interface_addresses(mrb_state *mrb, mrb_value self)
         break;
       default: mrb_assert(FALSE);
       }
-      mrb_hash_set(mrb, n, mrb_symbol_value(mrb_intern_lit(mrb, "netmask")),
-                   mrb_obj_value(Data_Wrap_Struct(mrb, cls, type, ptr)));
+      mrb_hash_set(mrb, n, symbol_value_lit(mrb, "netmask"), mrb_obj_value(Data_Wrap_Struct(mrb, cls, type, ptr)));
     }
 
     mrb_ary_push(mrb, ret, n);

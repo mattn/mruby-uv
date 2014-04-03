@@ -23,6 +23,8 @@
 #define mrb_module_get mrb_class_get
 #endif
 
+#define symbol_value_lit(mrb, lit) (mrb_symbol_value(mrb_intern_lit(mrb, lit)))
+
 extern const struct mrb_data_type mrb_uv_ip4addr_type;
 extern const struct mrb_data_type mrb_uv_ip6addr_type;
 extern const struct mrb_data_type mrb_uv_ip4addr_nofree_type;

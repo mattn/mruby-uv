@@ -1503,7 +1503,7 @@ mrb_uv_try_write(mrb_state *mrb, mrb_value self)
     mrb_uv_check_error(mrb, err);
   }
   if (err == 0) {
-    return mrb_symbol_value(mrb_intern_lit(mrb, "need_queue"));
+    return symbol_value_lit(mrb, "need_queue");
   } else {
     return mrb_fixnum_value(err);
   }
