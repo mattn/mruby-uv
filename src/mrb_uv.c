@@ -944,7 +944,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_ip4addr;
   struct RClass* _class_uv_ip6addr;
   struct RClass* _class_uv_error;
-  mrb_value uv_gc_table;
 
   _class_uv_error = mrb_define_class(mrb, "UVError", E_NAME_ERROR);
 
@@ -1059,8 +1058,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_mruby_uv_gem_init_thread(mrb, _class_uv);
   mrb_mruby_uv_gem_init_dl(mrb, _class_uv);
 
-  uv_gc_table = mrb_ary_new(mrb);
-  mrb_define_const(mrb, _class_uv, "$GC", uv_gc_table);
+  mrb_define_const(mrb, _class_uv, "$GC", mrb_ary_new(mrb));
 }
 
 void
