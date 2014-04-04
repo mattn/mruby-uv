@@ -428,41 +428,47 @@ assert('UV::Once') do
   assert_equal 1, c
 end
 
-assert_uv('UV::FS::Event') do
+assert_uv('UV::FS::Event rename') do
   remove_uv_test_tmpfile
 
-  f = nil
-  t = nil
-
   UV::FS::mkdir 'foo-bar'
-  f = UV::FS::open("foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD)
-  f.write "test\n"
+  f = UV::FS::open "foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+  f.write 'test\n'
+  f.close
 
   ev = UV::FS::Event.new
-  ev.start('foo-bar', UV::FS::Event::RECURSIVE) do |path,r|
-    assert_equal 'foo.txt', path
-    assert_equal :rename, r
+  ev.start 'foo-bar', 0 do |rename_path, rename_ev|
+    assert_equal 'foo.txt', rename_path
+    assert_equal :rename, rename_ev
     ev.close
-
-    ev = UV::FS::Event.new
-    ev.start('foo-bar', UV::FS::Event::RECURSIVE) do |path,r|
-      assert_equal 'foo.txt', path
-      assert_equal :rename, r
-      UV::FS.unlink 'foo-bar/bar.txt'
-      remove_uv_test_tmpfile
-      ev.close
-    end
-
-    t = UV::Timer.new
-    t.start(UV_INTERVAL, 0) do
-      UV::FS.rename 'foo-bar/foo.txt', 'foo-bar/bar.txt'
-    end
+    remove_uv_test_tmpfile
   end
-  assert_equal 'foo-bar', ev.path
 
   t = UV::Timer.new
-  t.start(UV_INTERVAL, 0) do
+  t.start UV_INTERVAL, 0 do
+    UV::FS.rename 'foo-bar/foo.txt', 'foo-bar/bar.txt'
+  end
+end
+
+assert_uv('UV::FS::Event change') do
+  remove_uv_test_tmpfile
+
+  UV::FS::mkdir 'foo-bar'
+  f = UV::FS::open "foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+
+  ev = UV::FS::Event.new
+  ev.start 'foo-bar/foo.txt', 0 do |change_path, change_ev|
+    assert_equal 'foo.txt', change_path
+    assert_equal :change, change_ev
+    ev.close
+    remove_uv_test_tmpfile
+  end
+  assert_equal 'foo-bar/foo.txt', ev.path
+
+  t = UV::Timer.new
+  t.start UV_INTERVAL, 0 do
     f.write "test\n"
     UV::FS.fsync f.fd
+    f.close
   end
 end
