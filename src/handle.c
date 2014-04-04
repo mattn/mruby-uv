@@ -1710,6 +1710,58 @@ mrb_uv_fs_event_path(mrb_state *mrb, mrb_value self)
   return mrb_str_new(mrb, ret, len - 1);
 }
 
+/*
+ * UV::Poll
+ */
+static mrb_value
+mrb_uv_poll_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx;
+  mrb_value fd, loop;
+  mrb_get_args(mrb, "o|o", &fd, &loop);
+
+  ctx = mrb_uv_handle_alloc(mrb, sizeof(uv_poll_t), self);
+  mrb_uv_check_error(mrb, uv_poll_init(get_loop(mrb, loop), (uv_poll_t*)&ctx->handle, mrb_uv_to_fd(mrb, fd)));
+  return self;
+}
+
+static void
+_uv_poll_cb(uv_poll_t *poll, int status, int events)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)poll->data;
+  mrb_state *mrb = ctx->mrb;
+  mrb_value cb = mrb_iv_get(mrb, ctx->instance, mrb_intern_lit(mrb, "poll_cb"));
+  mrb_uv_check_error(mrb, status);
+  if (!mrb_nil_p(cb)) {
+    mrb_value ev_val = mrb_fixnum_value(events);
+    mrb_yield_argv(mrb, cb, 1, &ev_val);
+  }
+}
+
+static mrb_value
+mrb_uv_poll_start(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_int ev;
+  mrb_value b;
+  uv_poll_cb cb = _uv_poll_cb;
+
+  mrb_get_args(mrb, "&i", &b, &ev);
+  if (mrb_nil_p(b)) {
+    cb = NULL;
+  }
+
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "poll_cb"), b);
+  return mrb_uv_check_error(mrb, uv_poll_start((uv_poll_t*)&ctx->handle, ev, cb)), self;
+}
+
+static mrb_value
+mrb_uv_poll_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  return mrb_uv_check_error(mrb, uv_poll_stop((uv_poll_t*)&ctx->handle)), self;
+}
+
 void
 mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
 {
@@ -1728,6 +1780,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   struct RClass* _class_uv_stream;
   struct RClass* _class_uv_check;
   struct RClass* _class_uv_fs_event;
+  struct RClass* _class_uv_poll;
   int const ai = mrb_gc_arena_save(mrb);
 
   _class_uv_handle = mrb_define_module_under(mrb, UV, "Handle");
@@ -1907,4 +1960,13 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_const(mrb, _class_uv_fs_event, "WATCH_ENTRY", mrb_fixnum_value(UV_FS_EVENT_WATCH_ENTRY));
   mrb_define_const(mrb, _class_uv_fs_event, "STAT", mrb_fixnum_value(UV_FS_EVENT_STAT));
   mrb_define_const(mrb, _class_uv_fs_event, "RECURSIVE", mrb_fixnum_value(UV_FS_EVENT_RECURSIVE));
+
+  _class_uv_poll = mrb_define_class_under(mrb, UV, "Poll", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_poll, MRB_TT_DATA);
+  mrb_include_module(mrb, _class_uv_poll, _class_uv_handle);
+  mrb_define_method(mrb, _class_uv_poll, "initialize", mrb_uv_poll_init, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_poll, "start", mrb_uv_poll_start, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_poll, "stop", mrb_uv_poll_stop, MRB_ARGS_NONE());
+  mrb_define_const(mrb, _class_uv_poll, "READABLE", mrb_fixnum_value(UV_READABLE));
+  mrb_define_const(mrb, _class_uv_poll, "WRITABLE", mrb_fixnum_value(UV_WRITABLE));
 }

@@ -28,7 +28,7 @@ static const struct mrb_data_type mrb_uv_file_type = {
   "uv_file", mrb_uv_fs_free
 };
 
-static uv_file
+uv_file
 mrb_uv_to_fd(mrb_state *mrb, mrb_value v)
 {
   if (mrb_fixnum_p(v)) {
