@@ -422,6 +422,7 @@ assert_uv('UV::FS::Event rename') do
     ev.close
     remove_uv_test_tmpfile
   end
+  assert_equal 'foo-bar', ev.path
 
   t = UV::Timer.new
   t.start UV_INTERVAL, 0 do
