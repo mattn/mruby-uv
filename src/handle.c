@@ -1665,7 +1665,7 @@ _uv_fs_event_cb(uv_fs_event_t *ev, char const *filename, int events, int status)
     args[0] = mrb_str_new_cstr(mrb, filename);
     switch((enum uv_fs_event)events) {
     case UV_RENAME: args[1] = symbol_value_lit(mrb, "rename"); break;
-    case UV_CHANGE: args[0] = symbol_value_lit(mrb, "change"); break;
+    case UV_CHANGE: args[1] = symbol_value_lit(mrb, "change"); break;
     default: mrb_assert(FALSE);
     }
     mrb_yield_argv(mrb, cb, 2, args);
