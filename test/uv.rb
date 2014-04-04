@@ -454,17 +454,15 @@ assert_uv('UV::FS::Event') do
     end
 
     t = UV::Timer.new
-    t.start(0, UV_INTERVAL) do
+    t.start(UV_INTERVAL, 0) do
       UV::FS.rename 'foo-bar/foo.txt', 'foo-bar/bar.txt'
-      t.close
     end
   end
   assert_equal 'foo-bar', ev.path
 
   t = UV::Timer.new
-  t.start(0, UV_INTERVAL) do
+  t.start(UV_INTERVAL, 0) do
     f.write "test\n"
     UV::FS.fsync f.fd
-    t.close
   end
 end
