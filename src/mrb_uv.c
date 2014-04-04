@@ -831,11 +831,19 @@ typedef struct mrb_uv_work_t {
   mrb_state *mrb;
   mrb_value block;
   mrb_value object;
-  uv_work_t *uv;
+  uv_work_t uv;
 } mrb_uv_work_t;
 
+static void
+mrb_uv_work_free(mrb_state *mrb, void *p)
+{
+  if (p) {
+    mrb_free(mrb, p);
+  }
+}
+
 static struct mrb_data_type const mrb_uv_work_type = {
-  "uv_work", NULL
+  "uv_work", mrb_uv_work_free
 };
 
 static void
@@ -849,11 +857,11 @@ static void
 mrb_uv_after_work_cb(uv_work_t *uv, int err)
 {
   mrb_uv_work_t *work = (mrb_uv_work_t*)uv->data;
-  mrb_free(work->mrb, work);
-  mrb_free(work->mrb, uv);
+  mrb_state *mrb = work->mrb;
   DATA_PTR(work->object) = NULL;
+  mrb_free(mrb, work);
   if (err < 0) {
-    mrb_uv_check_error(work->mrb, err);
+    mrb_uv_check_error(mrb, err);
   }
 }
 
@@ -862,7 +870,6 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
 {
   mrb_value blk;
   mrb_uv_work_t *work;
-  int err;
 
   mrb_get_args(mrb, "&", &blk);
   if (mrb_nil_p(blk)) {
@@ -872,17 +879,10 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
   work = (mrb_uv_work_t*)mrb_malloc(mrb, sizeof(mrb_uv_work_t));
   work->mrb = mrb;
   work->block = blk;
-  work->uv = (uv_work_t*)mrb_malloc(mrb, sizeof(uv_work_t));
-  work->uv->data = work;
-  err = uv_queue_work(uv_default_loop(), work->uv, mrb_uv_work_cb, mrb_uv_after_work_cb);
-  if (err < 0) {
-    mrb_free(mrb, work->uv);
-    mrb_free(mrb, work);
-    mrb_uv_check_error(mrb, err);
-  }
-
+  work->uv.data = work;
   work->object = mrb_obj_value(Data_Wrap_Struct(mrb, mrb->object_class, &mrb_uv_work_type, work));
   mrb_iv_set(mrb, work->object, mrb_intern_lit(mrb, "work_cb"), blk);
+  mrb_uv_check_error(mrb, uv_queue_work(uv_default_loop(), &work->uv, mrb_uv_work_cb, mrb_uv_after_work_cb));
   mrb_uv_gc_protect(mrb, work->object);
 
   return self;
