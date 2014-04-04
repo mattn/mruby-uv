@@ -447,7 +447,7 @@ assert_uv('UV::FS::Event change') do
   assert_equal 'foo-bar/foo.txt', ev.path
 
   t = UV::Timer.new
-  t.start UV_INTERVAL, 0 do
+  t.start 10, 0 do
     f.write "test\n"
     UV::FS.fsync f.fd
     f.close
