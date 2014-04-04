@@ -1636,6 +1636,80 @@ mrb_uv_writable(mrb_state *mrb, mrb_value self)
   return mrb_bool_value(uv_is_writable((uv_stream_t*)&ctx->handle));
 }
 
+/*
+ * UV::FS::Event
+ */
+static mrb_value
+mrb_uv_fs_event_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value l = mrb_nil_value();
+  mrb_uv_handle *ctx;
+  mrb_get_args(mrb, "|o", &l);
+
+  ctx = mrb_uv_handle_alloc(mrb, sizeof(uv_fs_event_t), self);
+  mrb_uv_check_error(mrb, uv_fs_event_init(get_loop(mrb, l), (uv_fs_event_t*)&ctx->handle));
+  return self;
+}
+
+static void
+_uv_fs_event_cb(uv_fs_event_t *ev, char const *filename, int events, int status)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)ev->data;
+  mrb_state *mrb = ctx->mrb;
+  mrb_value cb;
+
+  mrb_uv_check_error(mrb, status);
+  cb = mrb_iv_get(mrb, ctx->instance, mrb_intern_lit(mrb, "fs_event_cb"));
+  if (!mrb_nil_p(cb)) {
+    mrb_value args[2];
+    args[0] = mrb_str_new_cstr(mrb, filename);
+    switch((enum uv_fs_event)events) {
+    case UV_RENAME: args[1] = symbol_value_lit(mrb, "rename"); break;
+    case UV_CHANGE: args[0] = symbol_value_lit(mrb, "change"); break;
+    default: mrb_assert(FALSE);
+    }
+    mrb_yield_argv(mrb, cb, 2, args);
+  }
+}
+
+static mrb_value
+mrb_uv_fs_event_start(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  char* path;
+  uv_fs_event_cb cb = _uv_fs_event_cb;
+  mrb_int flags;
+  mrb_value b;
+
+  mrb_get_args(mrb, "&zi", &b, &path, &flags);
+  if (mrb_nil_p(b)) {
+    cb = NULL;
+  }
+
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_event_cb"), b);
+  mrb_uv_check_error(mrb, uv_fs_event_start((uv_fs_event_t*)&ctx->handle, cb, path, flags));
+  return self;
+}
+
+static mrb_value
+mrb_uv_fs_event_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_uv_check_error(mrb, uv_fs_event_stop((uv_fs_event_t*)&ctx->handle));
+  return self;
+}
+
+static mrb_value
+mrb_uv_fs_event_path(mrb_state *mrb, mrb_value self)
+{
+  char ret[PATH_MAX];
+  size_t len = PATH_MAX;
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+
+  mrb_uv_check_error(mrb, uv_fs_event_getpath((uv_fs_event_t*)&ctx->handle, ret, &len));
+  return mrb_str_new(mrb, ret, len - 1);
+}
+
 void
 mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
 {
@@ -1653,6 +1727,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   struct RClass* _class_uv_signal;
   struct RClass* _class_uv_stream;
   struct RClass* _class_uv_check;
+  struct RClass* _class_uv_fs_event;
   int const ai = mrb_gc_arena_save(mrb);
 
   _class_uv_handle = mrb_define_module_under(mrb, UV, "Handle");
@@ -1821,4 +1896,15 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_check, "initialize", mrb_uv_check_init, MRB_ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_check, "start", mrb_uv_check_start, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_check, "stop", mrb_uv_check_stop, MRB_ARGS_NONE());
+
+  _class_uv_fs_event = mrb_define_class_under(mrb, mrb_class_get_under(mrb, UV, "FS"), "Event", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_fs_event, MRB_TT_DATA);
+  mrb_include_module(mrb, _class_uv_fs_event, _class_uv_handle);
+  mrb_define_method(mrb, _class_uv_fs_event, "initialize", mrb_uv_fs_event_init, MRB_ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_fs_event, "start", mrb_uv_fs_event_start, MRB_ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_fs_event, "stop", mrb_uv_fs_event_stop, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs_event, "path", mrb_uv_fs_event_path, MRB_ARGS_NONE());
+  mrb_define_const(mrb, _class_uv_fs_event, "WATCH_ENTRY", mrb_fixnum_value(UV_FS_EVENT_WATCH_ENTRY));
+  mrb_define_const(mrb, _class_uv_fs_event, "STAT", mrb_fixnum_value(UV_FS_EVENT_STAT));
+  mrb_define_const(mrb, _class_uv_fs_event, "RECURSIVE", mrb_fixnum_value(UV_FS_EVENT_RECURSIVE));
 }

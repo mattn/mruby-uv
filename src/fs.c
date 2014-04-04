@@ -736,7 +736,6 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   /* TODO
   UV::FS::Stat object
 
-  uv_fs_event_init
   uv_fs_utime
   uv_fs_futime
   uv_fs_symlink
