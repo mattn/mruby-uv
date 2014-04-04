@@ -1960,6 +1960,8 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_const(mrb, _class_uv_fs_event, "WATCH_ENTRY", mrb_fixnum_value(UV_FS_EVENT_WATCH_ENTRY));
   mrb_define_const(mrb, _class_uv_fs_event, "STAT", mrb_fixnum_value(UV_FS_EVENT_STAT));
   mrb_define_const(mrb, _class_uv_fs_event, "RECURSIVE", mrb_fixnum_value(UV_FS_EVENT_RECURSIVE));
+  mrb_define_const(mrb, _class_uv_fs_event, "CHANGE", symbol_value_lit(mrb, "change"));
+  mrb_define_const(mrb, _class_uv_fs_event, "RENAME", symbol_value_lit(mrb, "rename"));
 
   _class_uv_poll = mrb_define_class_under(mrb, UV, "Poll", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_poll, MRB_TT_DATA);

@@ -440,6 +440,7 @@ assert_uv('UV::FS::Event rename') do
   ev.start 'foo-bar', 0 do |rename_path, rename_ev|
     assert_equal 'foo.txt', rename_path
     assert_equal :rename, rename_ev
+    assert_equal UV::FS::Event::RENAME, rename_ev
     ev.close
     remove_uv_test_tmpfile
   end
@@ -460,6 +461,7 @@ assert_uv('UV::FS::Event change') do
   ev.start 'foo-bar/foo.txt', 0 do |change_path, change_ev|
     assert_equal 'foo.txt', change_path
     assert_equal :change, change_ev
+    assert_equal UV::FS::Event::CHANGE, change_ev
     ev.close
     remove_uv_test_tmpfile
   end
