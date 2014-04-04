@@ -9,6 +9,7 @@ def assert_uv(name, &block)
 end
 
 def remove_uv_test_tmpfile
+  UV::FS::unlink(UV::IS_WINDOWS ? '\\\\.\\pipe\\mruby-uv' : '/tmp/mruby-uv') rescue nil
   UV::FS::unlink 'foo-bar/bar.txt' rescue nil
   UV::FS::unlink 'foo-bar/foo.txt' rescue nil
   UV::FS::rmdir 'foo-bar' rescue nil
@@ -96,49 +97,26 @@ assert('UV::Loop') do
 end
 
 assert_uv('UV::Pipe') do
-  if UV::IS_WINDOWS
-    s = UV::Pipe.new(0)
-    s.bind('\\\\.\\pipe\\mruby-uv')
-    s.listen(5) do |x|
-      return if x != 0
-      c = s.accept()
-      c.write "helloworld\r\n"
-      c.close()
-      s.close
-    end
+  path = UV::IS_WINDOWS ? '\\\\.\\pipe\\mruby-uv' : '/tmp/mruby-uv'
+  s = UV::Pipe.new 1
+  s.bind path
+  s.listen(5) do |x|
+    return if x != 0
+    c = s.accept
+    c.write "helloworld\r\n"
+    c.close
+    s.close
+  end
 
-    client = UV::Pipe.new(0)
-    client.connect('\\\\.\\pipe\\mruby-uv') do |x|
-      if x == 0
-        client.read_start do |b|
-          assert_equal "helloworld\r\n", b.to_s
-          client.close
-        end
-      else
+  client = UV::Pipe.new(1)
+  client.connect(path) do |x|
+    if x == 0
+      client.read_start do |b|
+        assert_equal "helloworld\r\n", b.to_s
         client.close
       end
-    end
-  else
-    s = UV::Pipe.new 1
-    s.bind '/tmp/mruby-uv'
-    s.listen(5) do |x|
-      return if x != 0
-      c = s.accept
-      c.write "helloworld\r\n"
-      c.close
-      s.close
-    end
-
-    client = UV::Pipe.new(1)
-    client.connect('/tmp/mruby-uv') do |x|
-      if x == 0
-        client.read_start do |b|
-          assert_equal "helloworld\r\n", b.to_s
-          client.close
-        end
-      else
-        client.close
-      end
+    else
+      client.close
     end
   end
 end
