@@ -1137,9 +1137,9 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
 
   uv_cwd(cwd, &cwd_size);
   args = mrb_malloc(mrb, sizeof(char*) * (RARRAY_LEN(arg_args)+2));
-  args[0] = RSTRING_PTR(arg_file);
+  args[0] = mrb_string_value_ptr(mrb, arg_file);
   for (i = 0; i < RARRAY_LEN(arg_args); i++) {
-    args[i+1] = RSTRING_PTR(mrb_ary_entry(arg_args, i));
+    args[i+1] = mrb_string_value_ptr(mrb, mrb_ary_entry(arg_args, i));
   }
   args[i+1] = NULL;
 
@@ -1168,7 +1168,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
 
   opt.file = RSTRING_PTR(arg_file);
-  opt.args = uv_setup_args(RARRAY_LEN(arg_args), args);
+  opt.args = args;
   opt.env = NULL; /* inherit parent */
   opt.cwd = cwd;
   opt.exit_cb = exit_cb;

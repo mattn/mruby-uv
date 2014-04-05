@@ -329,20 +329,23 @@ assert_uv 'UV::FS::Event change' do
 end
 =end
 
-=begin
 assert_uv 'Process' do
   remove_uv_test_tmpfile
   UV::FS.mkdir 'foo-bar'
+  f = UV::FS.open "foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+  f.write "test\n"
+  f.close
 
-  ps = UV::Process.new 'file' => 'grep', 'args' => []
+  ps = UV::Process.new 'file' => 'grep', 'args' => %w[-r test foo-bar]
   ps.stdout_pipe = UV::Pipe.new 0
 
-  ps.spawn do |sig|
-    assert_equal 2, sig
+  ps.spawn do |x, sig|
+    assert_equal 0, x
+    ps.close
     remove_uv_test_tmpfile
   end
   ps.stdout_pipe.read_start do |b|
-    assert_nil b
+    assert_equal "foo-bar/foo.txt:test\n", b
+    ps.stdout_pipe.close
   end
 end
-=end
