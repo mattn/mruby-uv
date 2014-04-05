@@ -11,6 +11,7 @@ def assert_uv(name, &block)
   assert name do
     block.call
     UV.run
+    UV.default_loop.close
     true
   end
 end
@@ -107,6 +108,7 @@ assert 'UV::Loop' do
     t.close if i < 0
   end
   l.run
+  l.close
   assert_equal(-1, i)
 end
 
@@ -206,31 +208,12 @@ assert_uv 'UV::Prepare, UV::Check' do
   end
 end
 
-assert_uv 'UV::TCP IPv4 server/client' do
-  test_str = "helloworld\r\n"
-
-  t = UV::Timer.new
-  t.start UV_INTERVAL, 0 do
-    c = UV::TCP.new
-    c.connect UV.ip4_addr('127.0.0.1', 8888) do |connect_status|
-      assert_equal 0, connect_status
-      c.read_start do |b|
-        assert_equal test_str, b
-        c.close
-      end
-    end
-    t.close
-  end
-
-  s = UV::TCP.new
-  s.bind UV.ip4_addr '127.0.0.1', 8888
-  assert_equal '127.0.0.1:8888', s.getsockname.to_s
-  s.listen 5 do |x|
-    return if x != 0
-    c = s.accept
-    assert_equal '127.0.0.1', c.getpeername.to_s[0, 9]
-    c.write test_str
-    s.close
+assert_uv 'UV::Idle' do
+  i = UV::Idle.new
+  idle_count = 0
+  i.start do
+    idle_count += 1
+    i.close { assert_equal 3, idle_count } if idle_count >= 3
   end
 end
 
@@ -263,6 +246,37 @@ assert_uv 'UV::TCP IPv6 server/client' do
   end
 end
 
+=begin
+assert_uv 'UV::TCP IPv4 server/client' do
+  test_str = "helloworld\r\n"
+
+  t = UV::Timer.new
+  t.start UV_INTERVAL, 0 do
+    c = UV::TCP.new
+    c.connect UV.ip4_addr('127.0.0.1', 8888) do |connect_status|
+      assert_equal 0, connect_status
+      c.read_start do |b|
+        assert_equal test_str, b
+        c.close
+      end
+    end
+    t.close
+  end
+
+  s = UV::TCP.new
+  s.bind UV.ip4_addr '127.0.0.1', 8888
+  assert_equal '127.0.0.1:8888', s.getsockname.to_s
+  s.listen 5 do |x|
+    return if x != 0
+    c = s.accept
+    assert_equal '127.0.0.1', c.getpeername.to_s[0, 9]
+    c.write test_str
+    s.close
+  end
+end
+=end
+
+=begin
 assert_uv 'UV::FS::Event rename' do
   remove_uv_test_tmpfile
 
@@ -286,7 +300,9 @@ assert_uv 'UV::FS::Event rename' do
     UV::FS.rename 'foo-bar/foo.txt', 'foo-bar/bar.txt'
   end
 end
+=end
 
+=begin
 assert_uv 'UV::FS::Event change' do
   remove_uv_test_tmpfile
 
@@ -310,7 +326,9 @@ assert_uv 'UV::FS::Event change' do
     f.close
   end
 end
+=end
 
+=begin
 assert_uv 'Process' do
   remove_uv_test_tmpfile
   UV::FS.mkdir 'foo-bar'
@@ -326,12 +344,4 @@ assert_uv 'Process' do
     assert_nil b
   end
 end
-
-assert_uv 'UV::Idle' do
-  i = UV::Idle.new
-  idle_count = 0
-  i.start do
-    idle_count += 1
-    i.close { assert_equal 3, idle_count } if idle_count >= 3
-  end
-end
+=end
