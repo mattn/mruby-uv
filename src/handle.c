@@ -93,9 +93,9 @@ _uv_close_cb(uv_handle_t* handle)
   mrb_state* mrb = context->mrb;
   mrb_value proc;
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "close_cb"));
-  if (!mrb_nil_p(proc)) {
-    mrb_yield_argv(mrb, proc, 0, NULL);
-  }
+  mrb_assert(!mrb_nil_p(proc));
+  mrb_yield_argv(mrb, proc, 0, NULL);
+  mrb_iv_remove(mrb, context->instance, mrb_intern_lit(mrb, "close_cb"));
   mrb_free(mrb, context);
 }
 
@@ -111,6 +111,7 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
     uv_close(&context->handle, no_yield_close_cb);
   } else {
     mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "close_cb"), b);
+    mrb_uv_gc_protect(mrb, self);
     uv_close(&context->handle, _uv_close_cb);
   }
   return self;

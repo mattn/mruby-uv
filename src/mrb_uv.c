@@ -18,7 +18,7 @@ mrb_uv_gc_table_clean(mrb_state *mrb)
   mrb_value t = mrb_uv_gc_table_get(mrb);
   mrb_value *ary = RARRAY_PTR(t);
   for (i = 0, new_i = 0; i < RARRAY_LEN(t); ++i) {
-    if (DATA_PTR(ary[i])) {
+    if (DATA_PTR(ary[i]) || mrb_iv_defined(mrb, ary[i], mrb_intern_lit(mrb, "close_cb"))) {
       ary[new_i++] = ary[i];
     }
   }
