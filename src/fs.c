@@ -357,27 +357,35 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
   mrb_value arg_path;
   mrb_int arg_flags;
   mrb_value b = mrb_nil_value();
-  uv_fs_cb fs_cb = _uv_fs_cb;
   static mrb_uv_file context;
   uv_fs_t* req;
 
   mrb_get_args(mrb, "&Si", &b, &arg_path, &arg_flags);
-  if (mrb_nil_p(b)) {
-    fs_cb = NULL;
-  } else {
-    memset(&context, 0, sizeof(mrb_uv_file));
+  if (!mrb_nil_p(b)) {
     context.mrb = mrb;
     context.instance = self;
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
   }
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
-  memset(req, 0, sizeof(uv_fs_t));
   req->data = &context;
-  err = uv_fs_readdir(uv_default_loop(), req, RSTRING_PTR(arg_path), arg_flags, fs_cb);
-  if (err != 0) {
+  err = uv_fs_readdir(uv_default_loop(), req, mrb_string_value_ptr(mrb, arg_path),
+                      arg_flags, mrb_nil_p(b)? NULL : _uv_fs_cb);
+  if (err < 0) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
+  }
+  if (mrb_nil_p(b)) {
+    int i;
+    char *ptr = (char*)req->ptr;
+    mrb_value const ret = mrb_ary_new_capa(mrb, req->result);
+    for (i = 0; i < req->result; ++i) {
+      mrb_ary_push(mrb, ret, mrb_str_new_cstr(mrb, ptr));
+      ptr += strlen(ptr) + 1;
+    }
+    uv_fs_req_cleanup(req);
+    mrb_free(mrb, req);
+    return ret;
   }
   return mrb_nil_value();
 }

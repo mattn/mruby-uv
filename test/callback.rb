@@ -32,16 +32,28 @@ assert_uv 'UV::FS' do
   remove_uv_test_tmpfile
 end
 
-assert_uv 'UV::FS::readdir' do
+assert_uv 'UV::FS.readdir' do
   remove_uv_test_tmpfile
 
   test_str = 'helloworld'
   UV::FS.mkdir 'foo-bar'
+
   f = UV::FS.open 'foo-bar/foo.txt', UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
   f.write(test_str)
+  f.close
+
+  f = UV::FS.open 'foo-bar/bar.txt', UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+  f.write(test_str)
+  f.close
+
+  # async version
   UV::FS.readdir 'foo-bar', 0 do |x, a|
-    assert_equal ['foo.txt'], a
+    assert_equal ['bar.txt', 'foo.txt'], a.sort
   end
+
+  # sync version
+  a = UV::FS.readdir 'foo-bar', 0
+  assert_equal ['bar.txt', 'foo.txt'], a.sort
 
   remove_uv_test_tmpfile
 end
