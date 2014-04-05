@@ -19,12 +19,23 @@ typedef struct {
 } mrb_uv_handle;
 
 static void
+no_yield_close_cb(uv_handle_t *h)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)h->data;
+  mrb_free(ctx->mrb, ctx);
+}
+
+static void
 mrb_uv_handle_free(mrb_state *mrb, void *p)
 {
   mrb_uv_handle* context = (mrb_uv_handle*) p;
-  if (context && !uv_is_closing(&context->handle)) {
-    uv_close(&context->handle, NULL);
-    mrb_free(mrb, p);
+  if (context) {
+    if (context->handle.type == UV_UNKNOWN_HANDLE) {
+      mrb_free(context->mrb, context);
+    }
+    else if (!uv_is_closing(&context->handle)) {
+      uv_close(&context->handle, no_yield_close_cb);
+    }
   }
 }
 
@@ -81,12 +92,10 @@ _uv_close_cb(uv_handle_t* handle)
   mrb_uv_handle* context = (mrb_uv_handle*) handle->data;
   mrb_state* mrb = context->mrb;
   mrb_value proc;
-  if (!mrb) return;
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "close_cb"));
   if (!mrb_nil_p(proc)) {
     mrb_yield_argv(mrb, proc, 0, NULL);
   }
-  DATA_PTR(context->instance) = NULL;
   mrb_free(mrb, context);
 }
 
@@ -96,11 +105,14 @@ mrb_uv_close(mrb_state *mrb, mrb_value self)
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
 
-  if (uv_is_closing(&context->handle)) return self;
-
   mrb_get_args(mrb, "&", &b);
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "close_cb"), b);
-  uv_close(&context->handle, mrb_nil_p(b)? NULL : _uv_close_cb);
+  DATA_PTR(self) = NULL;
+  if (mrb_nil_p(b)) {
+    uv_close(&context->handle, no_yield_close_cb);
+  } else {
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "close_cb"), b);
+    uv_close(&context->handle, _uv_close_cb);
+  }
   return self;
 }
 
