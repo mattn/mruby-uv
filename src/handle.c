@@ -981,16 +981,12 @@ mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
-  uv_idle_cb idle_cb = _uv_idle_cb;
 
   mrb_get_args(mrb, "&", &b);
-  if (mrb_nil_p(b)) {
-    idle_cb = NULL;
+  if (!mrb_nil_p(b)) {
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "idle_cb"), b);
   }
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "idle_cb"), b);
-  uv_idle_init(uv_default_loop(), (uv_idle_t*)&context->handle);
-
-  mrb_uv_check_error(mrb, uv_idle_start((uv_idle_t*)&context->handle, idle_cb));
+  mrb_uv_check_error(mrb, uv_idle_start((uv_idle_t*)&context->handle, mrb_nil_p(b)? NULL : _uv_idle_cb));
   return self;
 }
 
