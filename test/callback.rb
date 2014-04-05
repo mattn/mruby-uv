@@ -12,6 +12,7 @@ def assert_uv(name, &block)
     block.call
     UV.run
     UV.default_loop.close
+    UV.gc
     true
   end
 end
