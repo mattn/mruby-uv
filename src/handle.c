@@ -428,13 +428,11 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
   return c;
 }
 
-/*
 static mrb_value
 mrb_uv_tcp_simultaneous_accepts_get(mrb_state *mrb, mrb_value self)
 {
   return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "simultaneous_accepts"));
 }
-*/
 
 static mrb_value
 mrb_uv_tcp_simultaneous_accepts_set(mrb_state *mrb, mrb_value self)
@@ -444,16 +442,21 @@ mrb_uv_tcp_simultaneous_accepts_set(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "i", &arg_simultaneous_accepts);
   uv_tcp_simultaneous_accepts((uv_tcp_t*)&context->handle, arg_simultaneous_accepts);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "simultaneous_accepts"), mrb_bool_value(arg_simultaneous_accepts));
   return self;
 }
 
-/*
 static mrb_value
-mrb_uv_tcp_keepalive_get(mrb_state *mrb, mrb_value self)
+mrb_uv_tcp_keepalive_delay(mrb_state *mrb, mrb_value self)
 {
   return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "keepalive"));
 }
-*/
+
+static mrb_value
+mrb_uv_tcp_keepalive_p(mrb_state *mrb, mrb_value self)
+{
+  return mrb_bool_value(mrb_iv_defined(mrb, self, mrb_intern_lit(mrb, "keepalive")));
+}
 
 static mrb_value
 mrb_uv_tcp_keepalive_set(mrb_state *mrb, mrb_value self)
@@ -463,16 +466,19 @@ mrb_uv_tcp_keepalive_set(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "ii", &arg_keepalive, &arg_delay);
   uv_tcp_keepalive((uv_tcp_t*)&context->handle, arg_keepalive, arg_delay);
+  if (arg_keepalive) {
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "keepalive"), mrb_fixnum_value(arg_delay));
+  } else {
+    mrb_iv_remove(mrb, self, mrb_intern_lit(mrb, "keepalive"));
+  }
   return self;
 }
 
-/*
 static mrb_value
 mrb_uv_tcp_nodelay_get(mrb_state *mrb, mrb_value self)
 {
   return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "nodelay"));
 }
-*/
 
 static mrb_value
 mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
@@ -482,6 +488,7 @@ mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "i", &arg_nodelay);
   uv_tcp_nodelay((uv_tcp_t*)&context->handle, arg_nodelay);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "nodelay"), mrb_bool_value(arg_nodelay));
   return self;
 }
 
@@ -1927,6 +1934,10 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts=", mrb_uv_tcp_simultaneous_accepts_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "keepalive=", mrb_uv_tcp_keepalive_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "nodelay=", mrb_uv_tcp_nodelay_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts?", mrb_uv_tcp_simultaneous_accepts_get, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "keepalive?", mrb_uv_tcp_keepalive_p, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "keepalive_delay", mrb_uv_tcp_keepalive_delay, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "nodelay?", mrb_uv_tcp_nodelay_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "getpeername", mrb_uv_tcp_getpeername, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "getsockname", mrb_uv_tcp_getsockname, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
