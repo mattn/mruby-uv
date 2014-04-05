@@ -58,7 +58,7 @@ mrb_uv_data_set(mrb_state *mrb, mrb_value self)
   mrb_value arg;
   mrb_get_args(mrb, "o", &arg);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "data"), arg);
-  return mrb_nil_value();
+  return self;
 }
 
 /*********************************************************
@@ -103,7 +103,7 @@ mrb_uv_loop_run(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "|i", &arg_mode);
   mrb_uv_check_error(mrb, uv_run(loop, arg_mode));
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -116,7 +116,7 @@ mrb_uv_loop_close(mrb_state *mrb, mrb_value self)
   if (loop != uv_default_loop()) {
     mrb_free(mrb, loop);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -526,7 +526,7 @@ mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
     DATA_TYPE(c) = &uv_addrinfo_type;
     return c;
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value

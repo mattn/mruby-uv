@@ -33,7 +33,7 @@ mrb_uv_mutex_lock(mrb_state *mrb, mrb_value self)
 {
   uv_mutex_t *m = (uv_mutex_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_mutex_type);
   uv_mutex_lock(m);
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -41,7 +41,7 @@ mrb_uv_mutex_unlock(mrb_state *mrb, mrb_value self)
 {
   uv_mutex_t *m = (uv_mutex_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_mutex_type);
   uv_mutex_unlock(m);
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -57,7 +57,7 @@ mrb_uv_mutex_destroy(mrb_state *mrb, mrb_value self)
   uv_mutex_destroy(m);
   mrb_free(mrb, m);
   DATA_PTR(self) = NULL;
-  return mrb_nil_value();
+  return self;
 }
 
 /*********************************************************
@@ -126,7 +126,7 @@ mrb_uv_thread_join(mrb_state *mrb, mrb_value self)
   Data_Get_Struct(mrb, self, &mrb_uv_thread_type, context);
 
   uv_thread_join(&context->thread);
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -171,7 +171,7 @@ static mrb_value
 mrb_uv_barrier_wait(mrb_state *mrb, mrb_value self)
 {
   uv_barrier_wait((uv_barrier_t*)mrb_uv_get_ptr(mrb, self, &barrier_type));
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -180,7 +180,7 @@ mrb_uv_barrier_destroy(mrb_state *mrb, mrb_value self)
   uv_barrier_destroy((uv_barrier_t*)mrb_uv_get_ptr(mrb, self, &barrier_type));
   mrb_free(mrb, DATA_PTR(self));
   DATA_PTR(self) = NULL;
-  return mrb_nil_value();
+  return self;
 }
 
 void

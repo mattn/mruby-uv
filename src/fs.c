@@ -174,7 +174,7 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
   uv_fs_close(uv_default_loop(), req, context->fd, fs_cb);
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -284,7 +284,7 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -316,7 +316,7 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -347,7 +347,7 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -387,7 +387,7 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     return ret;
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -418,7 +418,7 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -449,7 +449,7 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -480,7 +480,7 @@ mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -511,7 +511,7 @@ mrb_uv_fs_rename(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -542,7 +542,7 @@ mrb_uv_fs_fsync(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -573,7 +573,7 @@ mrb_uv_fs_fdatasync(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -604,7 +604,7 @@ mrb_uv_fs_ftruncate(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -637,7 +637,7 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -669,7 +669,7 @@ mrb_uv_fs_chmod(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -700,7 +700,7 @@ mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
