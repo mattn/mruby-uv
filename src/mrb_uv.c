@@ -81,15 +81,8 @@ const struct mrb_data_type mrb_uv_loop_type = {
 static mrb_value
 mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
 {
-  mrb_value c;
-
-  struct RClass* _class_uv = mrb_module_get(mrb, "UV");
-  struct RClass* _class_uv_loop = mrb_class_get_under(mrb, _class_uv, "Loop");
-  c = mrb_obj_new(mrb, _class_uv_loop, 0, NULL);
-
-  DATA_PTR(self) = uv_default_loop();
-  DATA_TYPE(self) = &mrb_uv_loop_type;
-  return c;
+  struct RClass* _class_uv_loop = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "Loop");
+  return mrb_obj_value(Data_Wrap_Struct(mrb, _class_uv_loop, &mrb_uv_loop_type, uv_default_loop()));
 }
 
 static mrb_value
@@ -119,8 +112,10 @@ mrb_uv_loop_close(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
 
   mrb_uv_check_error(mrb, uv_loop_close(loop));
-  mrb_free(mrb, loop);
   DATA_PTR(self) = NULL;
+  if (loop != uv_default_loop()) {
+    mrb_free(mrb, loop);
+  }
   return mrb_nil_value();
 }
 
