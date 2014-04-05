@@ -49,13 +49,13 @@ assert_uv 'UV::FS.readdir' do
   # async version
   UV::FS.readdir 'foo-bar', 0 do |x, a|
     assert_equal ['bar.txt', 'foo.txt'], a.sort
+
+    remove_uv_test_tmpfile
   end
 
   # sync version
   a = UV::FS.readdir 'foo-bar', 0
   assert_equal ['bar.txt', 'foo.txt'], a.sort
-
-  remove_uv_test_tmpfile
 end
 
 assert_uv 'UV.getaddrinfo' do
