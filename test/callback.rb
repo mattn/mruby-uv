@@ -60,6 +60,30 @@ assert_uv 'UV::FS.readdir' do
   assert_equal ['bar.txt', 'foo.txt'], a.sort
 end
 
+assert_uv 'UV::FS.symlink' do
+  assert_true UV::FS::SYMLINK_DIR.kind_of? Numeric
+  assert_true UV::FS::SYMLINK_JUNCTION.kind_of? Numeric
+end
+
+assert_uv 'UV::FS.readlink' do
+  remove_uv_test_tmpfile
+  UV::FS.mkdir 'foo-bar'
+
+  f = UV::FS.open 'foo-bar/foo.txt', UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+  f.write "test\n"
+  f.close
+
+  UV::FS.symlink 'foo-bar/foo.txt', 'foo-bar/bar.txt', 0
+
+  # async version
+  UV::FS.readlink 'foo-bar/bar.txt' do |v|
+    assert_equal 'foo-bar/foo.txt', v
+  end
+
+  # sync version
+  assert_equal 'foo-bar/foo.txt', UV::FS.readlink('foo-bar/bar.txt')
+end
+
 assert_uv 'UV.getaddrinfo' do
   UV.getaddrinfo 'www.google.com', 'http' do |x, a|
     next unless a
