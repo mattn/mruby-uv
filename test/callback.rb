@@ -84,6 +84,23 @@ assert_uv 'UV::FS.readlink' do
   assert_equal 'foo-bar/foo.txt', UV::FS.readlink('foo-bar/bar.txt')
 end
 
+assert_uv 'UV::Stat' do
+  remove_uv_test_tmpfile
+  UV::FS.mkdir 'foo-bar'
+
+  f = UV::FS.open 'foo-bar/foo.txt', UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+  f.write "test\n"
+  f.close
+
+  assert_raise(NoMethodError) { UV::Stat.new }
+
+  s = UV::FS.stat 'foo-bar/foo.txt'
+  assert_true s.kind_of? UV::Stat
+  assert_true s.atim.kind_of? Time
+
+  remove_uv_test_tmpfile
+end
+
 assert_uv 'UV.getaddrinfo' do
   UV.getaddrinfo 'www.google.com', 'http' do |x, a|
     next unless a

@@ -1334,9 +1334,11 @@ _uv_fs_poll_cb(uv_fs_poll_t* handle, int status, const uv_stat_t* prev, const uv
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "fs_poll_cb"));
   if (!mrb_nil_p(proc)) {
-     mrb_value args[1];
+     mrb_value args[3];
      args[0] = mrb_fixnum_value(status);
-     mrb_yield_argv(mrb, proc, 1, args);
+     args[1] = mrb_uv_create_stat(mrb, prev);
+     args[2] = mrb_uv_create_stat(mrb, curr);
+     mrb_yield_argv(mrb, proc, 3, args);
   }
 }
 

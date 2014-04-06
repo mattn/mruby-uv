@@ -36,6 +36,8 @@ void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV);
 void mrb_mruby_uv_gem_init_dl(mrb_state *mrb, struct RClass *UV);
 void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV);
 
+mrb_value mrb_uv_create_stat(mrb_state*, uv_stat_t const*);
+
 mrb_value mrb_uv_data_get(mrb_state *mrb, mrb_value self);
 mrb_value mrb_uv_data_set(mrb_state *mrb, mrb_value self);
 

@@ -2,6 +2,71 @@
 #include "mrb_uv.h"
 #include <fcntl.h>
 
+/*
+ * UV::Stat
+ */
+static void
+mrb_uv_stat_free(mrb_state *mrb, void *p)
+{
+  mrb_free(mrb, p);
+}
+
+static struct mrb_data_type const mrb_uv_stat_type = {
+  "uv_stat", mrb_uv_stat_free
+};
+
+mrb_value
+mrb_uv_create_stat(mrb_state *mrb, uv_stat_t const *src_st)
+{
+  uv_stat_t *st;
+  struct RClass *cls;
+
+  cls = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "Stat");
+  st = (uv_stat_t*)mrb_malloc(mrb, sizeof(uv_stat_t));
+  *st = *src_st; /* copy */
+  return mrb_obj_value(mrb_data_object_alloc(mrb, cls, st, &mrb_uv_stat_type));
+}
+
+#define stat_field(n)                                                   \
+  static mrb_value                                                      \
+  mrb_uv_stat_ ## n(mrb_state *mrb, mrb_value self)                     \
+  {                                                                     \
+    uv_stat_t *st = (uv_stat_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_stat_type); \
+    return mrb_float_value(mrb, (mrb_float)st->st_ ## n);               \
+  }                                                                     \
+
+stat_field(dev)
+stat_field(mode)
+stat_field(nlink)
+stat_field(uid)
+stat_field(gid)
+stat_field(rdev)
+stat_field(ino)
+stat_field(size)
+stat_field(blksize)
+stat_field(blocks)
+stat_field(flags)
+stat_field(gen)
+
+#undef stat_field
+
+#define stat_time_field(n)                                              \
+  static mrb_value                                                      \
+  mrb_uv_stat_ ## n(mrb_state *mrb, mrb_value self)                     \
+  {                                                                     \
+    uv_stat_t *st = (uv_stat_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_stat_type); \
+    return mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "Time")), "at", 2, \
+                       mrb_float_value(mrb, (mrb_float)st->st_ ## n.tv_sec), \
+                       mrb_float_value(mrb, (mrb_float)(st->st_ ## n.tv_nsec / 1000))); \
+  }                                                                     \
+
+stat_time_field(atim)
+stat_time_field(mtim)
+stat_time_field(ctim)
+stat_time_field(birthtim)
+
+#undef stat_time_field
+
 /*********************************************************
  * UV::FS
  *********************************************************/
@@ -90,6 +155,15 @@ _uv_fs_cb(uv_fs_t* req)
     mrb_value res;
     mrb_assert(!mrb_nil_p(proc));
     res = mrb_str_new_cstr(mrb, req->ptr);
+    mrb_yield_argv(mrb, proc, 1, &res);
+  } break;
+
+  case UV_FS_STAT:
+  case UV_FS_FSTAT:
+  case UV_FS_LSTAT: {
+    mrb_value res;
+    mrb_assert(!mrb_nil_p(proc));
+    res = mrb_uv_create_stat(mrb, &req->statbuf);
     mrb_yield_argv(mrb, proc, 1, &res);
   } break;
 
@@ -426,6 +500,13 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
+
+  if (mrb_nil_p(b)) {
+    mrb_value ret = mrb_uv_create_stat(mrb, &req->statbuf);
+    uv_fs_req_cleanup(req);
+    mrb_free(mrb, req);
+    return ret;
+  }
   return self;
 }
 
@@ -457,6 +538,13 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
+
+  if (mrb_nil_p(b)) {
+    mrb_value ret = mrb_uv_create_stat(mrb, &req->statbuf);
+    uv_fs_req_cleanup(req);
+    mrb_free(mrb, req);
+    return ret;
+  }
   return self;
 }
 
@@ -487,6 +575,13 @@ mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
   if (err != 0) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
+  }
+
+  if (mrb_nil_p(b)) {
+    mrb_value ret = mrb_uv_create_stat(mrb, &req->statbuf);
+    uv_fs_req_cleanup(req);
+    mrb_free(mrb, req);
+    return ret;
   }
   return self;
 }
@@ -931,6 +1026,8 @@ mrb_uv_fs_fchown(mrb_state *mrb, mrb_value self)
 void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
 {
   struct RClass *_class_uv_fs;
+  struct RClass *_class_uv_stat;
+
   _class_uv_fs = mrb_define_class_under(mrb, UV, "FS", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_fs, MRB_TT_DATA);
   mrb_define_const(mrb, _class_uv_fs, "SYMLINK_DIR", mrb_fixnum_value(UV_FS_SYMLINK_DIR));
@@ -975,7 +1072,25 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_module_function(mrb, _class_uv_fs, "readlink", mrb_uv_fs_readlink, ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_fs, "chown", mrb_uv_fs_chown, ARGS_REQ(3));
   mrb_define_method(mrb, _class_uv_fs, "chown", mrb_uv_fs_fchown, ARGS_REQ(2));
-  /* TODO
-  UV::FS::Stat object
-  */
+
+  _class_uv_stat = mrb_define_class_under(mrb, UV, "Stat", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_stat, MRB_TT_DATA);
+  mrb_define_method(mrb, _class_uv_stat, "dev", mrb_uv_stat_dev, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "mode", mrb_uv_stat_mode, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "nlink", mrb_uv_stat_nlink, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "uid", mrb_uv_stat_uid, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "gid", mrb_uv_stat_gid, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "rdev", mrb_uv_stat_rdev, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "ino", mrb_uv_stat_ino, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "size", mrb_uv_stat_size, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "blksize", mrb_uv_stat_blksize, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "blocks", mrb_uv_stat_blocks, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "flags", mrb_uv_stat_flags, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "gen", mrb_uv_stat_gen, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "atim", mrb_uv_stat_atim, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "mtim", mrb_uv_stat_mtim, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "ctim", mrb_uv_stat_ctim, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stat, "birthtim", mrb_uv_stat_birthtim, MRB_ARGS_NONE());
+  /* cannot create from mruby side */
+  mrb_undef_class_method(mrb, _class_uv_stat, "new");
 }
