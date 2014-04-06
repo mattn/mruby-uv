@@ -546,6 +546,7 @@ mrb_uv_key_set(mrb_state *mrb, mrb_value self)
         RARRAY_PTR(ary)[dst++] = v;
       }
     }
+    RARRAY_LEN(ary) = dst;
   }
 
   uv_key_set(key, mrb_ptr(new_val));
