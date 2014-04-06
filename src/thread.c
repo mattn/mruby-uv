@@ -314,6 +314,246 @@ mrb_uv_once(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static void
+mrb_uv_rwlock_free(mrb_state *mrb, void *p)
+{
+  if (p) {
+    uv_rwlock_destroy((uv_rwlock_t*)p);
+    mrb_free(mrb, p);
+  }
+}
+
+static struct mrb_data_type const mrb_uv_rwlock_type = {
+  "uv_rwlock", mrb_uv_rwlock_free
+};
+
+static mrb_value
+mrb_uv_rwlock_init(mrb_state *mrb, mrb_value self)
+{
+  int err;
+  uv_rwlock_t *rwlock;
+
+  rwlock = (uv_rwlock_t*)mrb_malloc(mrb, sizeof(uv_rwlock_t));
+  err = uv_rwlock_init(rwlock);
+  if (err < 0) {
+    mrb_free(mrb, rwlock);
+    mrb_uv_check_error(mrb, err);
+  }
+  DATA_PTR(self) = rwlock;
+  DATA_TYPE(self) = &mrb_uv_rwlock_type;
+  return self;
+}
+
+static mrb_value
+mrb_uv_rwlock_destroy(mrb_state *mrb, mrb_value self)
+{
+  uv_rwlock_destroy((uv_rwlock_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_rwlock_type));
+  DATA_PTR(self) = NULL;
+  return self;
+}
+#define define_lock(s, n)                                               \
+  static mrb_value                                                      \
+  mrb_uv_rwlock_ ## n ## _lock(mrb_state *mrb, mrb_value self)          \
+  {                                                                     \
+    uv_rwlock_t *lock = (uv_rwlock_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_rwlock_type); \
+    return uv_rwlock_ ## s ## lock(lock), self;                         \
+  }                                                                     \
+                                                                        \
+  static mrb_value                                                      \
+  mrb_uv_rwlock_try_ ## n ## _lock(mrb_state *mrb, mrb_value self)      \
+  {                                                                     \
+    int err;                                                            \
+    err = uv_rwlock_try ## s ## lock((uv_rwlock_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_rwlock_type)); \
+      switch(err) {                                                     \
+      case UV_EAGAIN: return symbol_value_lit(mrb, "again");            \
+      case UV_EBUSY: return symbol_value_lit(mrb, "busy");              \
+      default:                                                          \
+        mrb_uv_check_error(mrb, err);                                   \
+        return self;                                                    \
+      }                                                                 \
+  }                                                                     \
+                                                                        \
+  static mrb_value                                                      \
+  mrb_uv_rwlock_ ## n ## _unlock(mrb_state *mrb, mrb_value self)        \
+  {                                                                     \
+    uv_rwlock_t *lock = (uv_rwlock_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_rwlock_type); \
+    return uv_rwlock_ ## s ## unlock(lock), self;                       \
+  }                                                                     \
+
+define_lock(wr, write)
+define_lock(rd, read)
+
+#undef define_lock
+
+static void
+mrb_uv_cond_free(mrb_state *mrb, void* p)
+{
+  if (p) {
+    uv_cond_destroy((uv_cond_t*)p);
+    mrb_free(mrb, p);
+  }
+}
+
+static struct mrb_data_type const mrb_uv_cond_type = {
+  "uv_cond", mrb_uv_cond_free
+};
+
+static mrb_value
+mrb_uv_cond_init(mrb_state *mrb, mrb_value self)
+{
+  int err;
+  uv_cond_t *cond;
+
+  cond = (uv_cond_t*)mrb_malloc(mrb, sizeof(uv_cond_t));
+  err = uv_cond_init(cond);
+  if (err < 0) {
+    mrb_free(mrb, cond);
+    mrb_uv_check_error(mrb, err);
+  }
+
+  DATA_PTR(self) = cond;
+  DATA_TYPE(self) = &mrb_uv_cond_type;
+  return self;
+}
+
+static mrb_value
+mrb_uv_cond_destroy(mrb_state *mrb, mrb_value self)
+{
+  uv_cond_destroy((uv_cond_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_cond_type));
+  DATA_PTR(self) = NULL;
+  return self;
+}
+
+static mrb_value
+mrb_uv_cond_signal(mrb_state *mrb, mrb_value self)
+{
+  return uv_cond_signal((uv_cond_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_cond_type)), self;
+}
+
+static mrb_value
+mrb_uv_cond_broadcast(mrb_state *mrb, mrb_value self)
+{
+  return uv_cond_broadcast((uv_cond_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_cond_type)), self;
+}
+
+static mrb_value
+mrb_uv_cond_wait(mrb_state *mrb, mrb_value self)
+{
+  mrb_value mutex_val;
+  uv_mutex_t *mutex;
+  mrb_get_args(mrb, "o", &mutex_val);
+
+  mutex = (uv_mutex_t*)mrb_uv_get_ptr(mrb, mutex_val, &mrb_uv_mutex_type);
+  return uv_cond_wait((uv_cond_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_cond_type), mutex), self;
+}
+
+static mrb_value
+mrb_uv_cond_timed_wait(mrb_state *mrb, mrb_value self)
+{
+  mrb_value mutex_val;
+  mrb_int timeout;
+  uv_mutex_t *mutex;
+  int err;
+  mrb_get_args(mrb, "oi", &mutex_val, &timeout);
+
+  mutex = (uv_mutex_t*)mrb_uv_get_ptr(mrb, mutex_val, &mrb_uv_mutex_type);
+  err = uv_cond_timedwait((uv_cond_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_cond_type), mutex, timeout);
+  if (err == UV_ETIMEDOUT) {
+    return symbol_value_lit(mrb, "timedout");
+  }
+  mrb_uv_check_error(mrb, err);
+  return self;
+}
+
+static void
+mrb_uv_key_free(mrb_state *mrb, void* p)
+{
+  if (p) {
+    uv_key_delete((uv_key_t*)p);
+    mrb_free(mrb, p);
+  }
+}
+
+static struct mrb_data_type const mrb_uv_key_type = {
+  "uv_key", mrb_uv_key_free
+};
+
+static mrb_value
+mrb_uv_key_init(mrb_state *mrb, mrb_value self)
+{
+  uv_key_t *key;
+  int err;
+
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "values"), mrb_ary_new(mrb));
+
+  key = (uv_key_t*)mrb_malloc(mrb, sizeof(uv_key_t));
+  err = uv_key_create(key);
+  if (err < 0) {
+    mrb_free(mrb, key);
+    mrb_uv_check_error(mrb, err);
+  }
+  DATA_PTR(self) = key;
+  DATA_TYPE(self) = &mrb_uv_key_type;
+  return self;
+}
+
+static mrb_value
+mrb_uv_key_destroy(mrb_state *mrb, mrb_value self)
+{
+  uv_key_t *key = (uv_key_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_key_type);
+  mrb_ary_clear(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "values")));
+  uv_key_delete(key);
+  return self;
+}
+
+static mrb_value
+mrb_uv_key_get(mrb_state *mrb, mrb_value self)
+{
+  uv_key_t *key;
+  void *p;
+
+  key = (uv_key_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_key_type);
+  p = uv_key_get(key);
+  return p? mrb_obj_value(p) : mrb_nil_value();
+}
+
+static mrb_value
+mrb_uv_key_set(mrb_state *mrb, mrb_value self)
+{
+  uv_key_t *key;
+  void *p;
+  mrb_value new_val;
+  mrb_value ary;
+
+  mrb_get_args(mrb, "o", &new_val);
+
+  if (mrb_type(new_val) < MRB_TT_HAS_BASIC) {
+    mrb_raisef(mrb, E_TYPE_ERROR, "cannot store value without basic: %S", new_val);
+  }
+
+  key = (uv_key_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_key_type);
+  p = uv_key_get(key);
+
+  ary = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "values"));
+  mrb_assert(mrb_array_p(ary));
+
+  if (p) {
+    /* remove value */
+    int i, dst;
+    for (i = 0, dst = 0; i < RARRAY_LEN(ary); ++i) {
+      mrb_value const v = RARRAY_PTR(ary)[i];
+      if (mrb_ptr(v) != p) {
+        RARRAY_PTR(ary)[dst++] = v;
+      }
+    }
+  }
+
+  uv_key_set(key, mrb_ptr(new_val));
+  mrb_ary_push(mrb, ary, new_val); /* protect from GC */
+
+  return new_val;
+}
+
 void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV)
 {
   struct RClass* _class_uv_thread;
@@ -321,6 +561,9 @@ void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV)
   struct RClass* _class_uv_semaphore;
   struct RClass* _class_uv_mutex;
   struct RClass* _class_uv_once;
+  struct RClass* _class_uv_rwlock;
+  struct RClass* _class_uv_cond;
+  struct RClass* _class_uv_key;
   int const ai = mrb_gc_arena_save(mrb);
 
   _class_uv_thread = mrb_define_class_under(mrb, UV, "Thread", mrb->object_class);
@@ -361,4 +604,34 @@ void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_once, "initialize", mrb_uv_once_init, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_once, "run", mrb_uv_once, MRB_ARGS_NONE());
   mrb_uv_check_error(mrb, uv_mutex_init(&once_info.lock));
+
+  _class_uv_rwlock = mrb_define_class_under(mrb, UV, "RWLock", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_rwlock, MRB_TT_DATA);
+  mrb_define_method(mrb, _class_uv_rwlock, "initialize", mrb_uv_rwlock_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_rwlock, "destroy", mrb_uv_rwlock_destroy, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_rwlock, "read_lock", mrb_uv_rwlock_read_lock, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_rwlock, "try_read_lock", mrb_uv_rwlock_try_read_lock, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_rwlock, "read_unlock", mrb_uv_rwlock_read_unlock, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_rwlock, "write_lock", mrb_uv_rwlock_write_lock, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_rwlock, "try_write_lock", mrb_uv_rwlock_try_write_lock, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_rwlock, "write_unlock", mrb_uv_rwlock_write_unlock, MRB_ARGS_NONE());
+  mrb_gc_arena_restore(mrb, ai);
+
+  _class_uv_cond = mrb_define_class_under(mrb, UV, "Cond", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_cond, MRB_TT_DATA);
+  mrb_define_method(mrb, _class_uv_cond, "initialize", mrb_uv_cond_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_cond, "destroy", mrb_uv_cond_destroy, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_cond, "signal", mrb_uv_cond_signal, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_cond, "broadcast", mrb_uv_cond_broadcast, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_cond, "wait", mrb_uv_cond_wait, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_cond, "timed_wait", mrb_uv_cond_timed_wait, MRB_ARGS_REQ(1));
+  mrb_gc_arena_restore(mrb, ai);
+
+  _class_uv_key = mrb_define_class_under(mrb, UV, "Key", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_key, MRB_TT_DATA);
+  mrb_define_method(mrb, _class_uv_key, "initialize", mrb_uv_key_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_key, "destroy", mrb_uv_key_destroy, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_key, "get", mrb_uv_key_get, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_key, "set", mrb_uv_key_set, MRB_ARGS_REQ(1));
+  mrb_gc_arena_restore(mrb, ai);
 }

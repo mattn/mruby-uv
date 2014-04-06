@@ -1002,20 +1002,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   uv_setup_args
   uv_inet_ntop
   uv_inet_pton
-  uv_rwlock_init
-  uv_rwlock_destroy
-  uv_rwlock_rdlock
-  uv_rwlock_tryrdlock
-  uv_rwlock_rdunlock
-  uv_rwlock_wrlock
-  uv_rwlock_trywrlock
-  uv_rwlock_wrunlock
-  uv_cond_init
-  uv_cond_destroy
-  uv_cond_signal
-  uv_cond_broadcast
-  uv_cond_wait
-  uv_cond_timedwait
   */
 
   mrb_mruby_uv_gem_init_fs(mrb, _class_uv);
