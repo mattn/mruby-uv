@@ -604,6 +604,7 @@ void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_once, "initialize", mrb_uv_once_init, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_once, "run", mrb_uv_once, MRB_ARGS_NONE());
   mrb_uv_check_error(mrb, uv_mutex_init(&once_info.lock));
+  mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_rwlock = mrb_define_class_under(mrb, UV, "RWLock", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_rwlock, MRB_TT_DATA);
