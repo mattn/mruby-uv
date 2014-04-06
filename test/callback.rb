@@ -78,6 +78,7 @@ assert_uv 'UV::FS.readlink' do
   # async version
   UV::FS.readlink 'foo-bar/bar.txt' do |v|
     assert_equal 'foo-bar/foo.txt', v
+    remove_uv_test_tmpfile
   end
 
   # sync version
