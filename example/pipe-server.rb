@@ -1,5 +1,5 @@
 #!mruby
-begin; require 'mruby-uv'; rescue Error; end
+begin; require 'mruby-uv'; rescue Exception; end
 
 s = UV::Pipe.new(1)
 s.bind('/tmp/mruby-uv')
@@ -12,7 +12,7 @@ s.listen(5) {|x|
     puts "helloworld\n"
     begin
       c.write "helloworld\r\n"
-    rescue RuntimeError
+    rescue UVError
       c.close()
       t.stop()
       t = nil

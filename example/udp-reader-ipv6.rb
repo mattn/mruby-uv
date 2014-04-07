@@ -1,5 +1,5 @@
 #!mruby
-begin; require 'mruby-uv'; rescue Error; end
+begin; require 'mruby-uv'; rescue Exception; end
 
 r = UV::UDP.new()
 r.bind6(UV::ip6_addr('::1', 8888))

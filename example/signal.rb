@@ -1,5 +1,5 @@
 #!mruby
-begin; require 'mruby-uv'; rescue Error; end
+begin; require 'mruby-uv'; rescue Exception; end
 
 s = UV::Signal.new()
 s.start(UV::Signal::SIGINT) do |x|
