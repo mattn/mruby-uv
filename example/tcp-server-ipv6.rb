@@ -1,5 +1,5 @@
 #!mruby
-begin; require 'mruby-uv'; rescue Error; end
+begin; require 'mruby-uv'; rescue Exception; end
 
 t = UV::Timer.new
 
@@ -21,7 +21,7 @@ s.listen(5) {|x|
     puts "helloworld\n"
     begin
       c.write "helloworld\r\n"
-    rescue RuntimeError
+    rescue UVError
       puts "disconnected"
       c.close
       c = nil

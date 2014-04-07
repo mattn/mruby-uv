@@ -1,5 +1,5 @@
 #!mruby
-begin; require 'mruby-uv'; rescue Error; end
+begin; require 'mruby-uv'; rescue Exception; end
 
 c = UV::Pipe.new(0)
 c.connect('\\\\.\\pipe\\mruby-uv') {|x|

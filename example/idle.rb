@@ -1,5 +1,5 @@
 #!mruby
-begin; require 'mruby-uv'; rescue Error; end
+begin; require 'mruby-uv'; rescue Exception; end
 
 i = UV::Idle.new()
 i.start {|x|
