@@ -800,11 +800,11 @@ static mrb_value
 mrb_uv_udp_set_membership(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
-  char *multicast, *interface;
+  char *multicast, *iface;
   mrb_int mem;
 
-  mrb_get_args(mrb, "zzi", &multicast, &interface, &mem);
-  mrb_uv_check_error(mrb, uv_udp_set_membership((uv_udp_t*)&ctx->handle, multicast, interface, mem));
+  mrb_get_args(mrb, "zzi", &multicast, &iface, &mem);
+  mrb_uv_check_error(mrb, uv_udp_set_membership((uv_udp_t*)&ctx->handle, multicast, iface, mem));
   return self;
 }
 
