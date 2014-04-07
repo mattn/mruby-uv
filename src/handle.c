@@ -1,7 +1,16 @@
+#include "mruby/uv.h"
 #include "mrb_uv.h"
 
 
-extern char **environ;
+static uv_loop_t*
+get_loop(mrb_state *mrb, mrb_value v)
+{
+  if(mrb_nil_p(v)) {
+    return uv_default_loop();
+  } else {
+    return (uv_loop_t*)mrb_uv_get_ptr(mrb, v, &mrb_uv_loop_type);
+  }
+}
 
 typedef struct {
   mrb_state* mrb;
@@ -10,12 +19,23 @@ typedef struct {
 } mrb_uv_handle;
 
 static void
+no_yield_close_cb(uv_handle_t *h)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)h->data;
+  mrb_free(ctx->mrb, ctx);
+}
+
+static void
 mrb_uv_handle_free(mrb_state *mrb, void *p)
 {
   mrb_uv_handle* context = (mrb_uv_handle*) p;
   if (context) {
-    uv_close(&context->handle, NULL);
-    mrb_free(mrb, p);
+    if (context->handle.type == UV_UNKNOWN_HANDLE) {
+      mrb_free(context->mrb, context);
+    }
+    else if (!uv_is_closing(&context->handle)) {
+      uv_close(&context->handle, no_yield_close_cb);
+    }
   }
 }
 
@@ -30,6 +50,7 @@ mrb_uv_handle_alloc(mrb_state* mrb, size_t size, mrb_value instance)
   context->mrb = mrb;
   context->instance = instance;
   context->handle.data = context;
+  context->handle.type = UV_UNKNOWN_HANDLE;
   mrb_assert(mrb_type(instance) == MRB_TT_DATA);
   DATA_PTR(instance) = context;
   DATA_TYPE(instance) = &mrb_uv_handle_type;
@@ -71,68 +92,63 @@ _uv_close_cb(uv_handle_t* handle)
   mrb_uv_handle* context = (mrb_uv_handle*) handle->data;
   mrb_state* mrb = context->mrb;
   mrb_value proc;
-  if (!mrb) return;
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "close_cb"));
-  if (!mrb_nil_p(proc)) {
-    mrb_yield_argv(mrb, proc, 0, NULL);
-  }
-  DATA_PTR(context->instance) = NULL;
+  mrb_assert(!mrb_nil_p(proc));
+  mrb_yield_argv(mrb, proc, 0, NULL);
+  mrb_iv_remove(mrb, context->instance, mrb_intern_lit(mrb, "close_cb"));
   mrb_free(mrb, context);
 }
 
 static mrb_value
 mrb_uv_close(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
 
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
-
-  if (!uv_is_active(&context->handle)) return mrb_nil_value();
-
   mrb_get_args(mrb, "&", &b);
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "close_cb"), b);
-  uv_close(&context->handle, _uv_close_cb);
-  return mrb_nil_value();
+  DATA_PTR(self) = NULL;
+  if (mrb_nil_p(b)) {
+    uv_close(&context->handle, no_yield_close_cb);
+  } else {
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "close_cb"), b);
+    mrb_uv_gc_protect(mrb, self);
+    uv_close(&context->handle, _uv_close_cb);
+  }
+  return self;
 }
 
 static mrb_value
 mrb_uv_is_closing(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* ctx = NULL;
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, ctx);
+  mrb_uv_handle* ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   return mrb_bool_value(uv_is_closing(&ctx->handle));
 }
 
 static mrb_value
 mrb_uv_is_active(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* ctx = NULL;
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, ctx);
+  mrb_uv_handle* ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   return mrb_bool_value(uv_is_active(&ctx->handle));
 }
 
 static mrb_value
 mrb_uv_ref(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* ctx = NULL;
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, ctx);
+  mrb_uv_handle* ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   return uv_ref(&ctx->handle), self;
 }
 
 static mrb_value
 mrb_uv_unref(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* ctx = NULL;
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, ctx);
+  mrb_uv_handle* ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   return uv_unref(&ctx->handle), self;
 }
 
 static mrb_value
 mrb_uv_has_ref(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* ctx = NULL;
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, ctx);
+  mrb_uv_handle* ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   return mrb_bool_value(uv_has_ref(&ctx->handle));
 }
 
@@ -142,18 +158,13 @@ mrb_uv_has_ref(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_loop = mrb_nil_value(), arg_ipc = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
   int ipc = 0;
 
   mrb_get_args(mrb, "o|o", &arg_ipc, &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
   if (!mrb_nil_p(arg_ipc)) {
     if (mrb_fixnum_p(arg_ipc))
       ipc = mrb_fixnum(arg_ipc);
@@ -163,41 +174,30 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_pipe_t), self);
 
-  err = uv_pipe_init(loop, (uv_pipe_t*)&context->handle, ipc);
-  if (err < 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_pipe_init(loop, (uv_pipe_t*)&context->handle, ipc));
   return self;
 }
 
 static mrb_value
 mrb_uv_pipe_open(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_int arg_file = 0;
-  mrb_uv_handle* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   mrb_get_args(mrb, "i", &arg_file);
-  err = uv_pipe_open((uv_pipe_t*)&context->handle, arg_file);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_pipe_open((uv_pipe_t*)&context->handle, arg_file));
+  return self;
 }
 
 static mrb_value
 mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_name;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_connect_cb connect_cb = _uv_connect_cb;
   char* name = NULL;
   uv_connect_t* req;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&S", &b, &arg_name);
   if (mrb_nil_p(arg_name) || mrb_type(arg_name) != MRB_TT_STRING) {
@@ -214,18 +214,15 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_connect_t));
   req->data = context;
   uv_pipe_connect(req, (uv_pipe_t*)&context->handle, name, connect_cb);
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
 mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_name;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   char* name = "";
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "S", &arg_name);
   if (mrb_nil_p(arg_name) || mrb_type(arg_name) != MRB_TT_STRING) {
@@ -233,23 +230,17 @@ mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
   }
   name = RSTRING_PTR(arg_name);
 
-  err = uv_pipe_bind((uv_pipe_t*)&context->handle, name ? name : "");
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_pipe_bind((uv_pipe_t*)&context->handle, name ? name : ""));
+  return self;
 }
 
 static mrb_value
 mrb_uv_pipe_listen(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_int arg_backlog;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_connection_cb connection_cb = _uv_connection_cb;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&i", &b, &arg_backlog);
   if (mrb_nil_p(b)) {
@@ -257,27 +248,21 @@ mrb_uv_pipe_listen(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "connection_cb"), b);
 
-  err = uv_listen((uv_stream_t*) &context->handle, arg_backlog, connection_cb);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_listen((uv_stream_t*) &context->handle, arg_backlog, connection_cb));
+  return self;
 }
 
 static mrb_value
 mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value c;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_uv_handle* new_context = NULL;
   mrb_value args[1];
   struct RClass* _class_uv;
   struct RClass* _class_uv_pipe;
   int ai;
   mrb_value uv_gc_table;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   args[0] = mrb_fixnum_value(0);
   _class_uv = mrb_module_get(mrb, "UV");
@@ -286,10 +271,7 @@ mrb_uv_pipe_accept(mrb_state *mrb, mrb_value self)
 
   Data_Get_Struct(mrb, c, &mrb_uv_handle_type, new_context);
 
-  err = uv_accept((uv_stream_t*) &context->handle, (uv_stream_t*) &new_context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_accept((uv_stream_t*) &context->handle, (uv_stream_t*) &new_context->handle));
 
   ai = mrb_gc_arena_save(mrb);
   uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "$GC"));
@@ -302,13 +284,11 @@ static mrb_value
 mrb_uv_pipe_pending_instances(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_count = 0;
-  mrb_uv_handle* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   mrb_get_args(mrb, "i", &arg_count);
   uv_pipe_pending_instances((uv_pipe_t*)&context->handle, arg_count);
-  return mrb_nil_value();
+  return self;
 }
 
 /*********************************************************
@@ -317,24 +297,16 @@ mrb_uv_pipe_pending_instances(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_loop = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_tcp_t), self);
 
-  err = uv_tcp_init(loop, (uv_tcp_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_tcp_init(loop, (uv_tcp_t*)&context->handle));
   return self;
 }
 
@@ -343,13 +315,11 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
   mrb_value arg_addr;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_connect_cb connect_cb = _uv_connect_cb;
   struct sockaddr_storage* addr = NULL;
   uv_connect_t* req;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&o", &b, &arg_addr);
   if (version != 4 && version != 6) {
@@ -377,9 +347,9 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
   err = uv_tcp_connect(req, (uv_tcp_t*)&context->handle, ((const struct sockaddr *) addr), connect_cb);
   if (err != 0) {
     mrb_free(mrb, req);
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -397,12 +367,9 @@ mrb_uv_tcp_connect6(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self, int version)
 {
-  int err;
   mrb_value arg_addr = mrb_nil_value();
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   struct sockaddr_storage* addr = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "o", &arg_addr);
   if (version != 4 && version != 6) {
@@ -419,11 +386,8 @@ mrb_uv_tcp_bind(mrb_state *mrb, mrb_value self, int version)
     Data_Get_Struct(mrb, arg_addr, &mrb_uv_ip6addr_type, addr);
   }
 
-  err = uv_tcp_bind((uv_tcp_t*)&context->handle, ((const struct sockaddr *) addr), version == 4? 0 : UV_TCP_IPV6ONLY);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_tcp_bind((uv_tcp_t*)&context->handle, ((const struct sockaddr *) addr), version == 4? 0 : UV_TCP_IPV6ONLY));
+  return self;
 }
 
 static mrb_value
@@ -441,13 +405,10 @@ mrb_uv_tcp_bind6(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_int arg_backlog = 0;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_connection_cb connection_cb = _uv_connection_cb;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&i", &b, &arg_backlog);
   if (mrb_nil_p(b)) {
@@ -455,26 +416,18 @@ mrb_uv_tcp_listen(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "connection_cb"), b);
 
-  err = uv_listen((uv_stream_t*) &context->handle, arg_backlog, connection_cb);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_listen((uv_stream_t*) &context->handle, arg_backlog, connection_cb));
+  return self;
 }
 
 static mrb_value
 mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value c;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_uv_handle* new_context = NULL;
   struct RClass* _class_uv;
   struct RClass* _class_uv_tcp;
-  int ai;
-  mrb_value uv_gc_table;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   _class_uv = mrb_module_get(mrb, "UV");
   _class_uv_tcp = mrb_class_get_under(mrb, _class_uv, "TCP");
@@ -482,99 +435,89 @@ mrb_uv_tcp_accept(mrb_state *mrb, mrb_value self)
 
   Data_Get_Struct(mrb, c, &mrb_uv_handle_type, new_context);
 
-  err = uv_accept((uv_stream_t*) &context->handle, (uv_stream_t*) &new_context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_accept((uv_stream_t*) &context->handle, (uv_stream_t*) &new_context->handle));
 
-  ai = mrb_gc_arena_save(mrb);
-  uv_gc_table = mrb_const_get(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "$GC"));
-  mrb_ary_push(mrb, uv_gc_table, c);
-  mrb_gc_arena_restore(mrb, ai);
+  mrb_uv_gc_protect(mrb, c);
   return c;
 }
 
-/*
 static mrb_value
 mrb_uv_tcp_simultaneous_accepts_get(mrb_state *mrb, mrb_value self)
 {
   return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "simultaneous_accepts"));
 }
-*/
 
 static mrb_value
 mrb_uv_tcp_simultaneous_accepts_set(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_simultaneous_accepts;
-  mrb_uv_handle* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   mrb_get_args(mrb, "i", &arg_simultaneous_accepts);
   uv_tcp_simultaneous_accepts((uv_tcp_t*)&context->handle, arg_simultaneous_accepts);
-  return mrb_nil_value();
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "simultaneous_accepts"), mrb_bool_value(arg_simultaneous_accepts));
+  return self;
 }
 
-/*
 static mrb_value
-mrb_uv_tcp_keepalive_get(mrb_state *mrb, mrb_value self)
+mrb_uv_tcp_keepalive_delay(mrb_state *mrb, mrb_value self)
 {
   return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "keepalive"));
 }
-*/
+
+static mrb_value
+mrb_uv_tcp_keepalive_p(mrb_state *mrb, mrb_value self)
+{
+  return mrb_bool_value(mrb_iv_defined(mrb, self, mrb_intern_lit(mrb, "keepalive")));
+}
 
 static mrb_value
 mrb_uv_tcp_keepalive_set(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_keepalive, arg_delay;
-  mrb_uv_handle* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   mrb_get_args(mrb, "ii", &arg_keepalive, &arg_delay);
   uv_tcp_keepalive((uv_tcp_t*)&context->handle, arg_keepalive, arg_delay);
-  return mrb_nil_value();
+  if (arg_keepalive) {
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "keepalive"), mrb_fixnum_value(arg_delay));
+  } else {
+    mrb_iv_remove(mrb, self, mrb_intern_lit(mrb, "keepalive"));
+  }
+  return self;
 }
 
-/*
 static mrb_value
 mrb_uv_tcp_nodelay_get(mrb_state *mrb, mrb_value self)
 {
   return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "nodelay"));
 }
-*/
 
 static mrb_value
 mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_nodelay;
-  mrb_uv_handle* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   mrb_get_args(mrb, "i", &arg_nodelay);
   uv_tcp_nodelay((uv_tcp_t*)&context->handle, arg_nodelay);
-  return mrb_nil_value();
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "nodelay"), mrb_bool_value(arg_nodelay));
+  return self;
 }
 
 static mrb_value
 mrb_uv_tcp_getpeername(mrb_state *mrb, mrb_value self)
 {
-  int err, len;
+  int len;
   struct sockaddr_storage addr;
   struct RClass* _class_uv;
   struct RClass* _class_uv_ipaddr;
   struct RData *data;
   mrb_value value_data, value_result = mrb_nil_value();
-  mrb_uv_handle* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   len = sizeof(addr);
-  err = uv_tcp_getpeername((uv_tcp_t*)&context->handle, (struct sockaddr *)&addr, &len);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_tcp_getpeername((uv_tcp_t*)&context->handle, (struct sockaddr *)&addr, &len));
   switch (addr.ss_family) {
     case AF_INET:
     case AF_INET6:
@@ -600,25 +543,20 @@ mrb_uv_tcp_getpeername(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_getsockname(mrb_state *mrb, mrb_value self, int tcp)
 {
-  int err, len;
+  int len;
   struct sockaddr_storage addr;
   struct RClass* _class_uv;
   struct RClass* _class_uv_ipaddr;
   struct RData *data;
   mrb_value value_data, value_result = mrb_nil_value();
-  mrb_uv_handle* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   len = sizeof(addr);
   if (tcp) {
-    err = uv_tcp_getsockname((uv_tcp_t*)&context->handle, (struct sockaddr *)&addr, &len);
+    mrb_uv_check_error(mrb, uv_tcp_getsockname((uv_tcp_t*)&context->handle, (struct sockaddr *)&addr, &len));
   }
   else {
-    err = uv_udp_getsockname((uv_udp_t*)&context->handle, (struct sockaddr *)&addr, &len);
-  }
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_check_error(mrb, uv_udp_getsockname((uv_udp_t*)&context->handle, (struct sockaddr *)&addr, &len));
   }
   switch (addr.ss_family) {
     case AF_INET:
@@ -654,37 +592,26 @@ mrb_uv_tcp_getsockname(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_loop = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_udp_t), self);
 
-  err = uv_udp_init(loop, (uv_udp_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_udp_init(loop, (uv_udp_t*)&context->handle));
   return self;
 }
 
 static mrb_value
 mrb_uv_udp_bind(mrb_state *mrb, mrb_value self, int version)
 {
-  int err;
   mrb_value arg_addr = mrb_nil_value(), arg_flags = mrb_nil_value();
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   struct sockaddr_storage* addr = NULL;
   int flags = 0;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "o|o", &arg_addr, &arg_flags);
   if (version != 4 && version != 6) {
@@ -706,11 +633,8 @@ mrb_uv_udp_bind(mrb_state *mrb, mrb_value self, int version)
     Data_Get_Struct(mrb, arg_addr, &mrb_uv_ip6addr_type, addr);
   }
 
-  err = uv_udp_bind((uv_udp_t*)&context->handle, ((const struct sockaddr *) addr), flags);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_udp_bind((uv_udp_t*)&context->handle, ((const struct sockaddr *) addr), flags));
+  return self;
 }
 
 static mrb_value
@@ -741,14 +665,12 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
   mrb_value arg_data = mrb_nil_value(), arg_addr = mrb_nil_value();
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   struct sockaddr_storage* addr = NULL;
   mrb_value b = mrb_nil_value();
   uv_udp_send_cb udp_send_cb = _uv_udp_send_cb;
   uv_buf_t buf;
   uv_udp_send_t* req;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&So", &b, &arg_data, &arg_addr);
   if (version != 4 && version != 6) {
@@ -778,9 +700,9 @@ mrb_uv_udp_send(mrb_state *mrb, mrb_value self, int version)
   err = uv_udp_send(req, (uv_udp_t*)&context->handle, &buf, 1, ((const struct sockaddr *) addr), udp_send_cb);
   if (err != 0) {
     mrb_free(mrb, req);
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -845,12 +767,9 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, const uv_buf_t* buf, const stru
 static mrb_value
 mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_udp_recv_cb udp_recv_cb = _uv_udp_recv_cb;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
@@ -858,32 +777,90 @@ mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "udp_recv_cb"), b);
 
-  err = uv_udp_recv_start((uv_udp_t*)&context->handle, _uv_alloc_cb, udp_recv_cb);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_udp_recv_start((uv_udp_t*)&context->handle, _uv_alloc_cb, udp_recv_cb));
+  return self;
 }
 
 static mrb_value
 mrb_uv_udp_recv_stop(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
-
-  err = uv_udp_recv_stop((uv_udp_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_udp_recv_stop((uv_udp_t*)&context->handle));
+  return self;
 }
 
 static mrb_value
 mrb_uv_udp_getsockname(mrb_state *mrb, mrb_value self)
 {
   return mrb_uv_getsockname(mrb, self, 0);
+}
+
+static mrb_value
+mrb_uv_udp_set_membership(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  char *multicast, *interface;
+  mrb_int mem;
+
+  mrb_get_args(mrb, "zzi", &multicast, &interface, &mem);
+  mrb_uv_check_error(mrb, uv_udp_set_membership((uv_udp_t*)&ctx->handle, multicast, interface, mem));
+  return self;
+}
+
+static mrb_value
+mrb_uv_udp_multicast_loop_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_bool b;
+
+  mrb_get_args(mrb, "b", &b);
+  mrb_uv_check_error(mrb, uv_udp_set_multicast_loop((uv_udp_t*)&ctx->handle, b));
+  return mrb_bool_value(b);
+}
+
+static mrb_value
+mrb_uv_udp_multicast_ttl_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_bool b;
+
+  mrb_get_args(mrb, "b", &b);
+  mrb_uv_check_error(mrb, uv_udp_set_multicast_ttl((uv_udp_t*)&ctx->handle, b));
+  return mrb_bool_value(b);
+}
+
+static mrb_value
+mrb_uv_udp_broadcast_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_bool b;
+
+  mrb_get_args(mrb, "b", &b);
+  mrb_uv_check_error(mrb, uv_udp_set_broadcast((uv_udp_t*)&ctx->handle, b));
+  return mrb_bool_value(b);
+}
+
+static mrb_value
+mrb_uv_udp_multicast_interface_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_value s;
+
+  mrb_get_args(mrb, "S", &s);
+  mrb_uv_check_error(mrb, uv_udp_set_multicast_interface((uv_udp_t*)&ctx->handle, mrb_string_value_ptr(mrb, s)));
+  return s;
+}
+
+static mrb_value
+mrb_uv_udp_ttl_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_int v;
+
+  mrb_get_args(mrb, "i", &v);
+  mrb_uv_check_error(mrb, uv_udp_set_ttl((uv_udp_t*)&ctx->handle, v));
+  return mrb_fixnum_value(v);
 }
 
 /*********************************************************
@@ -901,36 +878,25 @@ _uv_prepare_cb(uv_prepare_t* prepare)
 static mrb_value
 mrb_uv_prepare_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_loop = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_prepare_t), self);
 
-  err = uv_prepare_init(loop, (uv_prepare_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_prepare_init(loop, (uv_prepare_t*)&context->handle));
   return self;
 }
 
 static mrb_value
 mrb_uv_prepare_start(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_prepare_cb prepare_cb = _uv_prepare_cb;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
@@ -938,26 +904,17 @@ mrb_uv_prepare_start(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "prepare_cb"), b);
 
-  err = uv_prepare_start((uv_prepare_t*)&context->handle, prepare_cb);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_prepare_start((uv_prepare_t*)&context->handle, prepare_cb));
+  return self;
 }
 
 static mrb_value
 mrb_uv_prepare_stop(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
-
-  err = uv_prepare_stop((uv_prepare_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_prepare_stop((uv_prepare_t*)&context->handle));
+  return self;
 }
 
 /*********************************************************
@@ -975,21 +932,14 @@ _uv_async_cb(uv_async_t* async)
 static mrb_value
 mrb_uv_async_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_loop = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
   mrb_value b = mrb_nil_value();
   uv_async_cb async_cb = _uv_async_cb;
 
-  if (mrb_get_args(mrb, "&|o", &b, &arg_loop) == 1) {
-    mrb_value obj = mrb_funcall(mrb, arg_loop, "inspect", 0);
-    fwrite(RSTRING_PTR(obj), RSTRING_LEN(obj), 1, stdout);
-
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  mrb_get_args(mrb, "&|o", &b, &arg_loop);
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_async_t), self);
 
@@ -998,26 +948,17 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "async_cb"), b);
 
-  err = uv_async_init(loop, (uv_async_t*)&context->handle, async_cb);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_async_init(loop, (uv_async_t*)&context->handle, async_cb));
   return self;
 }
 
 static mrb_value
 mrb_uv_async_send(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
-
-  err = uv_async_send((uv_async_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_async_send((uv_async_t*)&context->handle));
+  return self;
 }
 
 /*********************************************************
@@ -1026,24 +967,16 @@ mrb_uv_async_send(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_loop = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_idle_t), self);
 
-  err = uv_idle_init(loop, (uv_idle_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_idle_init(loop, (uv_idle_t*)&context->handle));
   return self;
 }
 
@@ -1059,40 +992,24 @@ _uv_idle_cb(uv_idle_t* idle)
 static mrb_value
 mrb_uv_idle_start(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
-  uv_idle_cb idle_cb = _uv_idle_cb;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&", &b);
-  if (mrb_nil_p(b)) {
-    idle_cb = NULL;
+  if (!mrb_nil_p(b)) {
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "idle_cb"), b);
   }
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "idle_cb"), b);
-  uv_idle_init(uv_default_loop(), (uv_idle_t*)&context->handle);
-
-  err = uv_idle_start((uv_idle_t*)&context->handle, idle_cb);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_idle_start((uv_idle_t*)&context->handle, mrb_nil_p(b)? NULL : _uv_idle_cb));
+  return self;
 }
 
 static mrb_value
 mrb_uv_idle_stop(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
-
-  err = uv_idle_stop((uv_idle_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_idle_stop((uv_idle_t*)&context->handle));
+  return self;
 }
 
 /*********************************************************
@@ -1101,25 +1018,17 @@ mrb_uv_idle_stop(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_tty_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_loop = mrb_nil_value();
   mrb_int arg_file, arg_readable;
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "ii|o", &arg_file, &arg_readable, &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_tty_t), self);
 
-  err = uv_tty_init(loop, (uv_tty_t*)&context->handle, arg_file, arg_readable);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_tty_init(loop, (uv_tty_t*)&context->handle, arg_file, arg_readable));
   return self;
 }
 
@@ -1127,11 +1036,9 @@ static mrb_value
 mrb_uv_tty_set_mode(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_mode;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   mrb_get_args(mrb, "i", &arg_mode);
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   return mrb_fixnum_value(uv_tty_set_mode((uv_tty_t*)&context->handle, arg_mode));
 }
@@ -1140,23 +1047,17 @@ static mrb_value
 mrb_uv_tty_reset_mode(mrb_state *mrb, mrb_value self)
 {
   uv_tty_reset_mode();
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
 mrb_uv_tty_get_winsize(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   int width = 0, height = 0;
   mrb_value ary;
 
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
-
-  err = uv_tty_get_winsize((uv_tty_t*)&context->handle, &width, &height);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_tty_get_winsize((uv_tty_t*)&context->handle, &width, &height));
   ary = mrb_ary_new(mrb);
   mrb_ary_push(mrb, ary, mrb_fixnum_value(width));
   mrb_ary_push(mrb, ary, mrb_fixnum_value(height));
@@ -1194,8 +1095,6 @@ mrb_uv_process_init(mrb_state *mrb, mrb_value self)
   arg_args = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "args"));
   if (mrb_type(arg_args) != MRB_TT_ARRAY) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
 
-  mrb_uv_handle_alloc(mrb, sizeof(uv_process_t), self);
-
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "options"), arg_opt);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "stdout_pipe"), mrb_nil_value());
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "stderr_pipe"), mrb_nil_value());
@@ -1207,7 +1106,7 @@ mrb_uv_process_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context;
   mrb_value b = mrb_nil_value();
   uv_exit_cb exit_cb = _uv_exit_cb;
   mrb_value options;
@@ -1222,8 +1121,6 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   uv_stdio_container_t stdio[3];
   uv_process_options_t opt = {0};
   char** args;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   options = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "options"));
   arg_file = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "file"));
@@ -1240,15 +1137,14 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
 
   uv_cwd(cwd, &cwd_size);
   args = mrb_malloc(mrb, sizeof(char*) * (RARRAY_LEN(arg_args)+2));
-  args[0] = RSTRING_PTR(arg_file);
+  args[0] = mrb_string_value_ptr(mrb, arg_file);
   for (i = 0; i < RARRAY_LEN(arg_args); i++) {
-    args[i+1] = RSTRING_PTR(mrb_ary_entry(arg_args, i));
+    args[i+1] = mrb_string_value_ptr(mrb, mrb_ary_entry(arg_args, i));
   }
   args[i+1] = NULL;
 
   if (!mrb_nil_p(stdin_pipe)) {
-    mrb_uv_handle* pcontext = NULL;
-    Data_Get_Struct(mrb, stdin_pipe, &mrb_uv_handle_type, pcontext);
+    mrb_uv_handle* pcontext = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, stdin_pipe, &mrb_uv_handle_type);
     stdio[0].flags = UV_CREATE_PIPE | UV_READABLE_PIPE;
     stdio[0].data.stream = (uv_stream_t*)&pcontext->handle;
   } else {
@@ -1256,8 +1152,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
 
   if (!mrb_nil_p(stdout_pipe)) {
-    mrb_uv_handle* pcontext = NULL;
-    Data_Get_Struct(mrb, stdout_pipe, &mrb_uv_handle_type, pcontext);
+    mrb_uv_handle* pcontext = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, stdout_pipe, &mrb_uv_handle_type);
     stdio[1].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
     stdio[1].data.stream = (uv_stream_t*)&pcontext->handle;
   } else {
@@ -1265,8 +1160,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
 
   if (!mrb_nil_p(stderr_pipe)) {
-    mrb_uv_handle* pcontext = NULL;
-    Data_Get_Struct(mrb, stderr_pipe, &mrb_uv_handle_type, pcontext);
+    mrb_uv_handle* pcontext = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, stderr_pipe, &mrb_uv_handle_type);
     stdio[2].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
     stdio[2].data.stream = (uv_stream_t*)&pcontext->handle;
   } else {
@@ -1274,8 +1168,8 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
 
   opt.file = RSTRING_PTR(arg_file);
-  opt.args = uv_setup_args(RARRAY_LEN(arg_args), args);
-  opt.env = environ;
+  opt.args = args;
+  opt.env = NULL; /* inherit parent */
   opt.cwd = cwd;
   opt.exit_cb = exit_cb;
   opt.stdio_count = 3;
@@ -1284,23 +1178,22 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   opt.gid = 0;
   opt.flags = 0;
 
+  context = mrb_uv_handle_alloc(mrb, sizeof(uv_process_t), self);
   err = uv_spawn(uv_default_loop(), (uv_process_t*)&context->handle, &opt);
   mrb_free(mrb, args);
   if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
 mrb_uv_process_kill(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_signum;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   mrb_get_args(mrb, "i", &arg_signum);
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   return mrb_fixnum_value(uv_process_kill((uv_process_t*)&context->handle, arg_signum));
 }
@@ -1317,7 +1210,7 @@ mrb_uv_process_stdout_pipe_set(mrb_state *mrb, mrb_value self)
   mrb_value arg;
   mrb_get_args(mrb, "o", &arg);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "stdout_pipe"), arg);
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -1332,7 +1225,7 @@ mrb_uv_process_stdin_pipe_set(mrb_state *mrb, mrb_value self)
   mrb_value arg;
   mrb_get_args(mrb, "o", &arg);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "stdin_pipe"), arg);
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
@@ -1347,7 +1240,7 @@ mrb_uv_process_stderr_pipe_set(mrb_state *mrb, mrb_value self)
   mrb_value arg;
   mrb_get_args(mrb, "o", &arg);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "stderr_pipe"), arg);
-  return mrb_nil_value();
+  return self;
 }
 
 /*********************************************************
@@ -1356,40 +1249,26 @@ mrb_uv_process_stderr_pipe_set(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_loop = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_timer_t), self);
 
-  err = uv_timer_init(loop, (uv_timer_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_timer_init(loop, (uv_timer_t*)&context->handle));
   return self;
 }
 
 static mrb_value
 mrb_uv_timer_again(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
-
-  err = uv_timer_again((uv_timer_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_timer_again((uv_timer_t*)&context->handle));
+  return self;
 }
 
 static void
@@ -1404,13 +1283,10 @@ _uv_timer_cb(uv_timer_t* timer)
 static mrb_value
 mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_int arg_timeout = 0, arg_repeat = 0;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_timer_cb timer_cb = _uv_timer_cb;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&ii", &b, &arg_timeout, &arg_repeat);
   if (mrb_nil_p(b)) {
@@ -1418,27 +1294,34 @@ mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "timer_cb"), b);
 
-  err = uv_timer_start((uv_timer_t*)&context->handle, timer_cb,
-      arg_timeout, arg_repeat);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_timer_start((uv_timer_t*)&context->handle, timer_cb,
+                                         arg_timeout, arg_repeat));
+  return self;
 }
 
 static mrb_value
 mrb_uv_timer_stop(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
+  mrb_uv_check_error(mrb, uv_timer_stop((uv_timer_t*)&context->handle));
+  return self;
+}
 
-  err = uv_timer_stop((uv_timer_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+static mrb_value
+mrb_uv_timer_repeat(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  return mrb_float_value(mrb, (mrb_float)uv_timer_get_repeat((uv_timer_t*)&ctx->handle));
+}
+
+static mrb_value
+mrb_uv_timer_repeat_set(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_float f;
+  mrb_get_args(mrb, "f", &f);
+  return uv_timer_set_repeat((uv_timer_t*)&ctx->handle, (uint64_t)f), mrb_float_value(mrb, f);
 }
 
 /*********************************************************
@@ -1451,33 +1334,27 @@ _uv_fs_poll_cb(uv_fs_poll_t* handle, int status, const uv_stat_t* prev, const uv
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "fs_poll_cb"));
   if (!mrb_nil_p(proc)) {
-     mrb_value args[1];
+     mrb_value args[3];
      args[0] = mrb_fixnum_value(status);
-     mrb_yield_argv(mrb, proc, 1, args);
+     args[1] = mrb_uv_create_stat(mrb, prev);
+     args[2] = mrb_uv_create_stat(mrb, curr);
+     mrb_yield_argv(mrb, proc, 3, args);
   }
 }
 
 static mrb_value
 mrb_uv_fs_poll_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_loop = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_fs_poll_t), self);
 
-  err = uv_fs_poll_init(loop, (uv_fs_poll_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_fs_poll_init(loop, (uv_fs_poll_t*)&context->handle));
   return self;
 }
 
@@ -1486,11 +1363,9 @@ mrb_uv_fs_poll_start(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_path;
   mrb_int arg_interval;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_fs_poll_cb fs_poll_cb = _uv_fs_poll_cb;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&Si", &b, &arg_path, &arg_interval);
 
@@ -1505,11 +1380,57 @@ mrb_uv_fs_poll_start(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_fs_poll_stop(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
-
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   return mrb_fixnum_value(uv_fs_poll_stop((uv_fs_poll_t*)&context->handle));
+}
+
+/*********************************************************
+ * UV::Check
+ *********************************************************/
+static mrb_value
+mrb_uv_check_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value l = mrb_nil_value();
+  mrb_uv_handle *context;
+  mrb_get_args(mrb, "|o", &l);
+
+  context = mrb_uv_handle_alloc(mrb, sizeof(uv_check_t), self);
+  mrb_uv_check_error(mrb, uv_check_init(get_loop(mrb, l), (uv_check_t*)&context->handle));
+  return self;
+}
+
+static void
+_uv_check_cb(uv_check_t *check)
+{
+  mrb_uv_handle *context = (mrb_uv_handle*)check->data;
+  mrb_state *mrb = context->mrb;
+  mrb_value p = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "check_cb"));
+  if (!mrb_nil_p(p)) {
+    mrb_yield_argv(mrb, p, 0, NULL);
+  }
+}
+
+static mrb_value
+mrb_uv_check_start(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_value b;
+  uv_check_cb cb;
+
+  mrb_get_args(mrb, "&", &b);
+  cb = mrb_nil_p(b)? NULL : _uv_check_cb;
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "check_cb"), b);
+
+  mrb_uv_check_error(mrb, uv_check_start((uv_check_t*)&context->handle, cb));
+  return self;
+}
+
+static mrb_value
+mrb_uv_check_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_uv_check_error(mrb, uv_check_stop((uv_check_t*)&context->handle));
+  return self;
 }
 
 /*********************************************************
@@ -1531,24 +1452,16 @@ _uv_signal_cb(uv_signal_t* handle, int signum)
 static mrb_value
 mrb_uv_signal_init(mrb_state *mrb, mrb_value self)
 {
-  int err;
   mrb_value arg_loop = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  if (!mrb_nil_p(arg_loop)) {
-    Data_Get_Struct(mrb, arg_loop, &mrb_uv_loop_type, loop);
-  } else {
-    loop = uv_default_loop();
-  }
+  loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_signal_t), self);
 
-  err = uv_signal_init(loop, (uv_signal_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
+  mrb_uv_check_error(mrb, uv_signal_init(loop, (uv_signal_t*)&context->handle));
   return self;
 }
 
@@ -1556,11 +1469,9 @@ static mrb_value
 mrb_uv_signal_start(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_signum;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_signal_cb signal_cb = _uv_signal_cb;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&i", &b, &arg_signum);
 
@@ -1575,10 +1486,7 @@ mrb_uv_signal_start(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_signal_stop(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* context = NULL;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
-
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   return mrb_fixnum_value(uv_signal_stop((uv_signal_t*)&context->handle));
 }
 
@@ -1610,12 +1518,9 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 static mrb_value
 mrb_uv_read_start(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_read_cb read_cb = _uv_read_cb;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
@@ -1623,26 +1528,17 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "read_cb"), b);
 
-  err = uv_read_start((uv_stream_t*)&context->handle, _uv_alloc_cb, read_cb);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_read_start((uv_stream_t*)&context->handle, _uv_alloc_cb, read_cb));
+  return self;
 }
 
 static mrb_value
 mrb_uv_read_stop(mrb_state *mrb, mrb_value self)
 {
-  int err;
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
-
-  err = uv_read_stop((uv_stream_t*)&context->handle);
-  if (err != 0) {
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
-  }
-  return mrb_nil_value();
+  mrb_uv_check_error(mrb, uv_read_stop((uv_stream_t*)&context->handle));
+  return self;
 }
 
 static void
@@ -1667,13 +1563,11 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_data = mrb_nil_value();
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_write_cb write_cb = _uv_write_cb;
   uv_buf_t buf;
   uv_write_t* req;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&S", &b, &arg_data);
   if (mrb_nil_p(b)) {
@@ -1688,9 +1582,30 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   err = uv_write(req, (uv_stream_t*)&context->handle, &buf, 1, write_cb);
   if (err != 0) {
     mrb_free(mrb, req);
-    mrb_raise(mrb, E_RUNTIME_ERROR, uv_strerror(err));
+    mrb_uv_check_error(mrb, err);
   }
-  return mrb_nil_value();
+  return self;
+}
+
+static mrb_value
+mrb_uv_try_write(mrb_state *mrb, mrb_value self)
+{
+  uv_buf_t buf;
+  mrb_value str;
+  mrb_uv_handle *context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  int err;
+
+  mrb_get_args(mrb, "S", &str);
+  buf = uv_buf_init(RSTRING_PTR(str), RSTRING_LEN(str));
+  err = uv_try_write((uv_stream_t*)&context->handle, &buf, 1);
+  if (err < 0) {
+    mrb_uv_check_error(mrb, err);
+  }
+  if (err == 0) {
+    return symbol_value_lit(mrb, "need_queue");
+  } else {
+    return mrb_fixnum_value(err);
+  }
 }
 
 static void
@@ -1707,12 +1622,10 @@ _uv_shutdown_cb(uv_shutdown_t* req, int status)
 static mrb_value
 mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* context = NULL;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   mrb_value b = mrb_nil_value();
   uv_shutdown_cb shutdown_cb = _uv_shutdown_cb;
   uv_shutdown_t* req;
-
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, context);
 
   mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
@@ -1724,23 +1637,147 @@ mrb_uv_shutdown(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_shutdown_t));
   req->data = context;
   uv_shutdown(req, (uv_stream_t*)&context->handle, shutdown_cb);
-  return mrb_nil_value();
+  return self;
 }
 
 static mrb_value
 mrb_uv_readable(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* ctx;
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, ctx);
+  mrb_uv_handle* ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   return mrb_bool_value(uv_is_readable((uv_stream_t*)&ctx->handle));
 }
 
 static mrb_value
 mrb_uv_writable(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_handle* ctx;
-  Data_Get_Struct(mrb, self, &mrb_uv_handle_type, ctx);
+  mrb_uv_handle* ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   return mrb_bool_value(uv_is_writable((uv_stream_t*)&ctx->handle));
+}
+
+/*
+ * UV::FS::Event
+ */
+static mrb_value
+mrb_uv_fs_event_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_value l = mrb_nil_value();
+  mrb_uv_handle *ctx;
+  mrb_get_args(mrb, "|o", &l);
+
+  ctx = mrb_uv_handle_alloc(mrb, sizeof(uv_fs_event_t), self);
+  mrb_uv_check_error(mrb, uv_fs_event_init(get_loop(mrb, l), (uv_fs_event_t*)&ctx->handle));
+  return self;
+}
+
+static void
+_uv_fs_event_cb(uv_fs_event_t *ev, char const *filename, int events, int status)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)ev->data;
+  mrb_state *mrb = ctx->mrb;
+  mrb_value cb;
+
+  mrb_uv_check_error(mrb, status);
+  cb = mrb_iv_get(mrb, ctx->instance, mrb_intern_lit(mrb, "fs_event_cb"));
+  if (!mrb_nil_p(cb)) {
+    mrb_value args[2];
+    args[0] = mrb_str_new_cstr(mrb, filename);
+    switch((enum uv_fs_event)events) {
+    case UV_RENAME: args[1] = symbol_value_lit(mrb, "rename"); break;
+    case UV_CHANGE: args[1] = symbol_value_lit(mrb, "change"); break;
+    default: mrb_assert(FALSE);
+    }
+    mrb_yield_argv(mrb, cb, 2, args);
+  }
+}
+
+static mrb_value
+mrb_uv_fs_event_start(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  char* path;
+  uv_fs_event_cb cb = _uv_fs_event_cb;
+  mrb_int flags;
+  mrb_value b;
+
+  mrb_get_args(mrb, "&zi", &b, &path, &flags);
+  if (mrb_nil_p(b)) {
+    cb = NULL;
+  }
+
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_event_cb"), b);
+  mrb_uv_check_error(mrb, uv_fs_event_start((uv_fs_event_t*)&ctx->handle, cb, path, flags));
+  return self;
+}
+
+static mrb_value
+mrb_uv_fs_event_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_uv_check_error(mrb, uv_fs_event_stop((uv_fs_event_t*)&ctx->handle));
+  return self;
+}
+
+static mrb_value
+mrb_uv_fs_event_path(mrb_state *mrb, mrb_value self)
+{
+  char ret[PATH_MAX];
+  size_t len = PATH_MAX;
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+
+  mrb_uv_check_error(mrb, uv_fs_event_getpath((uv_fs_event_t*)&ctx->handle, ret, &len));
+  return mrb_str_new(mrb, ret, len - 1);
+}
+
+/*
+ * UV::Poll
+ */
+static mrb_value
+mrb_uv_poll_init(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx;
+  mrb_value fd, loop;
+  mrb_get_args(mrb, "o|o", &fd, &loop);
+
+  ctx = mrb_uv_handle_alloc(mrb, sizeof(uv_poll_t), self);
+  mrb_uv_check_error(mrb, uv_poll_init(get_loop(mrb, loop), (uv_poll_t*)&ctx->handle, mrb_uv_to_fd(mrb, fd)));
+  return self;
+}
+
+static void
+_uv_poll_cb(uv_poll_t *poll, int status, int events)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)poll->data;
+  mrb_state *mrb = ctx->mrb;
+  mrb_value cb = mrb_iv_get(mrb, ctx->instance, mrb_intern_lit(mrb, "poll_cb"));
+  mrb_uv_check_error(mrb, status);
+  if (!mrb_nil_p(cb)) {
+    mrb_value ev_val = mrb_fixnum_value(events);
+    mrb_yield_argv(mrb, cb, 1, &ev_val);
+  }
+}
+
+static mrb_value
+mrb_uv_poll_start(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_int ev;
+  mrb_value b;
+  uv_poll_cb cb = _uv_poll_cb;
+
+  mrb_get_args(mrb, "&i", &b, &ev);
+  if (mrb_nil_p(b)) {
+    cb = NULL;
+  }
+
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "poll_cb"), b);
+  return mrb_uv_check_error(mrb, uv_poll_start((uv_poll_t*)&ctx->handle, ev, cb)), self;
+}
+
+static mrb_value
+mrb_uv_poll_stop(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  return mrb_uv_check_error(mrb, uv_poll_stop((uv_poll_t*)&ctx->handle)), self;
 }
 
 void
@@ -1759,6 +1796,9 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   struct RClass* _class_uv_fs_poll;
   struct RClass* _class_uv_signal;
   struct RClass* _class_uv_stream;
+  struct RClass* _class_uv_check;
+  struct RClass* _class_uv_fs_event;
+  struct RClass* _class_uv_poll;
   int const ai = mrb_gc_arena_save(mrb);
 
   _class_uv_handle = mrb_define_module_under(mrb, UV, "Handle");
@@ -1774,6 +1814,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   _class_uv_stream = mrb_define_module_under(mrb, UV, "Stream");
   mrb_include_module(mrb, _class_uv_stream, _class_uv_handle);
   mrb_define_method(mrb, _class_uv_stream, "write", mrb_uv_write, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_stream, "try_write", mrb_uv_try_write, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_stream, "shutdown", mrb_uv_shutdown, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_stream, "read_start", mrb_uv_read_start, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_stream, "read_stop", mrb_uv_read_stop, MRB_ARGS_NONE());
@@ -1794,6 +1835,12 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_include_module(mrb, _class_uv_udp, _class_uv_handle);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_NONE());
   // TODO: uv_udp_open
+  mrb_define_method(mrb, _class_uv_udp, "set_membership", mrb_uv_udp_set_membership, ARGS_REQ(3));
+  mrb_define_method(mrb, _class_uv_udp, "multicast_loop=", mrb_uv_udp_multicast_loop_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "multicast_ttl=", mrb_uv_udp_multicast_ttl_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "multicast_interface=", mrb_uv_udp_multicast_interface_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "broadcast=", mrb_uv_udp_broadcast_set, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "ttl=", mrb_uv_udp_ttl_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "recv_start", mrb_uv_udp_recv_start, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "recv_stop", mrb_uv_udp_recv_stop, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "send", mrb_uv_udp_send4, ARGS_REQ(2));
@@ -1801,6 +1848,8 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind4, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "bind6", mrb_uv_udp_bind6, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "getsockname", mrb_uv_udp_getsockname, ARGS_NONE());
+  mrb_define_const(mrb, _class_uv_udp, "LEAVE_GROUP", mrb_fixnum_value(UV_LEAVE_GROUP));
+  mrb_define_const(mrb, _class_uv_udp, "JOIN_GROUP", mrb_fixnum_value(UV_JOIN_GROUP));
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_process = mrb_define_class_under(mrb, UV, "Process", mrb->object_class);
@@ -1853,8 +1902,8 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_include_module(mrb, _class_uv_timer, _class_uv_handle);
   mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "again", mrb_uv_timer_again, ARGS_NONE());
-  // TODO: uv_timer_set_repeat
-  // TODO: uv_timer_get_repeat
+  mrb_define_method(mrb, _class_uv_timer, "repeat", mrb_uv_timer_repeat, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_timer, "repeat=", mrb_uv_timer_repeat_set, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_timer, "start", mrb_uv_timer_start, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_timer, "stop", mrb_uv_timer_stop, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
@@ -1887,11 +1936,6 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_include_module(mrb, _class_uv_tcp, _class_uv_stream);
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_NONE());
   // TODO: uv_tcp_open
-  // TODO: uv_udp_set_membership
-  // TODO: uv_udp_set_multicast_loop
-  // TODO: uv_udp_set_multicast_ttl
-  // TODO: uv_udp_set_broadcast
-  // TODO: uv_udp_set_ttl
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect4, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "connect6", mrb_uv_tcp_connect6, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind4, ARGS_REQ(1));
@@ -1899,11 +1943,12 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_tcp, "listen", mrb_uv_tcp_listen, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "accept", mrb_uv_tcp_accept, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts=", mrb_uv_tcp_simultaneous_accepts_set, ARGS_REQ(1));
-  //mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts", mrb_uv_tcp_simultaneous_accepts_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "keepalive=", mrb_uv_tcp_keepalive_set, ARGS_REQ(1));
-  //mrb_define_method(mrb, _class_uv_tcp, "keepalive", mrb_uv_tcp_keepalive_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "nodelay=", mrb_uv_tcp_nodelay_set, ARGS_REQ(1));
-  //mrb_define_method(mrb, _class_uv_tcp, "nodelay", mrb_uv_tcp_nodelay_get, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "simultaneous_accepts?", mrb_uv_tcp_simultaneous_accepts_get, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "keepalive?", mrb_uv_tcp_keepalive_p, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "keepalive_delay", mrb_uv_tcp_keepalive_delay, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "nodelay?", mrb_uv_tcp_nodelay_get, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "getpeername", mrb_uv_tcp_getpeername, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "getsockname", mrb_uv_tcp_getsockname, ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
@@ -1919,4 +1964,33 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_pipe, "pending_instances=", mrb_uv_pipe_pending_instances, ARGS_REQ(1));
   mrb_gc_arena_restore(mrb, ai);
+
+  _class_uv_check = mrb_define_class_under(mrb, UV, "Check", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_check, MRB_TT_DATA);
+  mrb_include_module(mrb, _class_uv_check, _class_uv_handle);
+  mrb_define_method(mrb, _class_uv_check, "initialize", mrb_uv_check_init, MRB_ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_check, "start", mrb_uv_check_start, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_check, "stop", mrb_uv_check_stop, MRB_ARGS_NONE());
+
+  _class_uv_fs_event = mrb_define_class_under(mrb, mrb_class_get_under(mrb, UV, "FS"), "Event", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_fs_event, MRB_TT_DATA);
+  mrb_include_module(mrb, _class_uv_fs_event, _class_uv_handle);
+  mrb_define_method(mrb, _class_uv_fs_event, "initialize", mrb_uv_fs_event_init, MRB_ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_fs_event, "start", mrb_uv_fs_event_start, MRB_ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_fs_event, "stop", mrb_uv_fs_event_stop, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs_event, "path", mrb_uv_fs_event_path, MRB_ARGS_NONE());
+  mrb_define_const(mrb, _class_uv_fs_event, "WATCH_ENTRY", mrb_fixnum_value(UV_FS_EVENT_WATCH_ENTRY));
+  mrb_define_const(mrb, _class_uv_fs_event, "STAT", mrb_fixnum_value(UV_FS_EVENT_STAT));
+  mrb_define_const(mrb, _class_uv_fs_event, "RECURSIVE", mrb_fixnum_value(UV_FS_EVENT_RECURSIVE));
+  mrb_define_const(mrb, _class_uv_fs_event, "CHANGE", symbol_value_lit(mrb, "change"));
+  mrb_define_const(mrb, _class_uv_fs_event, "RENAME", symbol_value_lit(mrb, "rename"));
+
+  _class_uv_poll = mrb_define_class_under(mrb, UV, "Poll", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_poll, MRB_TT_DATA);
+  mrb_include_module(mrb, _class_uv_poll, _class_uv_handle);
+  mrb_define_method(mrb, _class_uv_poll, "initialize", mrb_uv_poll_init, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_poll, "start", mrb_uv_poll_start, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_poll, "stop", mrb_uv_poll_stop, MRB_ARGS_NONE());
+  mrb_define_const(mrb, _class_uv_poll, "READABLE", mrb_fixnum_value(UV_READABLE));
+  mrb_define_const(mrb, _class_uv_poll, "WRITABLE", mrb_fixnum_value(UV_WRITABLE));
 }
