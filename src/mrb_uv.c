@@ -82,10 +82,16 @@ mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t)
 {
   void *p;
   struct RClass *cls;
+  mrb_value ret;
+  int ai;
 
+  ai = mrb_gc_arena_save(mrb);
   cls = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "Req");
   p = mrb_malloc(mrb, uv_req_size(t));
-  return mrb_obj_value(mrb_data_object_alloc(mrb, cls, p, &req_type));
+  ret = mrb_obj_value(mrb_data_object_alloc(mrb, cls, p, &req_type));
+  mrb_uv_gc_protect(mrb, ret);
+  mrb_gc_arena_restore(mrb, ai);
+  return ret;
 }
 
 static mrb_value
