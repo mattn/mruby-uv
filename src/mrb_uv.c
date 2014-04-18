@@ -61,6 +61,72 @@ mrb_uv_data_set(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+/*
+ * UV::Req
+ */
+static void
+mrb_uv_req_free(mrb_state *mrb, void *p)
+{
+  if (p) {
+    uv_req_t *req = (uv_req_t*)p;
+    if (req->type == UV_FS) {
+      uv_fs_req_cleanup(req);
+    }
+    mrb_free(mrb, p);
+  }
+}
+static mrb_data_type const req_type = { "uv_req", mrb_uv_req_free };
+
+mrb_value
+mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t)
+{
+  void *p;
+  struct RClass *cls;
+
+  cls = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "Req");
+  p = mrb_malloc(mrb, uv_req_size(t));
+  return mrb_obj_value(mrb_data_object_alloc(mrb, cls, p, &req_type));
+}
+
+static mrb_value
+mrb_uv_cancel(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_check_error(mrb, uv_cancel((uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type)));
+  return self;
+}
+
+static mrb_value
+mrb_uv_req_type(mrb_state *mrb, mrb_value self)
+{
+  uv_req_t *req;
+
+  req = (uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
+  switch(req->type) {
+#define XX(u, l) case UV_ ## u: return symbol_value_lit(mrb, #l);
+      UV_REQ_TYPE_MAP(XX)
+#undef XX
+
+    case UV_UNKNOWN_REQ: return symbol_value_lit(mrb, "unknown");
+
+    default:
+      mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_req_t type: %S", mrb_fixnum_value(req->type));
+      return self;
+  }
+}
+
+void
+mrb_uv_req_release(mrb_state *mrb, mrb_value v)
+{
+  uv_req_t *req;
+
+  req = (uv_req_t*)mrb_uv_get_ptr(mrb, v, &req_type);
+  if (req->type == UV_FS) {
+    uv_fs_req_cleanup(req);
+  }
+  mrb_free(mrb, req);
+  DATA_PTR(v) = NULL;
+}
+
 /*********************************************************
  * UV::Loop
  *********************************************************/
@@ -922,6 +988,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_ip4addr;
   struct RClass* _class_uv_ip6addr;
   struct RClass* _class_uv_error;
+  struct RClass* _class_uv_req;
 
   _class_uv_error = mrb_define_class(mrb, "UVError", E_NAME_ERROR);
 
@@ -1007,11 +1074,15 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   /* TODO
   uv_poll_init_socket
-  uv_cancel
   uv_setup_args
   uv_inet_ntop
   uv_inet_pton
   */
+
+  _class_uv_req = mrb_define_class_under(mrb, _class_uv, "Req", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_req, MRB_TT_DATA);
+  mrb_define_method(mrb, _class_uv_req, "cancel", mrb_uv_cancel, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_req, "type", mrb_uv_req_type, MRB_ARGS_NONE());
 
   mrb_mruby_uv_gem_init_fs(mrb, _class_uv);
   mrb_mruby_uv_gem_init_handle(mrb, _class_uv);

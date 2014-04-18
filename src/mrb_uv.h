@@ -48,4 +48,7 @@ mrb_value mrb_uv_gc_table_get(mrb_state *mrb);
 void mrb_uv_gc_table_clean(mrb_state *mrb);
 void mrb_uv_gc_protect(mrb_state *mrb, mrb_value v);
 
+mrb_value mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t);
+void mrb_uv_req_release(mrb_state *mrb, mrb_value v);
+
 #endif
