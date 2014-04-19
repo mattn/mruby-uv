@@ -1051,6 +1051,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   MRB_SET_INSTANCE_TT(_class_uv_req, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_req, "cancel", mrb_uv_cancel, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_req, "type", mrb_uv_req_type, MRB_ARGS_NONE());
+  mrb_undef_class_method(mrb, _class_uv_req, "new");
 
   mrb_mruby_uv_gem_init_fs(mrb, _class_uv);
   mrb_mruby_uv_gem_init_handle(mrb, _class_uv);

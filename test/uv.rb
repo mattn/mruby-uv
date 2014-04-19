@@ -126,3 +126,7 @@ assert('UV::Once') do
   o.run
   assert_equal 1, c
 end
+
+assert 'UV::Req' do
+  assert_raise(NoMethodError) { UV::Req.new }
+end
