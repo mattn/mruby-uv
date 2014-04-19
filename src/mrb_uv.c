@@ -880,31 +880,12 @@ mrb_uv_interface_addresses(mrb_state *mrb, mrb_value self)
   return ret;
 }
 
-typedef struct mrb_uv_work_t {
-  mrb_state *mrb;
-  mrb_value block;
-  mrb_value object;
-  uv_work_t uv;
-} mrb_uv_work_t;
-
 static void
-mrb_uv_work_free(mrb_state *mrb, void *p)
+mrb_uv_work_cb(uv_work_t *uv_req)
 {
-  if (p) {
-    mrb_free(mrb, p);
-  }
-}
-
-static struct mrb_data_type const mrb_uv_work_type = {
-  "uv_work", mrb_uv_work_free
-};
-
-static void
-mrb_uv_work_cb(uv_work_t *w)
-{
-  mrb_uv_work_t *data = (mrb_uv_work_t*)w->data;
-  mrb_state *mrb = data->mrb;
-  mrb_value cfunc = mrb_iv_get(mrb, data->object, mrb_intern_lit(mrb, "cfunc_cb"));
+  mrb_uv_req_t *req = (mrb_uv_req_t*)uv_req->data;
+  mrb_state *mrb = req->mrb;
+  mrb_value cfunc = mrb_iv_get(mrb, req->instance, mrb_intern_lit(mrb, "cfunc_cb"));
 
   mrb_assert(mrb_type(cfunc) == MRB_TT_PROC);
   mrb_assert(MRB_PROC_CFUNC_P(mrb_proc_ptr(cfunc)));
@@ -913,21 +894,21 @@ mrb_uv_work_cb(uv_work_t *w)
 }
 
 static void
-mrb_uv_after_work_cb(uv_work_t *uv, int err)
+mrb_uv_after_work_cb(uv_work_t *uv_req, int err)
 {
-  mrb_uv_work_t *work = (mrb_uv_work_t*)uv->data;
-  mrb_state *mrb = work->mrb;
-  mrb_yield_argv(mrb, work->block, 0, NULL);
+  mrb_uv_req_t *req = (mrb_uv_req_t*)uv_req->data;
+  mrb_state *mrb = req->mrb;
+
+  mrb_yield_argv(mrb, req->block, 0, NULL);
   mrb_uv_check_error(mrb, err);
-  DATA_PTR(work->object) = NULL;
-  mrb_free(mrb, work);
+  mrb_uv_req_release(mrb, req->instance);
 }
 
 static mrb_value
 mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
 {
-  mrb_value cfunc, blk;
-  mrb_uv_work_t *work;
+  mrb_value cfunc, blk, req_val;
+  mrb_uv_req_t *req;
 
   mrb_get_args(mrb, "o&", &cfunc, &blk);
   if (mrb_type(cfunc) != MRB_TT_PROC || !MRB_PROC_CFUNC_P(mrb_proc_ptr(cfunc))) {
@@ -937,17 +918,12 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "expected block to UV.queue_work");
   }
 
-  work = (mrb_uv_work_t*)mrb_malloc(mrb, sizeof(mrb_uv_work_t));
-  work->mrb = mrb;
-  work->block = blk;
-  work->uv.data = work;
-  work->object = mrb_obj_value(Data_Wrap_Struct(mrb, mrb->object_class, &mrb_uv_work_type, work));
-  mrb_iv_set(mrb, work->object, mrb_intern_lit(mrb, "work_cb"), blk);
-  mrb_iv_set(mrb, work->object, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
-  mrb_uv_check_error(mrb, uv_queue_work(uv_default_loop(), &work->uv, mrb_uv_work_cb, mrb_uv_after_work_cb));
-  mrb_uv_gc_protect(mrb, work->object);
-
-  return self;
+  req_val = mrb_uv_req_alloc(mrb, UV_WORK, blk);
+  req = (mrb_uv_req_t*)DATA_PTR(req_val);
+  mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
+  mrb_uv_check_error(mrb, uv_queue_work(
+      uv_default_loop(), (uv_work_t*)&req->req, mrb_uv_work_cb, mrb_uv_after_work_cb));
+  return req_val;
 }
 
 static mrb_value
