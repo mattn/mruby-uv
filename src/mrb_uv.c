@@ -465,6 +465,7 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
   args[0] = mrb_fixnum_value(status);
   args[1] = c;
   mrb_yield_argv(mrb, mrb_iv_get(mrb, addr->instance, mrb_intern_lit(mrb, "uv_cb")), 2, args);
+  mrb_uv_req_release(mrb, addr->instance);
 }
 
 static mrb_value
