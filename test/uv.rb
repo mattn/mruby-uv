@@ -96,7 +96,12 @@ end
 
 assert('UV.queue_work') do
   c = 0
-  UV.queue_work { c += 1 }
+  assert_raise(ArgumentError) { UV.queue_work(Proc.new {}) {} }
+  assert_raise(ArgumentError) { UV.queue_work(WorkCFunc) }
+  UV.queue_work(WorkCFunc) {
+    assert_equal 4950, get_work_result
+    c += 1
+  }
   UV.run
   assert_equal 1, c
 end

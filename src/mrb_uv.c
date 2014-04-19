@@ -845,7 +845,13 @@ static void
 mrb_uv_work_cb(uv_work_t *w)
 {
   mrb_uv_work_t *data = (mrb_uv_work_t*)w->data;
-  mrb_yield_argv(data->mrb, data->block, 0, NULL);
+  mrb_state *mrb = data->mrb;
+  mrb_value cfunc = mrb_iv_get(mrb, data->object, mrb_intern_lit(mrb, "cfunc_cb"));
+
+  mrb_assert(mrb_type(cfunc) == MRB_TT_PROC);
+  mrb_assert(MRB_PROC_CFUNC_P(mrb_proc_ptr(cfunc)));
+
+  mrb_proc_ptr(cfunc)->body.func(NULL, mrb_nil_value());
 }
 
 static void
@@ -853,20 +859,22 @@ mrb_uv_after_work_cb(uv_work_t *uv, int err)
 {
   mrb_uv_work_t *work = (mrb_uv_work_t*)uv->data;
   mrb_state *mrb = work->mrb;
+  mrb_yield_argv(mrb, work->block, 0, NULL);
+  mrb_uv_check_error(mrb, err);
   DATA_PTR(work->object) = NULL;
   mrb_free(mrb, work);
-  if (err < 0) {
-    mrb_uv_check_error(mrb, err);
-  }
 }
 
 static mrb_value
 mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
 {
-  mrb_value blk;
+  mrb_value cfunc, blk;
   mrb_uv_work_t *work;
 
-  mrb_get_args(mrb, "&", &blk);
+  mrb_get_args(mrb, "o&", &cfunc, &blk);
+  if (mrb_type(cfunc) != MRB_TT_PROC || !MRB_PROC_CFUNC_P(mrb_proc_ptr(cfunc))) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid cfunc callback");
+  }
   if (mrb_nil_p(blk)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "expected block to UV.queue_work");
   }
@@ -877,6 +885,7 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
   work->uv.data = work;
   work->object = mrb_obj_value(Data_Wrap_Struct(mrb, mrb->object_class, &mrb_uv_work_type, work));
   mrb_iv_set(mrb, work->object, mrb_intern_lit(mrb, "work_cb"), blk);
+  mrb_iv_set(mrb, work->object, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
   mrb_uv_check_error(mrb, uv_queue_work(uv_default_loop(), &work->uv, mrb_uv_work_cb, mrb_uv_after_work_cb));
   mrb_uv_gc_protect(mrb, work->object);
 
