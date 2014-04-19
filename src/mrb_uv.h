@@ -53,7 +53,7 @@ void mrb_uv_req_release(mrb_state *mrb, mrb_value v);
 
 typedef struct mrb_uv_req_t {
   mrb_state *mrb;
-  mrb_value instance;
+  mrb_value instance, block;
   uv_req_t req;
 } mrb_uv_req_t;
 

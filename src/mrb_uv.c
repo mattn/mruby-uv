@@ -91,6 +91,7 @@ mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t, mrb_value proc)
   ret = mrb_obj_value(mrb_data_object_alloc(mrb, cls, p, &req_type));
   p->mrb = mrb;
   p->instance = ret;
+  p->block = proc;
   p->req.data = p;
 
   mrb_assert(!mrb_nil_p(proc));
@@ -464,7 +465,7 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
 
   args[0] = mrb_fixnum_value(status);
   args[1] = c;
-  mrb_yield_argv(mrb, mrb_iv_get(mrb, addr->instance, mrb_intern_lit(mrb, "uv_cb")), 2, args);
+  mrb_yield_argv(mrb, addr->block, 2, args);
   mrb_uv_req_release(mrb, addr->instance);
 }
 
