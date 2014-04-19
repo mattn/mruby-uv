@@ -98,10 +98,12 @@ assert('UV.queue_work') do
   c = 0
   assert_raise(ArgumentError) { UV.queue_work(Proc.new {}) {} }
   assert_raise(ArgumentError) { UV.queue_work(WorkCFunc) }
-  UV.queue_work(WorkCFunc) {
+  req = UV.queue_work(WorkCFunc) {
     assert_equal 4950, get_work_result
     c += 1
   }
+  assert_kind_of UV::Req, req
+  assert_equal :work, req.type
   UV.run
   assert_equal 1, c
 end

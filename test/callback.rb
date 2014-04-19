@@ -109,6 +109,7 @@ assert_uv 'UV.getaddrinfo' do
     assert_equal 80, a.addr.sin_port
   }
   assert_kind_of UV::Req, req
+  assert_equal :getaddrinfo, req.type
 
   # getaddrinfo without callback
   assert_raise(ArgumentError) { UV.getaddrinfo 'www.google.com', 'http' }

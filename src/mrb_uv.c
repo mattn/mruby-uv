@@ -68,9 +68,9 @@ static void
 mrb_uv_req_free(mrb_state *mrb, void *p)
 {
   if (p) {
-    uv_req_t *req = (uv_req_t*)p;
-    if (req->type == UV_FS) {
-      uv_fs_req_cleanup(req);
+    mrb_uv_req_t *req = (mrb_uv_req_t*)p;
+    if (req->req.type == UV_FS) {
+      uv_fs_req_cleanup(&req->req);
     }
     mrb_free(mrb, p);
   }
@@ -105,17 +105,17 @@ mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t, mrb_value proc)
 static mrb_value
 mrb_uv_cancel(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_check_error(mrb, uv_cancel((uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type)));
+  mrb_uv_check_error(mrb, uv_cancel(&((mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type))->req));
   return self;
 }
 
 static mrb_value
 mrb_uv_req_type(mrb_state *mrb, mrb_value self)
 {
-  uv_req_t *req;
+  mrb_uv_req_t *req;
 
-  req = (uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
-  switch(req->type) {
+  req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
+  switch(req->req.type) {
 #define XX(u, l) case UV_ ## u: return symbol_value_lit(mrb, #l);
       UV_REQ_TYPE_MAP(XX)
 #undef XX
@@ -123,7 +123,7 @@ mrb_uv_req_type(mrb_state *mrb, mrb_value self)
     case UV_UNKNOWN_REQ: return symbol_value_lit(mrb, "unknown");
 
     default:
-      mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_req_t type: %S", mrb_fixnum_value(req->type));
+      mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_req_t type: %S", mrb_fixnum_value(req->req.type));
       return self;
   }
 }
@@ -131,11 +131,11 @@ mrb_uv_req_type(mrb_state *mrb, mrb_value self)
 void
 mrb_uv_req_release(mrb_state *mrb, mrb_value v)
 {
-  uv_req_t *req;
+  mrb_uv_req_t *req;
 
-  req = (uv_req_t*)mrb_uv_get_ptr(mrb, v, &req_type);
-  if (req->type == UV_FS) {
-    uv_fs_req_cleanup(req);
+  req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, v, &req_type);
+  if (req->req.type == UV_FS) {
+    uv_fs_req_cleanup(&req->req);
   }
   mrb_free(mrb, req);
   DATA_PTR(v) = NULL;
