@@ -61,6 +61,86 @@ mrb_uv_data_set(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+/*
+ * UV::Req
+ */
+static void
+mrb_uv_req_free(mrb_state *mrb, void *p)
+{
+  if (p) {
+    mrb_uv_req_t *req = (mrb_uv_req_t*)p;
+    if (req->req.type == UV_FS) {
+      uv_fs_req_cleanup(&req->req);
+    }
+    mrb_free(mrb, p);
+  }
+}
+static mrb_data_type const req_type = { "uv_req", mrb_uv_req_free };
+
+mrb_value
+mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t, mrb_value proc)
+{
+  mrb_uv_req_t *p;
+  struct RClass *cls;
+  mrb_value ret;
+  int ai;
+
+  ai = mrb_gc_arena_save(mrb);
+  cls = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "Req");
+  p = (mrb_uv_req_t*)mrb_malloc(mrb, sizeof(mrb_uv_req_t) - sizeof(uv_req_t) + uv_req_size(t));
+  ret = mrb_obj_value(mrb_data_object_alloc(mrb, cls, p, &req_type));
+  p->mrb = mrb;
+  p->instance = ret;
+  p->block = proc;
+  p->req.data = p;
+
+  mrb_assert(!mrb_nil_p(proc));
+  mrb_iv_set(mrb, ret, mrb_intern_lit(mrb, "uv_cb"), proc);
+
+  mrb_uv_gc_protect(mrb, ret);
+  mrb_gc_arena_restore(mrb, ai);
+  return ret;
+}
+
+static mrb_value
+mrb_uv_cancel(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_check_error(mrb, uv_cancel(&((mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type))->req));
+  return self;
+}
+
+static mrb_value
+mrb_uv_req_type(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_req_t *req;
+
+  req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
+  switch(req->req.type) {
+#define XX(u, l) case UV_ ## u: return symbol_value_lit(mrb, #l);
+      UV_REQ_TYPE_MAP(XX)
+#undef XX
+
+    case UV_UNKNOWN_REQ: return symbol_value_lit(mrb, "unknown");
+
+    default:
+      mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_req_t type: %S", mrb_fixnum_value(req->req.type));
+      return self;
+  }
+}
+
+void
+mrb_uv_req_release(mrb_state *mrb, mrb_value v)
+{
+  mrb_uv_req_t *req;
+
+  req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, v, &req_type);
+  if (req->req.type == UV_FS) {
+    uv_fs_req_cleanup(&req->req);
+  }
+  mrb_free(mrb, req);
+  DATA_PTR(v) = NULL;
+}
+
 /*********************************************************
  * UV::Loop
  *********************************************************/
@@ -357,18 +437,10 @@ mrb_uv_ip6addr_sin_port(mrb_state *mrb, mrb_value self)
 /*********************************************************
  * UV::Addrinfo
  *********************************************************/
-typedef struct {
-  mrb_state* mrb;
-  struct addrinfo* addr;
-  mrb_value proc;
-} mrb_uv_addrinfo;
-
 static void
 uv_addrinfo_free(mrb_state *mrb, void *p)
 {
-  mrb_uv_addrinfo* addr = (mrb_uv_addrinfo*) p;
-  uv_freeaddrinfo(addr->addr);
-  mrb_free(mrb, p);
+  uv_freeaddrinfo((struct addrinfo*)p);
 }
 
 static const struct mrb_data_type uv_addrinfo_type = {
@@ -379,7 +451,7 @@ static void
 _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
 {
   mrb_value args[2];
-  mrb_uv_addrinfo* addr = (mrb_uv_addrinfo*) req->data;
+  mrb_uv_req_t* addr = (mrb_uv_req_t*) req->data;
   mrb_state* mrb = addr->mrb;
 
   mrb_value c = mrb_nil_value();
@@ -387,86 +459,72 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
     struct RClass* _class_uv = mrb_module_get(mrb, "UV");
     struct RClass* _class_uv_addrinfo = mrb_class_get_under(mrb, _class_uv, "Addrinfo");
     c = mrb_obj_new(mrb, _class_uv_addrinfo, 0, NULL);
-    DATA_PTR(c) = addr;
+    DATA_PTR(c) = res;
     DATA_TYPE(c) = &uv_addrinfo_type;
-    addr->addr = res;
   }
 
   args[0] = mrb_fixnum_value(status);
   args[1] = c;
-  mrb_yield_argv(mrb, addr->proc, 2, args);
+  mrb_yield_argv(mrb, addr->block, 2, args);
+  mrb_uv_req_release(mrb, addr->instance);
 }
 
 static mrb_value
 mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
 {
-  mrb_value node, service;
-  mrb_value b = mrb_nil_value();
-  uv_getaddrinfo_cb getaddrinfo_cb = _uv_getaddrinfo_cb;
-  mrb_uv_addrinfo* addr;
-  uv_getaddrinfo_t* req;
-  int ret;
+  mrb_value node, service, b = mrb_nil_value(), req_val;
+  mrb_uv_req_t* req;
 
   mrb_get_args(mrb, "SS&", &node, &service, &b);
 
-  addr = (mrb_uv_addrinfo*) mrb_malloc(mrb, sizeof(mrb_uv_addrinfo));
-  memset(addr, 0, sizeof(mrb_uv_addrinfo));
-  addr->mrb = mrb;
-  addr->proc = b;
-
   if (mrb_nil_p(b)) {
-    getaddrinfo_cb = NULL;
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "Expected callback in uv_getaddrinfo.");
   }
 
-  req = (uv_getaddrinfo_t*) mrb_malloc(mrb, sizeof(uv_getaddrinfo_t));
-  memset(req, 0, sizeof(uv_getaddrinfo_t));
-  req->data = addr;
-  ret = uv_getaddrinfo(
-    uv_default_loop(),
-    req,
-    getaddrinfo_cb,
-    RSTRING_PTR(node),
-    RSTRING_PTR(service),
-    NULL);
-  return mrb_fixnum_value(ret);
+  req_val = mrb_uv_req_alloc(mrb, UV_GETADDRINFO, b);
+  req = (mrb_uv_req_t*)DATA_PTR(req_val);
+  mrb_uv_check_error(mrb, uv_getaddrinfo(
+      uv_default_loop(), (uv_getaddrinfo_t*)&req->req, _uv_getaddrinfo_cb,
+      RSTRING_PTR(node), RSTRING_PTR(service), NULL));
+  return req_val;
 }
 
 static mrb_value
 mrb_uv_addrinfo_flags(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_addrinfo* addr = NULL;
+  struct addrinfo* addr = NULL;
   Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->addr->ai_flags);
+  return mrb_fixnum_value(addr->ai_flags);
 }
 
 static mrb_value
 mrb_uv_addrinfo_family(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_addrinfo* addr = NULL;
+  struct addrinfo* addr = NULL;
   Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->addr->ai_family);
+  return mrb_fixnum_value(addr->ai_family);
 }
 
 static mrb_value
 mrb_uv_addrinfo_socktype(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_addrinfo* addr = NULL;
+  struct addrinfo* addr = NULL;
   Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->addr->ai_socktype);
+  return mrb_fixnum_value(addr->ai_socktype);
 }
 
 static mrb_value
 mrb_uv_addrinfo_protocol(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_addrinfo* addr = NULL;
+  struct addrinfo* addr = NULL;
   Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->addr->ai_protocol);
+  return mrb_fixnum_value(addr->ai_protocol);
 }
 
 static mrb_value
 mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_addrinfo* addr = NULL;
+  struct addrinfo* addr = NULL;
   struct RClass* _class_uv;
   mrb_value c = mrb_nil_value();
   mrb_value args[1];
@@ -475,12 +533,12 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
 
   _class_uv = mrb_module_get(mrb, "UV");
 
-  switch (addr->addr->ai_family) {
+  switch (addr->ai_family) {
   case AF_INET:
     {
       struct RClass* _class_uv_ip4addr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
       struct sockaddr_in* saddr = (struct sockaddr_in*)mrb_malloc(mrb, sizeof(struct sockaddr_in));
-      *saddr = *(struct sockaddr_in*)addr->addr->ai_addr;
+      *saddr = *(struct sockaddr_in*)addr->ai_addr;
       args[0] = mrb_obj_value(
         Data_Wrap_Struct(mrb, mrb->object_class,
         &mrb_uv_ip4addr_type, (void*) saddr));
@@ -491,7 +549,7 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
     {
       struct RClass* _class_uv_ip6addr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
       struct sockaddr_in6* saddr = (struct sockaddr_in6*)mrb_malloc(mrb, sizeof(struct sockaddr_in6));
-      *saddr = *(struct sockaddr_in6*)addr->addr->ai_addr;
+      *saddr = *(struct sockaddr_in6*)addr->ai_addr;
       args[0] = mrb_obj_value(
         Data_Wrap_Struct(mrb, mrb->object_class,
         &mrb_uv_ip6addr_type, (void*) saddr));
@@ -505,24 +563,24 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_addrinfo_canonname(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_addrinfo* addr = NULL;
+  struct addrinfo* addr = NULL;
   Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
   return mrb_str_new_cstr(mrb,
-    addr->addr->ai_canonname ? addr->addr->ai_canonname : "");
+    addr->ai_canonname ? addr->ai_canonname : "");
 }
 
 static mrb_value
 mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_addrinfo* addr = NULL;
+  struct addrinfo* addr = NULL;
   Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
 
-  if (addr->addr->ai_next) {
+  if (addr->ai_next) {
     struct RClass* _class_uv = mrb_module_get(mrb, "UV");
     struct RClass* _class_uv_ip4addr = mrb_class_get_under(mrb, _class_uv, "Addrinfo");
 
     mrb_value c = mrb_obj_new(mrb, _class_uv_ip4addr, 0, NULL);
-    DATA_PTR(c) = addr->addr->ai_next;
+    DATA_PTR(c) = addr->ai_next;
     DATA_TYPE(c) = &uv_addrinfo_type;
     return c;
   }
@@ -822,31 +880,12 @@ mrb_uv_interface_addresses(mrb_state *mrb, mrb_value self)
   return ret;
 }
 
-typedef struct mrb_uv_work_t {
-  mrb_state *mrb;
-  mrb_value block;
-  mrb_value object;
-  uv_work_t uv;
-} mrb_uv_work_t;
-
 static void
-mrb_uv_work_free(mrb_state *mrb, void *p)
+mrb_uv_work_cb(uv_work_t *uv_req)
 {
-  if (p) {
-    mrb_free(mrb, p);
-  }
-}
-
-static struct mrb_data_type const mrb_uv_work_type = {
-  "uv_work", mrb_uv_work_free
-};
-
-static void
-mrb_uv_work_cb(uv_work_t *w)
-{
-  mrb_uv_work_t *data = (mrb_uv_work_t*)w->data;
-  mrb_state *mrb = data->mrb;
-  mrb_value cfunc = mrb_iv_get(mrb, data->object, mrb_intern_lit(mrb, "cfunc_cb"));
+  mrb_uv_req_t *req = (mrb_uv_req_t*)uv_req->data;
+  mrb_state *mrb = req->mrb;
+  mrb_value cfunc = mrb_iv_get(mrb, req->instance, mrb_intern_lit(mrb, "cfunc_cb"));
 
   mrb_assert(mrb_type(cfunc) == MRB_TT_PROC);
   mrb_assert(MRB_PROC_CFUNC_P(mrb_proc_ptr(cfunc)));
@@ -855,21 +894,21 @@ mrb_uv_work_cb(uv_work_t *w)
 }
 
 static void
-mrb_uv_after_work_cb(uv_work_t *uv, int err)
+mrb_uv_after_work_cb(uv_work_t *uv_req, int err)
 {
-  mrb_uv_work_t *work = (mrb_uv_work_t*)uv->data;
-  mrb_state *mrb = work->mrb;
-  mrb_yield_argv(mrb, work->block, 0, NULL);
+  mrb_uv_req_t *req = (mrb_uv_req_t*)uv_req->data;
+  mrb_state *mrb = req->mrb;
+
+  mrb_yield_argv(mrb, req->block, 0, NULL);
   mrb_uv_check_error(mrb, err);
-  DATA_PTR(work->object) = NULL;
-  mrb_free(mrb, work);
+  mrb_uv_req_release(mrb, req->instance);
 }
 
 static mrb_value
 mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
 {
-  mrb_value cfunc, blk;
-  mrb_uv_work_t *work;
+  mrb_value cfunc, blk, req_val;
+  mrb_uv_req_t *req;
 
   mrb_get_args(mrb, "o&", &cfunc, &blk);
   if (mrb_type(cfunc) != MRB_TT_PROC || !MRB_PROC_CFUNC_P(mrb_proc_ptr(cfunc))) {
@@ -879,17 +918,12 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "expected block to UV.queue_work");
   }
 
-  work = (mrb_uv_work_t*)mrb_malloc(mrb, sizeof(mrb_uv_work_t));
-  work->mrb = mrb;
-  work->block = blk;
-  work->uv.data = work;
-  work->object = mrb_obj_value(Data_Wrap_Struct(mrb, mrb->object_class, &mrb_uv_work_type, work));
-  mrb_iv_set(mrb, work->object, mrb_intern_lit(mrb, "work_cb"), blk);
-  mrb_iv_set(mrb, work->object, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
-  mrb_uv_check_error(mrb, uv_queue_work(uv_default_loop(), &work->uv, mrb_uv_work_cb, mrb_uv_after_work_cb));
-  mrb_uv_gc_protect(mrb, work->object);
-
-  return self;
+  req_val = mrb_uv_req_alloc(mrb, UV_WORK, blk);
+  req = (mrb_uv_req_t*)DATA_PTR(req_val);
+  mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
+  mrb_uv_check_error(mrb, uv_queue_work(
+      uv_default_loop(), (uv_work_t*)&req->req, mrb_uv_work_cb, mrb_uv_after_work_cb));
+  return req_val;
 }
 
 static mrb_value
@@ -922,6 +956,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_ip4addr;
   struct RClass* _class_uv_ip6addr;
   struct RClass* _class_uv_error;
+  struct RClass* _class_uv_req;
 
   _class_uv_error = mrb_define_class(mrb, "UVError", E_NAME_ERROR);
 
@@ -1007,11 +1042,16 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   /* TODO
   uv_poll_init_socket
-  uv_cancel
   uv_setup_args
   uv_inet_ntop
   uv_inet_pton
   */
+
+  _class_uv_req = mrb_define_class_under(mrb, _class_uv, "Req", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_req, MRB_TT_DATA);
+  mrb_define_method(mrb, _class_uv_req, "cancel", mrb_uv_cancel, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_req, "type", mrb_uv_req_type, MRB_ARGS_NONE());
+  mrb_undef_class_method(mrb, _class_uv_req, "new");
 
   mrb_mruby_uv_gem_init_fs(mrb, _class_uv);
   mrb_mruby_uv_gem_init_handle(mrb, _class_uv);

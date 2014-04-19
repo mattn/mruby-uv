@@ -103,11 +103,16 @@ assert_uv 'UV::Stat' do
 end
 
 assert_uv 'UV.getaddrinfo' do
-  UV.getaddrinfo 'www.google.com', 'http' do |x, a|
+  req = UV.getaddrinfo('www.google.com', 'http') { |x, a|
     next unless a
 
     assert_equal 80, a.addr.sin_port
-  end
+  }
+  assert_kind_of UV::Req, req
+  assert_equal :getaddrinfo, req.type
+
+  # getaddrinfo without callback
+  assert_raise(ArgumentError) { UV.getaddrinfo 'www.google.com', 'http' }
 end
 
 assert_uv 'UV::Async' do
