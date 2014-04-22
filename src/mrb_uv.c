@@ -942,6 +942,17 @@ mrb_uv_uptime(mrb_state *mrb, mrb_value self)
   return mrb_float_value(mrb, (mrb_float)t);
 }
 
+uv_os_sock_t
+mrb_uv_to_socket(mrb_state *mrb, mrb_value v)
+{
+  if (mrb_fixnum_p(v)) { /* treat raw integer as socket */
+    return mrb_fixnum(v);
+  }
+
+  mrb_raisef(mrb, E_ARGUMENT_ERROR, "Cannot get socket from: %S", v);
+  return 0; /* for compiler warning */
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -1041,7 +1052,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   /* TODO
-  uv_poll_init_socket
   uv_setup_args
   uv_inet_ntop
   uv_inet_pton
