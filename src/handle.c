@@ -311,6 +311,18 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_uv_tcp_open(mrb_state *mrb, mrb_value self)
+{
+  mrb_value socket;
+  mrb_uv_handle *ctx;
+  mrb_get_args(mrb, "o", &socket);
+  ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+
+  mrb_uv_check_error(mrb, uv_tcp_open((uv_tcp_t*)&ctx->handle, mrb_uv_to_socket(mrb, socket)));
+  return self;
+}
+
+static mrb_value
 mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
 {
   int err;
@@ -602,6 +614,18 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_udp_t), self);
 
   mrb_uv_check_error(mrb, uv_udp_init(loop, (uv_udp_t*)&context->handle));
+  return self;
+}
+
+static mrb_value
+mrb_uv_udp_open(mrb_state *mrb, mrb_value self)
+{
+  mrb_value socket;
+  mrb_uv_handle *ctx;
+  mrb_get_args(mrb, "o", &socket);
+  ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+
+  mrb_uv_check_error(mrb, uv_udp_open((uv_udp_t*)&ctx->handle, mrb_uv_to_socket(mrb, socket)));
   return self;
 }
 
@@ -1743,6 +1767,19 @@ mrb_uv_poll_init(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static mrb_value
+mrb_uv_poll_init_socket(mrb_state *mrb, mrb_value self)
+{
+  mrb_value sock, loop = mrb_nil_value(), ret;
+  mrb_uv_handle *ctx;
+  mrb_get_args(mrb, "o|o", &sock, &loop);
+
+  ret = mrb_obj_value(mrb_data_object_alloc(mrb, mrb_class_ptr(self), NULL, NULL));
+  ctx = mrb_uv_handle_alloc(mrb, sizeof(uv_poll_t), ret);
+  mrb_uv_check_error(mrb, uv_poll_init_socket(get_loop(mrb, loop), (uv_poll_t*)&ctx->handle, mrb_uv_to_socket(mrb, sock)));
+  return ret;
+}
+
 static void
 _uv_poll_cb(uv_poll_t *poll, int status, int events)
 {
@@ -1834,7 +1871,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   MRB_SET_INSTANCE_TT(_class_uv_udp, MRB_TT_DATA);
   mrb_include_module(mrb, _class_uv_udp, _class_uv_handle);
   mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, ARGS_NONE());
-  // TODO: uv_udp_open
+  mrb_define_method(mrb, _class_uv_udp, "open", mrb_uv_udp_open, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "set_membership", mrb_uv_udp_set_membership, ARGS_REQ(3));
   mrb_define_method(mrb, _class_uv_udp, "multicast_loop=", mrb_uv_udp_multicast_loop_set, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "multicast_ttl=", mrb_uv_udp_multicast_ttl_set, ARGS_REQ(1));
@@ -1935,7 +1972,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   MRB_SET_INSTANCE_TT(_class_uv_tcp, MRB_TT_DATA);
   mrb_include_module(mrb, _class_uv_tcp, _class_uv_stream);
   mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, ARGS_NONE());
-  // TODO: uv_tcp_open
+  mrb_define_method(mrb, _class_uv_tcp, "open", mrb_uv_tcp_open, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect4, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "connect6", mrb_uv_tcp_connect6, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "bind", mrb_uv_tcp_bind4, ARGS_REQ(1));
@@ -1989,6 +2026,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   MRB_SET_INSTANCE_TT(_class_uv_poll, MRB_TT_DATA);
   mrb_include_module(mrb, _class_uv_poll, _class_uv_handle);
   mrb_define_method(mrb, _class_uv_poll, "initialize", mrb_uv_poll_init, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(1));
+  mrb_define_class_method(mrb, _class_uv_poll, "create_from_socket", mrb_uv_poll_init_socket, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_poll, "start", mrb_uv_poll_start, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_poll, "stop", mrb_uv_poll_stop, MRB_ARGS_NONE());
   mrb_define_const(mrb, _class_uv_poll, "READABLE", mrb_fixnum_value(UV_READABLE));
