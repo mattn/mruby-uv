@@ -953,6 +953,39 @@ mrb_uv_to_socket(mrb_state *mrb, mrb_value v)
   return 0; /* for compiler warning */
 }
 
+char**
+mrb_uv_setup_args(mrb_state *mrb, int *argc, char **argv, mrb_bool set_global)
+{
+  int new_argc; char **new_argv;
+
+  new_argv = uv_setup_args(*argc, argv);
+  if (new_argv == argv) { // no change
+    new_argc = *argc;
+  } else {
+    char **it = new_argv;
+    new_argc = 0;
+    while (*it) { ++new_argc; }
+  }
+
+  if (set_global) {
+    int i, ai;
+    mrb_value argv_val;
+
+    mrb_gv_set(mrb, mrb_intern_lit(mrb, "$0"), mrb_str_new_cstr(mrb, new_argv[0]));
+
+    argv_val = mrb_ary_new_capa(mrb, new_argc - 1);
+    ai = mrb_gc_arena_save(mrb);
+    for (i = 1; i < new_argc; ++i) {
+      mrb_ary_push(mrb, argv_val, mrb_str_new_cstr(mrb, new_argv[i]));
+      mrb_gc_arena_restore(mrb, ai);
+    }
+    mrb_define_global_const(mrb, "ARGV", argv_val);
+  }
+
+  *argc = new_argc;
+  return new_argv;
+}
+
 /*********************************************************
  * register
  *********************************************************/
@@ -1052,7 +1085,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_gc_arena_restore(mrb, ai);
 
   /* TODO
-  uv_setup_args
   uv_inet_ntop
   uv_inet_pton
   */
