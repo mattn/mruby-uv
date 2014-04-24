@@ -1336,7 +1336,7 @@ static mrb_value
 mrb_uv_timer_repeat(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
-  return mrb_float_value(mrb, (mrb_float)uv_timer_get_repeat((uv_timer_t*)&ctx->handle));
+  return mrb_uv_from_uint64(mrb, uv_timer_get_repeat((uv_timer_t*)&ctx->handle));
 }
 
 static mrb_value

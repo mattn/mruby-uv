@@ -6,6 +6,12 @@
  *********************************************************/
 
 mrb_value
+mrb_uv_from_uint64(mrb_state *mrb, uint64_t v)
+{
+  return MRB_INT_MAX < v? mrb_float_value(mrb, (mrb_float)v) : mrb_fixnum_value(v);
+}
+
+mrb_value
 mrb_uv_gc_table_get(mrb_state *mrb)
 {
   return mrb_const_get(mrb, mrb_obj_value(mrb_module_get(mrb, "UV")), mrb_intern_lit(mrb, "$GC"));
@@ -683,19 +689,19 @@ void mrb_uv_check_error(mrb_state *mrb, int err)
 static mrb_value
 mrb_uv_free_memory(mrb_state *mrb, mrb_value self)
 {
-  return mrb_float_value(mrb, (mrb_float)uv_get_free_memory());
+  return mrb_uv_from_uint64(mrb, uv_get_free_memory());
 }
 
 static mrb_value
 mrb_uv_total_memory(mrb_state *mrb, mrb_value self)
 {
-  return mrb_float_value(mrb, (mrb_float)uv_get_total_memory());
+  return mrb_uv_from_uint64(mrb, uv_get_total_memory());
 }
 
 static mrb_value
 mrb_uv_hrtime(mrb_state *mrb, mrb_value self)
 {
-  return mrb_float_value(mrb, (mrb_float)uv_hrtime());
+  return mrb_uv_from_uint64(mrb, uv_hrtime());
 }
 
 static mrb_value
@@ -733,7 +739,7 @@ mrb_uv_rusage(mrb_state *mrb, mrb_value self)
 
   ret = mrb_hash_new_capa(mrb, 16);
 #define set_val(name) \
-  mrb_hash_set(mrb, ret, symbol_value_lit(mrb, #name), mrb_float_value(mrb, usage.ru_ ## name))
+  mrb_hash_set(mrb, ret, symbol_value_lit(mrb, #name), mrb_uv_from_uint64(mrb, usage.ru_ ## name))
 
   set_val(maxrss);
   set_val(ixrss);
@@ -782,11 +788,11 @@ mrb_uv_cpu_info(mrb_state *mrb, mrb_value self)
   for (i = 0; i < info_count; ++i) {
     mrb_value c = mrb_hash_new_capa(mrb, 3), t = mrb_hash_new_capa(mrb, 5);
 
-    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "user"), mrb_float_value(mrb, info[i].cpu_times.user));
-    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "nice"), mrb_float_value(mrb, info[i].cpu_times.nice));
-    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "sys"), mrb_float_value(mrb, info[i].cpu_times.sys));
-    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "idle"), mrb_float_value(mrb, info[i].cpu_times.idle));
-    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "irq"), mrb_float_value(mrb, info[i].cpu_times.irq));
+    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "user"), mrb_uv_from_uint64(mrb, info[i].cpu_times.user));
+    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "nice"), mrb_uv_from_uint64(mrb, info[i].cpu_times.nice));
+    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "sys"), mrb_uv_from_uint64(mrb, info[i].cpu_times.sys));
+    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "idle"), mrb_uv_from_uint64(mrb, info[i].cpu_times.idle));
+    mrb_hash_set(mrb, t, symbol_value_lit(mrb, "irq"), mrb_uv_from_uint64(mrb, info[i].cpu_times.irq));
 
     mrb_hash_set(mrb, c, symbol_value_lit(mrb, "model"), mrb_str_new_cstr(mrb, info[i].model));
     mrb_hash_set(mrb, c, symbol_value_lit(mrb, "speed"), mrb_fixnum_value(info[i].speed));
@@ -931,7 +937,7 @@ mrb_uv_resident_set_memory(mrb_state *mrb, mrb_value self)
 {
   size_t rss;
   mrb_uv_check_error(mrb, uv_resident_set_memory(&rss));
-  return mrb_float_value(mrb, (mrb_float)rss);
+  return mrb_uv_from_uint64(mrb, rss);
 }
 
 static mrb_value

@@ -32,7 +32,7 @@ mrb_uv_create_stat(mrb_state *mrb, uv_stat_t const *src_st)
   mrb_uv_stat_ ## n(mrb_state *mrb, mrb_value self)                     \
   {                                                                     \
     uv_stat_t *st = (uv_stat_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_stat_type); \
-    return mrb_float_value(mrb, (mrb_float)st->st_ ## n);               \
+    return mrb_uv_from_uint64(mrb, st->st_ ## n);                       \
   }                                                                     \
 
 stat_field(dev)
@@ -56,8 +56,8 @@ stat_field(gen)
   {                                                                     \
     uv_stat_t *st = (uv_stat_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_stat_type); \
     return mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "Time")), "at", 2, \
-                       mrb_float_value(mrb, (mrb_float)st->st_ ## n.tv_sec), \
-                       mrb_float_value(mrb, (mrb_float)(st->st_ ## n.tv_nsec / 1000))); \
+                       mrb_uv_from_uint64(mrb, st->st_ ## n.tv_sec),    \
+                       mrb_uv_from_uint64(mrb, st->st_ ## n.tv_nsec / 1000)); \
   }                                                                     \
 
 stat_time_field(atim)
