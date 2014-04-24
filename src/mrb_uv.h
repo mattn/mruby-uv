@@ -59,4 +59,6 @@ typedef struct mrb_uv_req_t {
 
 uv_os_sock_t mrb_uv_to_socket(mrb_state *mrb, mrb_value v);
 
+mrb_value mrb_uv_from_uint64(mrb_state *mrb, uint64_t v);
+
 #endif
