@@ -514,26 +514,22 @@ static mrb_value
 mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_int arg_file;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_file context;
+  mrb_uv_file *context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "&i", &b, &arg_file);
+  mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
-  } else {
-    memset(&context, 0, sizeof(mrb_uv_file));
-    context.mrb = mrb;
-    context.instance = self;
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
+  context = (mrb_uv_file*)mrb_uv_get_ptr(mrb, self, &mrb_uv_file_type);
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   memset(req, 0, sizeof(uv_fs_t));
   req->data = &context;
-  err = uv_fs_fstat(uv_default_loop(), req, arg_file, fs_cb);
+  err = uv_fs_fstat(uv_default_loop(), req, context->fd, fs_cb);
   if (err != 0) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
@@ -621,26 +617,22 @@ static mrb_value
 mrb_uv_fs_fsync(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_int arg_file;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_file context;
+  mrb_uv_file *context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "&i", &b, &arg_file);
+  mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
-  } else {
-    memset(&context, 0, sizeof(mrb_uv_file));
-    context.mrb = mrb;
-    context.instance = self;
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
+  context = (mrb_uv_file*)mrb_uv_get_ptr(mrb, self, &mrb_uv_file_type);
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   memset(req, 0, sizeof(uv_fs_t));
   req->data = &context;
-  err = uv_fs_fsync(uv_default_loop(), req, arg_file, fs_cb);
+  err = uv_fs_fsync(uv_default_loop(), req, context->fd, fs_cb);
   if (err != 0) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
@@ -652,26 +644,22 @@ static mrb_value
 mrb_uv_fs_fdatasync(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_int arg_file;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_file context;
+  mrb_uv_file *context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "&i", &b, &arg_file);
+  mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
-  } else {
-    memset(&context, 0, sizeof(mrb_uv_file));
-    context.mrb = mrb;
-    context.instance = self;
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
+  context = (mrb_uv_file*)mrb_uv_get_ptr(mrb, self, &mrb_uv_file_type);
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   memset(req, 0, sizeof(uv_fs_t));
   req->data = &context;
-  err = uv_fs_fdatasync(uv_default_loop(), req, arg_file, fs_cb);
+  err = uv_fs_fdatasync(uv_default_loop(), req, context->fd, fs_cb);
   if (err != 0) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
@@ -683,26 +671,23 @@ static mrb_value
 mrb_uv_fs_ftruncate(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_int arg_file, arg_offset;
+  mrb_int arg_offset;
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
-  static mrb_uv_file context;
+  mrb_uv_file *context;
   uv_fs_t* req;
 
-  mrb_get_args(mrb, "&ii", &b, &arg_file, &arg_offset);
+  mrb_get_args(mrb, "&i", &b, &arg_offset);
   if (mrb_nil_p(b)) {
     fs_cb = NULL;
-  } else {
-    memset(&context, 0, sizeof(mrb_uv_file));
-    context.mrb = mrb;
-    context.instance = self;
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
 
+  context = (mrb_uv_file*)mrb_uv_get_ptr(mrb, self, &mrb_uv_file_type);
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   memset(req, 0, sizeof(uv_fs_t));
   req->data = &context;
-  err = uv_fs_ftruncate(uv_default_loop(), req, arg_file, arg_offset, fs_cb);
+  err = uv_fs_ftruncate(uv_default_loop(), req, context->fd, arg_offset, fs_cb);
   if (err != 0) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
@@ -1046,32 +1031,32 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
 #endif
   mrb_define_const(mrb, _class_uv_fs, "S_IWRITE", mrb_fixnum_value(S_IWRITE));
   mrb_define_const(mrb, _class_uv_fs, "S_IREAD", mrb_fixnum_value(S_IREAD));
-  mrb_define_module_function(mrb, _class_uv_fs, "fd", mrb_uv_fs_fd, ARGS_NONE());
-  mrb_define_module_function(mrb, _class_uv_fs, "open", mrb_uv_fs_open, ARGS_REQ(2));
-  mrb_define_module_function(mrb, _class_uv_fs, "close", mrb_uv_fs_close, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs, "write", mrb_uv_fs_write, ARGS_REQ(1) | ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_fs, "read", mrb_uv_fs_read, ARGS_REQ(0) | ARGS_OPT(2));
-  mrb_define_module_function(mrb, _class_uv_fs, "unlink", mrb_uv_fs_unlink, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "mkdir", mrb_uv_fs_mkdir, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "rmdir", mrb_uv_fs_rmdir, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "readdir", mrb_uv_fs_readdir, ARGS_REQ(2));
-  mrb_define_module_function(mrb, _class_uv_fs, "stat", mrb_uv_fs_stat, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "fstat", mrb_uv_fs_fstat, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "rename", mrb_uv_fs_rename, ARGS_REQ(2));
-  mrb_define_module_function(mrb, _class_uv_fs, "fsync", mrb_uv_fs_fsync, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "fdatasync", mrb_uv_fs_fdatasync, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "ftruncate", mrb_uv_fs_ftruncate, ARGS_REQ(2));
-  mrb_define_module_function(mrb, _class_uv_fs, "sendfile", mrb_uv_fs_sendfile, ARGS_REQ(4));
-  mrb_define_module_function(mrb, _class_uv_fs, "chmod", mrb_uv_fs_chmod, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_fs, "datasync", mrb_uv_fs_fdatasync, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs, "truncate", mrb_uv_fs_ftruncate, ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_fs, "stat", mrb_uv_fs_fstat, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs, "sync", mrb_uv_fs_fsync, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_fs, "chmod", mrb_uv_fs_fchmod, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "lstat", mrb_uv_fs_lstat, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "link", mrb_uv_fs_link, ARGS_REQ(2));
-  mrb_define_module_function(mrb, _class_uv_fs, "utime", mrb_uv_fs_utime, ARGS_REQ(3));
-  mrb_define_method(mrb, _class_uv_fs, "futime", mrb_uv_fs_futime, ARGS_REQ(2));
-  mrb_define_module_function(mrb, _class_uv_fs, "symlink", mrb_uv_fs_symlink, ARGS_REQ(3));
-  mrb_define_module_function(mrb, _class_uv_fs, "readlink", mrb_uv_fs_readlink, ARGS_REQ(1));
-  mrb_define_module_function(mrb, _class_uv_fs, "chown", mrb_uv_fs_chown, ARGS_REQ(3));
+  mrb_define_method(mrb, _class_uv_fs, "utime", mrb_uv_fs_futime, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs, "chown", mrb_uv_fs_fchown, ARGS_REQ(2));
+  mrb_define_method(mrb, _class_uv_fs, "close", mrb_uv_fs_close, ARGS_NONE());
+  mrb_define_class_method(mrb, _class_uv_fs, "fd", mrb_uv_fs_fd, ARGS_NONE());
+  mrb_define_class_method(mrb, _class_uv_fs, "open", mrb_uv_fs_open, ARGS_REQ(2));
+  mrb_define_class_method(mrb, _class_uv_fs, "unlink", mrb_uv_fs_unlink, ARGS_REQ(1));
+  mrb_define_class_method(mrb, _class_uv_fs, "mkdir", mrb_uv_fs_mkdir, ARGS_REQ(1));
+  mrb_define_class_method(mrb, _class_uv_fs, "rmdir", mrb_uv_fs_rmdir, ARGS_REQ(1));
+  mrb_define_class_method(mrb, _class_uv_fs, "readdir", mrb_uv_fs_readdir, ARGS_REQ(2));
+  mrb_define_class_method(mrb, _class_uv_fs, "stat", mrb_uv_fs_stat, ARGS_REQ(1));
+  mrb_define_class_method(mrb, _class_uv_fs, "rename", mrb_uv_fs_rename, ARGS_REQ(2));
+  mrb_define_class_method(mrb, _class_uv_fs, "sendfile", mrb_uv_fs_sendfile, ARGS_REQ(4));
+  mrb_define_class_method(mrb, _class_uv_fs, "chmod", mrb_uv_fs_chmod, ARGS_REQ(2));
+  mrb_define_class_method(mrb, _class_uv_fs, "lstat", mrb_uv_fs_lstat, ARGS_REQ(1));
+  mrb_define_class_method(mrb, _class_uv_fs, "link", mrb_uv_fs_link, ARGS_REQ(2));
+  mrb_define_class_method(mrb, _class_uv_fs, "utime", mrb_uv_fs_utime, ARGS_REQ(3));
+  mrb_define_class_method(mrb, _class_uv_fs, "symlink", mrb_uv_fs_symlink, ARGS_REQ(3));
+  mrb_define_class_method(mrb, _class_uv_fs, "readlink", mrb_uv_fs_readlink, ARGS_REQ(1));
+  mrb_define_class_method(mrb, _class_uv_fs, "chown", mrb_uv_fs_chown, ARGS_REQ(3));
 
   _class_uv_stat = mrb_define_class_under(mrb, UV, "Stat", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_stat, MRB_TT_DATA);
