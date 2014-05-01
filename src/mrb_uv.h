@@ -21,6 +21,9 @@
 
 #ifndef MRUBY_VERSION
 #define mrb_module_get mrb_class_get
+#define mrb_uv_args_int int
+#else
+#define mrb_uv_args_int mrb_int
 #endif
 
 #define symbol_value_lit(mrb, lit) (mrb_symbol_value(mrb_intern_lit(mrb, lit)))
