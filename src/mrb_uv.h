@@ -5,6 +5,7 @@
 
 #ifndef _MSC_VER
 #include <unistd.h>
+#include <limits.h>
 #else
 #define PATH_MAX MAX_PATH
 #endif
