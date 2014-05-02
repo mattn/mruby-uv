@@ -76,7 +76,7 @@ mrb_uv_req_free(mrb_state *mrb, void *p)
   if (p) {
     mrb_uv_req_t *req = (mrb_uv_req_t*)p;
     if (req->req.type == UV_FS) {
-      uv_fs_req_cleanup(&req->req);
+      uv_fs_req_cleanup((uv_fs_t*)&req->req);
     }
     mrb_free(mrb, p);
   }
@@ -141,7 +141,7 @@ mrb_uv_req_release(mrb_state *mrb, mrb_value v)
 
   req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, v, &req_type);
   if (req->req.type == UV_FS) {
-    uv_fs_req_cleanup(&req->req);
+    uv_fs_req_cleanup((uv_fs_t*)&req->req);
   }
   mrb_free(mrb, req);
   DATA_PTR(v) = NULL;
