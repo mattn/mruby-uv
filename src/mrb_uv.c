@@ -276,7 +276,7 @@ const struct mrb_data_type mrb_uv_ip4addr_nofree_type = {
 static mrb_value
 mrb_uv_ip4_addr(mrb_state *mrb, mrb_value self)
 {
-  int argc;
+  mrb_uv_args_int argc;
   mrb_value *argv;
   struct RClass* _class_uv;
   struct RClass* _class_uv_ip4addr;
@@ -370,7 +370,7 @@ const struct mrb_data_type mrb_uv_ip6addr_nofree_type = {
 static mrb_value
 mrb_uv_ip6_addr(mrb_state *mrb, mrb_value self)
 {
-  int argc;
+  mrb_uv_args_int argc;
   mrb_value *argv;
   struct RClass* _class_uv;
   struct RClass* _class_uv_ip6addr;

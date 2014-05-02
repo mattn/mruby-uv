@@ -71,6 +71,6 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   if `uname`.chomp =~ /darwin/i
     spec.linker.libraries << ['uv', 'pthread', 'm']
   else
-    spec.linker.libraries << ['uv', 'pthread', 'rt', 'm']
+    spec.linker.libraries << ['uv', 'pthread', 'rt', 'm', 'dl']
   end
 end
