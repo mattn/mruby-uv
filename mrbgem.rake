@@ -3,6 +3,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   spec.authors = 'mattn'
   spec.summary = 'libuv mruby binding'
   spec.add_dependency 'mruby-time'
+  spec.add_dependency 'mruby-sprintf'
 
   if ENV['OS'] == 'Windows_NT'
     spec.linker.libraries << ['uv', 'psapi', 'iphlpapi', 'ws2_32']
@@ -11,7 +12,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
 
   require 'open3'
 
-  version = '0.11.24'
+  version = '0.11.25'
   libuv_dir = "#{build_dir}/libuv-v#{version}"
   libuv_lib = libfile "#{libuv_dir}/.libs/libuv"
   header = "#{libuv_dir}/include/uv.h"
