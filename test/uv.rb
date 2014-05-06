@@ -130,3 +130,7 @@ end
 assert 'UV::Req' do
   assert_raise(NoMethodError) { UV::Req.new }
 end
+
+assert 'UV::Loop#now' do
+  assert_kind_of Numeric, UV.default_loop.now
+end
