@@ -241,6 +241,15 @@ mrb_uv_backend_timeout(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_uv_now(mrb_state *mrb, mrb_value self)
+{
+  uv_loop_t *loop;
+
+  loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
+  return mrb_uv_from_uint64(mrb, uv_now(loop));
+}
+
+static mrb_value
 mrb_uv_loadavg(mrb_state *mrb, mrb_value self)
 {
   mrb_value ret = mrb_ary_new_capa(mrb, 3);
@@ -1061,6 +1070,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_loop, "update_time", mrb_uv_update_time, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "backend_fd", mrb_uv_backend_fd, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "backend_timeout", mrb_uv_backend_timeout, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "now", mrb_uv_now, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_addrinfo = mrb_define_class_under(mrb, _class_uv, "Addrinfo", mrb->object_class);
