@@ -65,4 +65,17 @@ uv_os_sock_t mrb_uv_to_socket(mrb_state *mrb, mrb_value v);
 
 mrb_value mrb_uv_from_uint64(mrb_state *mrb, uint64_t v);
 
+#ifdef _WIN32
+#  include <io.h>
+#  ifndef S_IRUSR
+#    define S_IRUSR _S_IREAD
+#  endif
+#  ifndef S_IWUSR
+#    define S_IWUSR _S_IWRITE
+#  endif
+#  ifndef S_IXUSR
+#    define S_IXUSR _S_IEXEC
+#  endif
+#endif
+
 #endif
