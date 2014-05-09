@@ -73,6 +73,9 @@ mrb_value mrb_uv_from_uint64(mrb_state *mrb, uint64_t v);
 #  ifndef S_IWUSR
 #    define S_IWUSR _S_IWRITE
 #  endif
+#  ifndef S_IXUSR
+#    define S_IXUSR _S_IEXEC
+#  endif
 #endif
 
 #endif
