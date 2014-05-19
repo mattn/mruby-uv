@@ -7,6 +7,15 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
 
   if ENV['OS'] == 'Windows_NT'
     spec.linker.libraries << ['uv', 'psapi', 'iphlpapi', 'ws2_32']
+  elsif `uname`.chomp =~ /darwin/i
+    spec.linker.libraries << ['uv', 'pthread', 'm']
+  else
+    spec.linker.libraries << ['uv', 'pthread', 'rt', 'm', 'dl']
+  end
+
+  if build.cc.respond_to? :search_header_path
+    next if build.cc.search_header_path 'uv.h'
+  elsif ENV['OS'] == 'Windows_NT'
     next
   end
 
@@ -69,9 +78,4 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   Dir.glob("#{dir}/src/*.c") { |f| file f => libuv_lib }
   spec.cc.include_paths << "#{libuv_dir}/include"
   spec.linker.library_paths << File.dirname(libuv_lib)
-  if `uname`.chomp =~ /darwin/i
-    spec.linker.libraries << ['uv', 'pthread', 'm']
-  else
-    spec.linker.libraries << ['uv', 'pthread', 'rt', 'm', 'dl']
-  end
 end
