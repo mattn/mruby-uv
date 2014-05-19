@@ -5,9 +5,11 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   spec.add_dependency 'mruby-time'
   spec.add_dependency 'mruby-sprintf'
 
-  if ENV['OS'] == 'Windows_NT'
+  is_cross = build.kind_of? MRuby::CrossBuild
+
+  if not is_cross and ENV['OS'] == 'Windows_NT'
     spec.linker.libraries << ['uv', 'psapi', 'iphlpapi', 'ws2_32']
-  elsif `uname`.chomp =~ /darwin/i
+  elsif not is_cross and `uname`.chomp =~ /darwin/i
     spec.linker.libraries << ['uv', 'pthread', 'm']
   else
     spec.linker.libraries << ['uv', 'pthread', 'rt', 'm', 'dl']
