@@ -1585,14 +1585,13 @@ static mrb_value
 mrb_uv_write(mrb_state *mrb, mrb_value self)
 {
   int err;
-  mrb_value arg_data = mrb_nil_value();
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
-  mrb_value b = mrb_nil_value();
+  mrb_value b = mrb_nil_value(), arg_data = mrb_nil_value(), send_handle_val = mrb_nil_value();
   uv_write_cb write_cb = _uv_write_cb;
   uv_buf_t buf;
   uv_write_t* req;
 
-  mrb_get_args(mrb, "&S", &b, &arg_data);
+  mrb_get_args(mrb, "&S|o", &b, &arg_data, &send_handle_val);
   if (mrb_nil_p(b)) {
     write_cb = NULL;
   }
@@ -1602,7 +1601,15 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   req = (uv_write_t*) mrb_malloc(mrb, sizeof(uv_write_t));
   memset(req, 0, sizeof(uv_write_t));
   req->data = context;
-  err = uv_write(req, (uv_stream_t*)&context->handle, &buf, 1, write_cb);
+  if (mrb_nil_p(send_handle_val)) {
+    err = uv_write(req, (uv_stream_t*)&context->handle, &buf, 1, write_cb);
+  } else {
+    mrb_uv_handle *send_handle = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, send_handle_val, &mrb_uv_handle_type);
+    if (send_handle->handle.type != UV_NAMED_PIPE && send_handle->handle.type != UV_TCP) {
+      mrb_raisef(mrb, E_ARGUMENT_ERROR, "Unexpected send handle type: %S", mrb_funcall(mrb, send_handle_val, "type", 0));
+    }
+    err = uv_write2(req, (uv_stream_t*)&context->handle, &buf, 1, (uv_stream_t*)&send_handle->handle, write_cb);
+  }
   if (err != 0) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
