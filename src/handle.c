@@ -60,12 +60,13 @@ mrb_uv_handle_alloc(mrb_state* mrb, size_t size, mrb_value instance)
 static void
 _uv_connect_cb(uv_connect_t* req, int status)
 {
-  mrb_value args[1];
-  mrb_uv_handle* context = (mrb_uv_handle*) req->handle->data;
+  mrb_uv_req_t* context = (mrb_uv_req_t*) req->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "connect_cb"));
-  args[0] = mrb_fixnum_value(status);
-  mrb_yield_argv(mrb, proc, 1, args);
+  if (!mrb_nil_p(context->block)) {
+    mrb_value args[] = { mrb_fixnum_value(status) };
+    mrb_yield_argv(mrb, context->block, 1, args);
+  }
+  mrb_uv_req_release(mrb, context->instance);
 }
 
 static void
@@ -192,28 +193,15 @@ mrb_uv_pipe_open(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_name;
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
-  mrb_value b = mrb_nil_value();
-  uv_connect_cb connect_cb = _uv_connect_cb;
-  char* name = NULL;
-  uv_connect_t* req;
+  mrb_value b = mrb_nil_value(), req_val;
+  char* name;
+  mrb_uv_req_t* req;
 
-  mrb_get_args(mrb, "&S", &b, &arg_name);
-  if (mrb_nil_p(arg_name) || mrb_type(arg_name) != MRB_TT_STRING) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-  }
-  name = RSTRING_PTR(arg_name);
-
-  if (mrb_nil_p(b)) {
-    connect_cb = NULL;
-  }
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "connect_cb"), b);
-
-  req = (uv_connect_t*) mrb_malloc(mrb, sizeof(uv_connect_t));
-  memset(req, 0, sizeof(uv_connect_t));
-  req->data = context;
-  uv_pipe_connect(req, (uv_pipe_t*)&context->handle, name, connect_cb);
+  mrb_get_args(mrb, "&z", &b, &name);
+  req_val = mrb_uv_req_alloc(mrb, UV_CONNECT, b);
+  req = (mrb_uv_req_t*)DATA_PTR(req_val);
+  uv_pipe_connect((uv_connect_t*)&req->req, (uv_pipe_t*)&context->handle, name, _uv_connect_cb);
   return self;
 }
 
@@ -328,10 +316,9 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
   int err;
   mrb_value arg_addr;
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
-  mrb_value b = mrb_nil_value();
-  uv_connect_cb connect_cb = _uv_connect_cb;
+  mrb_value b = mrb_nil_value(), req_val;
   struct sockaddr_storage* addr = NULL;
-  uv_connect_t* req;
+  mrb_uv_req_t* req;
 
   mrb_get_args(mrb, "&o", &b, &arg_addr);
   if (version != 4 && version != 6) {
@@ -348,17 +335,11 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
     Data_Get_Struct(mrb, arg_addr, &mrb_uv_ip6addr_type, addr);
   }
 
-  if (mrb_nil_p(b)) {
-    connect_cb = NULL;
-  }
-  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "connect_cb"), b);
-
-  req = (uv_connect_t*) mrb_malloc(mrb, sizeof(uv_connect_t));
-  memset(req, 0, sizeof(uv_connect_t));
-  req->data = context;
-  err = uv_tcp_connect(req, (uv_tcp_t*)&context->handle, ((const struct sockaddr *) addr), connect_cb);
+  req_val = mrb_uv_req_alloc(mrb, UV_CONNECT, b);
+  req = (mrb_uv_req_t*)DATA_PTR(req_val);
+  err = uv_tcp_connect((uv_connect_t*)&req->req, (uv_tcp_t*)&context->handle, ((const struct sockaddr *) addr), _uv_connect_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_req_release(mrb, req_val);
     mrb_uv_check_error(mrb, err);
   }
   return self;
