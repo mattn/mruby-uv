@@ -202,7 +202,7 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
   req_val = mrb_uv_req_alloc(mrb, UV_CONNECT, b);
   req = (mrb_uv_req_t*)DATA_PTR(req_val);
   uv_pipe_connect((uv_connect_t*)&req->req, (uv_pipe_t*)&context->handle, name, _uv_connect_cb);
-  return self;
+  return req_val;
 }
 
 static mrb_value
@@ -342,7 +342,7 @@ mrb_uv_tcp_connect(mrb_state *mrb, mrb_value self, int version)
     mrb_uv_req_release(mrb, req_val);
     mrb_uv_check_error(mrb, err);
   }
-  return self;
+  return req_val;
 }
 
 static mrb_value

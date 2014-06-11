@@ -1055,6 +1055,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 #else
   mrb_define_const(mrb, _class_uv, "IS_WINDOWS", mrb_false_value());
 #endif
+  mrb_define_const(mrb, _class_uv, "SOMAXCONN", mrb_fixnum_value(SOMAXCONN));
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
