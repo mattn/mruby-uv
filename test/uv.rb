@@ -134,3 +134,7 @@ end
 assert 'UV::Loop#now' do
   assert_kind_of Numeric, UV.default_loop.now
 end
+
+assert 'UV::SOMAXCONN' do
+  assert_kind_of Fixnum, UV::SOMAXCONN
+end
