@@ -115,6 +115,17 @@ assert_uv 'UV.getaddrinfo' do
   assert_raise(ArgumentError) { UV.getaddrinfo 'www.google.com', 'http' }
 end
 
+assert_uv 'UV.getnameinfo' do
+  req = UV.getnameinfo(UV::Ip4Addr.new('127.0.0.1', 80)) { |host, service|
+    assert_kind_of String, host
+    assert_kind_of String, service
+  }
+  assert_kind_of UV::Req, req
+  assert_equal :getnameinfo, req.type
+
+  assert_raise(ArgumentError) { UV.getnameinfo UV::Ip4Addr.new('127.0.0.1', 80) }
+end
+
 assert_uv 'UV::Async' do
   async_called = false
   a = UV::Async.new do |async_state|
