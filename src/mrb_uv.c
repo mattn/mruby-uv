@@ -449,6 +449,49 @@ mrb_uv_ip6addr_sin_port(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(htons(addr->sin6_port));
 }
 
+/*
+ * UV.getnameinfo
+ */
+static void
+mrb_uv_getnameinfo_cb(uv_getnameinfo_t *req, int status, char const *host, char const* service)
+{
+  mrb_uv_req_t *req_data = (mrb_uv_req_t*)req->data;
+  mrb_state *mrb = req_data->mrb;
+  mrb_value block = req_data->block;
+  mrb_value args[] = { mrb_str_new_cstr(mrb, host), mrb_str_new_cstr(mrb, service) };
+
+  mrb_uv_req_release(mrb, req_data->instance);
+  mrb_uv_check_error(mrb, status);
+  mrb_yield_argv(mrb, block, 2, args);
+}
+
+static mrb_value
+mrb_uv_getnameinfo(mrb_state *mrb, mrb_value self)
+{
+  mrb_value block, sock, req_val;
+  mrb_int flags = 0;
+  struct sockaddr* addr;
+  mrb_uv_req_t *req;
+
+  mrb_get_args(mrb, "&o|i", &block, &sock, &flags);
+
+  if (mrb_nil_p(block)) {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "Expected callback in uv_getaddrinfo.");
+  }
+
+  addr = (struct sockaddr*)mrb_data_check_get_ptr(mrb, sock, &mrb_uv_ip4addr_type);
+  if (!addr) {
+    addr = (struct sockaddr*)mrb_data_check_get_ptr(mrb, sock, &mrb_uv_ip6addr_type);
+  }
+
+  req_val = mrb_uv_req_alloc(mrb, UV_GETNAMEINFO, block);
+  req = (mrb_uv_req_t*)DATA_PTR(req_val);
+  mrb_uv_check_error(mrb, uv_getnameinfo(
+      uv_default_loop(), (uv_getnameinfo_t*)&req->req,
+      mrb_uv_getnameinfo_cb, addr, flags));
+  return req_val;
+}
+
 /*********************************************************
  * UV::Addrinfo
  *********************************************************/
@@ -1025,6 +1068,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
+  mrb_define_module_function(mrb, _class_uv, "getnameinfo", mrb_uv_getnameinfo, ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "guess_handle", mrb_uv_guess_handle, MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv, "exepath", mrb_uv_exepath, MRB_ARGS_NONE());
