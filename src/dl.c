@@ -80,7 +80,7 @@ mrb_f_uv_dlsym(mrb_state *mrb, mrb_value self)
 {
   char *z;
   mrb_get_args(mrb, "z", &z);
-  return mrb_voidp_value(mrb, mrb_uv_dlsym(mrb, self, z));
+  return mrb_cptr_value(mrb, mrb_uv_dlsym(mrb, self, z));
 }
 
 void
