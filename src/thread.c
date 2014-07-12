@@ -303,12 +303,10 @@ static mrb_value
 mrb_uv_once(mrb_state *mrb, mrb_value self)
 {
   uv_mutex_lock(&once_info.lock);
-  mrb_assert(mrb_nil_p(once_info.block));
 
   once_info.mrb = mrb;
   once_info.block = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "once_cb"));
   uv_once((uv_once_t*)DATA_PTR(self), _uv_once_cb);
-  once_info.block = mrb_nil_value();
 
   uv_mutex_unlock(&once_info.lock);
   return self;
