@@ -85,6 +85,18 @@ assert_uv 'UV::FS.readlink' do
   assert_equal 'foo-bar/foo.txt', UV::FS.readlink('foo-bar/bar.txt')
 end
 
+assert_uv 'UV::FS.mkdtemp' do
+  tmp = UV::FS.mkdtemp('temp_XXXXXX')
+  assert_equal 'temp_', tmp[0, 5]
+  UV::FS.rmdir tmp
+
+  UV::FS.mkdtemp 'temp_XXXXXX' do |v|
+    assert_equal 'temp_', v[0, 5]
+    assert_equal 11, v.length
+    UV::FS.rmdir v
+  end
+end
+
 assert_uv 'UV::Stat' do
   remove_uv_test_tmpfile
   UV::FS.mkdir 'foo-bar'
