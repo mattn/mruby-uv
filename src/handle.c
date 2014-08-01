@@ -868,6 +868,28 @@ mrb_uv_udp_ttl_set(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(v);
 }
 
+static mrb_value
+mrb_uv_udp_try_send(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_value s, a;
+  int err;
+  uv_buf_t buf;
+  const struct sockaddr* addr;
+
+  mrb_get_args(mrb, "So", &s, &a);
+  buf = uv_buf_init(RSTRING_PTR(s), RSTRING_LEN(s));
+  addr = mrb_data_check_get_ptr(mrb, a, &mrb_uv_ip4addr_type);
+  if (!addr) {
+    mrb_data_get_ptr(mrb, a, &mrb_uv_ip6addr_type);
+  }
+
+  err = uv_udp_try_send((uv_udp_t*)&ctx->handle, &buf, 1, addr);
+  mrb_uv_check_error(mrb, err);
+
+  return mrb_fixnum_value(err);
+}
+
 /*********************************************************
  * UV::Prepare
  *********************************************************/
@@ -1872,6 +1894,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind4, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "bind6", mrb_uv_udp_bind6, ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "getsockname", mrb_uv_udp_getsockname, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_udp, "try_send", mrb_uv_udp_try_send, MRB_ARGS_REQ(1));
   mrb_define_const(mrb, _class_uv_udp, "LEAVE_GROUP", mrb_fixnum_value(UV_LEAVE_GROUP));
   mrb_define_const(mrb, _class_uv_udp, "JOIN_GROUP", mrb_fixnum_value(UV_JOIN_GROUP));
   mrb_gc_arena_restore(mrb, ai);

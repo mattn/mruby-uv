@@ -11,5 +11,6 @@ MIT
 libuv
 -----
 
-Current mruby-uv use [libuv-v0.11.26](http://libuv.org/dist/v0.11.26/libuv-v0.11.26.tar.gz).
+Current mruby-uv use [libuv-v0.11.27](http://libuv.org/dist/v0.11.27/libuv-v0.11.27.tar.gz).
 In Windows mruby-uv doesn't provide libuv builder so install it before you use this.
+In OS X install it with `brew install libuv --devel` to reduce build time.

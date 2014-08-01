@@ -1008,6 +1008,38 @@ mrb_uv_fs_fchown(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static void
+mkdtemp_cb(uv_fs_t *req)
+{
+  mrb_uv_req_t *req_data = (mrb_uv_req_t*)req->data;
+  mrb_state *mrb = req_data->mrb;
+  mrb_value b = req_data->block;
+  mrb_value args[] = { mrb_str_new_cstr(mrb, req->path) };
+
+  mrb_uv_req_release(mrb, req_data->instance);
+  mrb_uv_check_error(mrb, req->result);
+  mrb_yield_argv(mrb, b, 1, args);
+}
+
+static mrb_value
+mrb_uv_fs_mkdtemp(mrb_state *mrb, mrb_value self)
+{
+  char *tmp;
+  mrb_value proc;
+
+  mrb_get_args(mrb, "&z", &proc, &tmp);
+  if (mrb_nil_p(proc)) {
+    uv_fs_t req;
+    mrb_uv_check_error(mrb, uv_fs_mkdtemp(uv_default_loop(), &req, tmp, NULL));
+    return mrb_str_new_cstr(mrb, req.path);
+  } else {
+    mrb_value req_val = mrb_uv_req_alloc(mrb, UV_FS, proc);
+    mrb_uv_req_t *req = (mrb_uv_req_t*)DATA_PTR(req_val);
+    mrb_uv_check_error(mrb, uv_fs_mkdtemp(uv_default_loop(), (uv_fs_t*)&req->req, tmp, mkdtemp_cb));
+    return req_val;
+  }
+}
+
 void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
 {
   struct RClass *_class_uv_fs;
@@ -1058,6 +1090,7 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_class_method(mrb, _class_uv_fs, "symlink", mrb_uv_fs_symlink, ARGS_REQ(3));
   mrb_define_class_method(mrb, _class_uv_fs, "readlink", mrb_uv_fs_readlink, ARGS_REQ(1));
   mrb_define_class_method(mrb, _class_uv_fs, "chown", mrb_uv_fs_chown, ARGS_REQ(3));
+  mrb_define_class_method(mrb, _class_uv_fs, "mkdtemp", mrb_uv_fs_mkdtemp, MRB_ARGS_REQ(1));
 
   _class_uv_stat = mrb_define_class_under(mrb, UV, "Stat", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_stat, MRB_TT_DATA);
