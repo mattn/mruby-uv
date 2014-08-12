@@ -23,7 +23,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
 
   require 'open3'
 
-  version = '0.11.27'
+  version = '0.11.28'
   libuv_dir = "#{build_dir}/libuv-#{version}"
   libuv_lib = libfile "#{libuv_dir}/.libs/libuv"
   header = "#{libuv_dir}/include/uv.h"
