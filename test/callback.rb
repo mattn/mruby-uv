@@ -49,15 +49,15 @@ assert_uv 'UV::FS.readdir' do
   f.close
 
   # async version
-  UV::FS.readdir 'foo-bar', 0 do |x, a|
-    assert_equal ['bar.txt', 'foo.txt'], a.sort
+  UV::FS.readdir 'foo-bar', 0 do |a|
+    assert_equal [['bar.txt', :file], ['foo.txt', :file]], a.sort
 
     remove_uv_test_tmpfile
   end
 
   # sync version
   a = UV::FS.readdir 'foo-bar', 0
-  assert_equal ['bar.txt', 'foo.txt'], a.sort
+  assert_equal [['bar.txt', :file], ['foo.txt', :file]], a.sort
 end
 
 assert_uv 'UV::FS.symlink' do
@@ -210,6 +210,14 @@ assert_uv 'UV::Pipe' do
     c.close
     s.close
   end
+
+  assert_kind_of Fixnum, s.recv_buffer_size
+  s.recv_buffer_size = 0x10000
+  assert_true s.recv_buffer_size >= 0x10000
+
+  assert_kind_of Fixnum, s.send_buffer_size
+  s.send_buffer_size = 0x10000
+  assert_true s.send_buffer_size >= 0x10000
 
   client = UV::Pipe.new(1)
   client.connect path do |x|
