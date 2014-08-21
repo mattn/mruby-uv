@@ -121,6 +121,25 @@ _uv_fs_open_cb(uv_fs_t* req)
   mrb_free(mrb, req);
 }
 
+static mrb_value
+dirtype_to_sym(mrb_state *mrb, uv_dirent_type_t t)
+{
+  mrb_sym ret;
+  switch(t) {
+  case UV_DIRENT_FILE: ret = mrb_intern_lit(mrb, "file"); break;
+  case UV_DIRENT_DIR: ret = mrb_intern_lit(mrb, "dir"); break;
+  case UV_DIRENT_LINK: ret = mrb_intern_lit(mrb, "link"); break;
+  case UV_DIRENT_FIFO: ret = mrb_intern_lit(mrb, "fifo"); break;
+  case UV_DIRENT_SOCKET: ret = mrb_intern_lit(mrb, "socket"); break;
+  case UV_DIRENT_CHAR: ret = mrb_intern_lit(mrb, "char"); break;
+  case UV_DIRENT_BLOCK: ret = mrb_intern_lit(mrb, "block"); break;
+
+  default:
+  case UV_DIRENT_UNKNOWN: ret = mrb_intern_lit(mrb, "unknown"); break;
+  }
+  return mrb_symbol_value(ret);
+}
+
 static void
 _uv_fs_cb(uv_fs_t* req)
 {
@@ -134,20 +153,12 @@ _uv_fs_cb(uv_fs_t* req)
   switch (req->fs_type) {
   case UV_FS_READDIR:
     if (!mrb_nil_p(proc)) {
-       int count;
-       char* ptr;
-       mrb_value ary;
-       mrb_value args[2];
-       args[0] = mrb_fixnum_value(req->result);
-       count = req->result;
-       ptr = req->ptr;
-       ary = mrb_ary_new(mrb);
-       while (count-- > 0) {
-         mrb_ary_push(mrb, ary, mrb_str_new_cstr(mrb, ptr));
-         ptr += strlen(ptr) + 1;
-       }
-       args[1] = ary;
-       mrb_yield_argv(mrb, proc, 2, args);
+      mrb_value ary = mrb_ary_new_capa(mrb, req->result);
+      uv_dirent_t ent;
+      while (uv_fs_readdir_next(req, &ent) != UV_EOF) {
+        mrb_ary_push(mrb, ary, mrb_assoc_new(mrb, mrb_str_new_cstr(mrb, ent.name), dirtype_to_sym(mrb, ent.type)));
+      }
+      mrb_yield_argv(mrb, proc, 1, &ary);
     }
     break;
 
@@ -458,12 +469,10 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
     mrb_uv_check_error(mrb, err);
   }
   if (mrb_nil_p(b)) {
-    int i;
-    char *ptr = (char*)req->ptr;
     mrb_value const ret = mrb_ary_new_capa(mrb, req->result);
-    for (i = 0; i < req->result; ++i) {
-      mrb_ary_push(mrb, ret, mrb_str_new_cstr(mrb, ptr));
-      ptr += strlen(ptr) + 1;
+    uv_dirent_t ent;
+    while (uv_fs_readdir_next(req, &ent) != UV_EOF) {
+      mrb_ary_push(mrb, ret, mrb_assoc_new(mrb, mrb_str_new_cstr(mrb, ent.name), dirtype_to_sym(mrb, ent.type)));
     }
     uv_fs_req_cleanup(req);
     mrb_free(mrb, req);
