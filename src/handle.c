@@ -1189,7 +1189,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   int i, err;
   uv_stdio_container_t stdio[3];
   uv_process_options_t opt = {0};
-  char** args;
+  const char** args;
 
   options = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "options"));
   arg_file = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "file"));
@@ -1237,7 +1237,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
 
   opt.file = RSTRING_PTR(arg_file);
-  opt.args = args;
+  opt.args = (char**) args;
   opt.env = NULL; /* inherit parent */
   opt.cwd = cwd;
   opt.exit_cb = exit_cb;

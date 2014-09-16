@@ -539,9 +539,9 @@ mrb_uv_key_set(mrb_state *mrb, mrb_value self)
     /* remove value */
     int i, dst;
     for (i = 0, dst = 0; i < RARRAY_LEN(ary); ++i) {
-      mrb_value const v = RARRAY_PTR(ary)[i];
+      mrb_value v = RARRAY_PTR(ary)[i];
       if (mrb_ptr(v) != p) {
-        RARRAY_PTR(ary)[dst++] = v;
+        mrb_ary_ptr(ary)->ptr[dst++] = v;
       }
     }
     RARRAY_LEN(ary) = dst;
