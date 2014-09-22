@@ -195,6 +195,15 @@ mrb_uv_send_buffer_size_set(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static mrb_value
+mrb_uv_fileno(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  uv_os_fd_t fd;
+  mrb_uv_check_error(mrb, uv_fileno(&ctx->handle, &fd));
+  return mrb_uv_from_uint64(mrb, fd);
+}
+
 /*********************************************************
  * UV::Pipe
  *********************************************************/
@@ -1902,6 +1911,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_handle, "recv_buffer_size=", mrb_uv_recv_buffer_size_set, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_handle, "send_buffer_size", mrb_uv_send_buffer_size, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_handle, "send_buffer_size=", mrb_uv_send_buffer_size_set, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_handle, "fileno", mrb_uv_fileno, MRB_ARGS_NONE());
 
   _class_uv_stream = mrb_define_module_under(mrb, UV, "Stream");
   mrb_include_module(mrb, _class_uv_stream, _class_uv_handle);

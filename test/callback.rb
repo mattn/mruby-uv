@@ -219,6 +219,8 @@ assert_uv 'UV::Pipe' do
   s.send_buffer_size = 0x10000
   assert_true s.send_buffer_size >= 0x10000
 
+  assert_kind_of Fixnum, s.fileno
+
   client = UV::Pipe.new(1)
   client.connect path do |x|
     if x == 0
