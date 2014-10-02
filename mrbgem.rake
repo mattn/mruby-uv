@@ -17,7 +17,8 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
 
   if build.cc.respond_to? :search_header_path
     next if build.cc.search_header_path 'uv.h'
-  elsif ENV['OS'] == 'Windows_NT'
+  end
+  if ENV['OS'] == 'Windows_NT'
     next
   end
 
