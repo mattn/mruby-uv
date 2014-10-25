@@ -138,3 +138,8 @@ end
 assert 'UV::SOMAXCONN' do
   assert_kind_of Fixnum, UV::SOMAXCONN
 end
+
+assert 'UV.thread_self' do
+  s = UV.thread_self
+  assert_equal s, s
+end
