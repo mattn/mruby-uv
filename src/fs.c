@@ -1083,7 +1083,7 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_fs, "utime", mrb_uv_fs_futime, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs, "chown", mrb_uv_fs_fchown, ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs, "close", mrb_uv_fs_close, ARGS_NONE());
-  mrb_define_class_method(mrb, _class_uv_fs, "fd", mrb_uv_fs_fd, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs, "fd", mrb_uv_fs_fd, ARGS_NONE());
   mrb_define_class_method(mrb, _class_uv_fs, "open", mrb_uv_fs_open, ARGS_REQ(2));
   mrb_define_class_method(mrb, _class_uv_fs, "unlink", mrb_uv_fs_unlink, ARGS_REQ(1));
   mrb_define_class_method(mrb, _class_uv_fs, "mkdir", mrb_uv_fs_mkdir, ARGS_REQ(1));
