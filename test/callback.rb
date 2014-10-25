@@ -17,6 +17,27 @@ def assert_uv(name, &block)
   end
 end
 
+assert_uv 'UV::FS.access' do
+  remove_uv_test_tmpfile
+
+  UV::FS.mkdir 'foo-bar'
+  f = UV::FS.open 'foo-bar/foo.txt', UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+  f.write 'helloworld'
+  f.close
+
+  assert_true UV::FS.access 'foo-bar/foo.txt', UV::FS::F_OK
+  assert_false UV::FS.access 'foo-bar/f.txt', UV::FS::F_OK
+  UV::FS.access 'foo-bar/foo.txt', UV::FS::F_OK do |res, err|
+    assert_true res
+    remove_uv_test_tmpfile
+  end
+  UV::FS.access 'foo-bar/f.txt', UV::FS::F_OK do |res, err|
+    assert_false res
+    assert_equal :ENOENT, err
+    remove_uv_test_tmpfile
+  end
+end
+
 assert_uv 'UV::FS' do
   remove_uv_test_tmpfile
 
