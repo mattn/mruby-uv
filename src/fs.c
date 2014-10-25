@@ -151,11 +151,11 @@ _uv_fs_cb(uv_fs_t* req)
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "fs_cb"));
 
   switch (req->fs_type) {
-  case UV_FS_READDIR:
+  case UV_FS_SCANDIR:
     if (!mrb_nil_p(proc)) {
       mrb_value ary = mrb_ary_new_capa(mrb, req->result);
       uv_dirent_t ent;
-      while (uv_fs_readdir_next(req, &ent) != UV_EOF) {
+      while (uv_fs_scandir_next(req, &ent) != UV_EOF) {
         mrb_ary_push(mrb, ary, mrb_assoc_new(mrb, mrb_str_new_cstr(mrb, ent.name), dirtype_to_sym(mrb, ent.type)));
       }
       mrb_yield_argv(mrb, proc, 1, &ary);
@@ -444,7 +444,7 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
+mrb_uv_fs_scandir(mrb_state *mrb, mrb_value self)
 {
   int err;
   mrb_value arg_path;
@@ -462,7 +462,7 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
 
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   req->data = &context;
-  err = uv_fs_readdir(uv_default_loop(), req, mrb_string_value_ptr(mrb, arg_path),
+  err = uv_fs_scandir(uv_default_loop(), req, mrb_string_value_ptr(mrb, arg_path),
                       arg_flags, mrb_nil_p(b)? NULL : _uv_fs_cb);
   if (err < 0) {
     mrb_free(mrb, req);
@@ -471,7 +471,7 @@ mrb_uv_fs_readdir(mrb_state *mrb, mrb_value self)
   if (mrb_nil_p(b)) {
     mrb_value const ret = mrb_ary_new_capa(mrb, req->result);
     uv_dirent_t ent;
-    while (uv_fs_readdir_next(req, &ent) != UV_EOF) {
+    while (uv_fs_scandir_next(req, &ent) != UV_EOF) {
       mrb_ary_push(mrb, ret, mrb_assoc_new(mrb, mrb_str_new_cstr(mrb, ent.name), dirtype_to_sym(mrb, ent.type)));
     }
     uv_fs_req_cleanup(req);
@@ -1088,7 +1088,7 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_class_method(mrb, _class_uv_fs, "unlink", mrb_uv_fs_unlink, ARGS_REQ(1));
   mrb_define_class_method(mrb, _class_uv_fs, "mkdir", mrb_uv_fs_mkdir, ARGS_REQ(1));
   mrb_define_class_method(mrb, _class_uv_fs, "rmdir", mrb_uv_fs_rmdir, ARGS_REQ(1));
-  mrb_define_class_method(mrb, _class_uv_fs, "readdir", mrb_uv_fs_readdir, ARGS_REQ(2));
+  mrb_define_class_method(mrb, _class_uv_fs, "scandir", mrb_uv_fs_scandir, ARGS_REQ(2));
   mrb_define_class_method(mrb, _class_uv_fs, "stat", mrb_uv_fs_stat, ARGS_REQ(1));
   mrb_define_class_method(mrb, _class_uv_fs, "rename", mrb_uv_fs_rename, ARGS_REQ(2));
   mrb_define_class_method(mrb, _class_uv_fs, "sendfile", mrb_uv_fs_sendfile, ARGS_REQ(4));
@@ -1100,6 +1100,9 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_class_method(mrb, _class_uv_fs, "readlink", mrb_uv_fs_readlink, ARGS_REQ(1));
   mrb_define_class_method(mrb, _class_uv_fs, "chown", mrb_uv_fs_chown, ARGS_REQ(3));
   mrb_define_class_method(mrb, _class_uv_fs, "mkdtemp", mrb_uv_fs_mkdtemp, MRB_ARGS_REQ(1));
+
+  /* for compatibility */
+  mrb_define_class_method(mrb, _class_uv_fs, "readdir", mrb_uv_fs_scandir, ARGS_REQ(2));
 
   _class_uv_stat = mrb_define_class_under(mrb, UV, "Stat", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_stat, MRB_TT_DATA);
