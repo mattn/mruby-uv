@@ -107,6 +107,7 @@ mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "&|o", &b, &thread_arg);
 
   context = (mrb_uv_thread*)mrb_malloc(mrb, sizeof(mrb_uv_thread));
+  context->mrb = mrb;
   context->instance = self;
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "thread_proc"), b);
@@ -132,7 +133,30 @@ mrb_uv_thread_join(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_thread_self(mrb_state *mrb, mrb_value self)
 {
-  return mrb_fixnum_value(uv_thread_self());
+  mrb_uv_thread *ctx;
+
+  ctx = (mrb_uv_thread*)mrb_malloc(mrb, sizeof(mrb_uv_thread));
+  ctx->instance = mrb_nil_value();
+  ctx->mrb = mrb;
+  ctx->thread = uv_thread_self();
+
+  return mrb_obj_value(Data_Wrap_Struct(
+      mrb, mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "Thread"),
+      &mrb_uv_thread_type, ctx));
+}
+
+static mrb_value
+mrb_uv_thread_eq(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_thread *self_ctx = NULL, *other_ctx = NULL;
+  mrb_value other;
+
+  mrb_get_args(mrb, "o", &other);
+
+  Data_Get_Struct(mrb, self, &mrb_uv_thread_type, self_ctx);
+  Data_Get_Struct(mrb, other, &mrb_uv_thread_type, other_ctx);
+
+  return mrb_bool_value(uv_thread_equal(&self_ctx->thread, &other_ctx->thread));
 }
 
 /*********************************************************
@@ -565,11 +589,13 @@ void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV)
   struct RClass* _class_uv_key;
   int const ai = mrb_gc_arena_save(mrb);
 
+  mrb_define_module_function(mrb, UV, "thread_self", mrb_uv_thread_self, ARGS_NONE());
+
   _class_uv_thread = mrb_define_class_under(mrb, UV, "Thread", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_thread, MRB_TT_DATA);
-  mrb_define_module_function(mrb, _class_uv_thread, "self", mrb_uv_thread_self, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_thread, "initialize", mrb_uv_thread_init, ARGS_NONE());
   mrb_define_method(mrb, _class_uv_thread, "join", mrb_uv_thread_join, ARGS_NONE());
+  mrb_define_method(mrb, UV, "==", mrb_uv_thread_eq, MRB_ARGS_REQ(1));
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_barrier = mrb_define_class_under(mrb, UV, "Barrier", mrb->object_class);
