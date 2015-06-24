@@ -589,20 +589,20 @@ void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV)
   struct RClass* _class_uv_key;
   int const ai = mrb_gc_arena_save(mrb);
 
-  mrb_define_module_function(mrb, UV, "thread_self", mrb_uv_thread_self, ARGS_NONE());
+  mrb_define_module_function(mrb, UV, "thread_self", mrb_uv_thread_self, MRB_ARGS_NONE());
 
   _class_uv_thread = mrb_define_class_under(mrb, UV, "Thread", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_thread, MRB_TT_DATA);
-  mrb_define_method(mrb, _class_uv_thread, "initialize", mrb_uv_thread_init, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_thread, "join", mrb_uv_thread_join, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_thread, "initialize", mrb_uv_thread_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_thread, "join", mrb_uv_thread_join, MRB_ARGS_NONE());
   mrb_define_method(mrb, UV, "==", mrb_uv_thread_eq, MRB_ARGS_REQ(1));
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_barrier = mrb_define_class_under(mrb, UV, "Barrier", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_barrier, MRB_TT_DATA);
-  mrb_define_method(mrb, _class_uv_barrier, "initialize", mrb_uv_barrier_init, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_barrier, "wait", mrb_uv_barrier_wait, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_barrier, "destroy", mrb_uv_barrier_destroy, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_barrier, "initialize", mrb_uv_barrier_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_barrier, "wait", mrb_uv_barrier_wait, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_barrier, "destroy", mrb_uv_barrier_destroy, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_semaphore = mrb_define_class_under(mrb, UV, "Semaphore", mrb->object_class);
@@ -617,11 +617,11 @@ void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV)
 
   _class_uv_mutex = mrb_define_class_under(mrb, UV, "Mutex", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_mutex, MRB_TT_DATA);
-  mrb_define_method(mrb, _class_uv_mutex, "initialize", mrb_uv_mutex_init, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_mutex, "lock", mrb_uv_mutex_lock, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_mutex, "trylock", mrb_uv_mutex_trylock, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_mutex, "unlock", mrb_uv_mutex_unlock, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_mutex, "destroy", mrb_uv_mutex_destroy, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_mutex, "initialize", mrb_uv_mutex_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_mutex, "lock", mrb_uv_mutex_lock, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_mutex, "trylock", mrb_uv_mutex_trylock, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_mutex, "unlock", mrb_uv_mutex_unlock, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_mutex, "destroy", mrb_uv_mutex_destroy, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_once = mrb_define_class_under(mrb, UV, "Once", mrb->object_class);

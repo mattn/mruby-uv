@@ -1063,13 +1063,13 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   _class_uv_error = mrb_define_class(mrb, "UVError", E_NAME_ERROR);
 
   _class_uv = mrb_define_module(mrb, "UV");
-  mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, ARGS_NONE());
-  mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, ARGS_NONE());
-  mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, ARGS_REQ(2));
-  mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, ARGS_REQ(2));
-  mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, ARGS_REQ(3));
-  mrb_define_module_function(mrb, _class_uv, "getnameinfo", mrb_uv_getnameinfo, ARGS_REQ(2));
-  mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, MRB_ARGS_REQ(2));
+  mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, MRB_ARGS_REQ(2));
+  mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, MRB_ARGS_REQ(3));
+  mrb_define_module_function(mrb, _class_uv, "getnameinfo", mrb_uv_getnameinfo, MRB_ARGS_REQ(2));
+  mrb_define_module_function(mrb, _class_uv, "gc", mrb_uv_gc, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "guess_handle", mrb_uv_guess_handle, MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv, "exepath", mrb_uv_exepath, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "cwd", mrb_uv_cwd, MRB_ARGS_NONE());
@@ -1104,12 +1104,12 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_loop = mrb_define_class_under(mrb, _class_uv, "Loop", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_loop, MRB_TT_DATA);
-  mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_close, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_loop, "close", mrb_uv_loop_close, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "initialize", mrb_uv_loop_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "run", mrb_uv_loop_run, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "delete", mrb_uv_loop_close, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "close", mrb_uv_loop_close, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_loop, "data=", mrb_uv_data_set, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_loop, "data", mrb_uv_data_get, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "alive?", mrb_uv_loop_alive, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "stop", mrb_uv_stop, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "update_time", mrb_uv_update_time, MRB_ARGS_NONE());
@@ -1120,29 +1120,29 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
   _class_uv_addrinfo = mrb_define_class_under(mrb, _class_uv, "Addrinfo", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_addrinfo, MRB_TT_DATA);
-  mrb_define_method(mrb, _class_uv_addrinfo, "flags", mrb_uv_addrinfo_flags, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_addrinfo, "family", mrb_uv_addrinfo_family, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_addrinfo, "socktype", mrb_uv_addrinfo_socktype, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_addrinfo, "protocol", mrb_uv_addrinfo_protocol, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_addrinfo, "addr", mrb_uv_addrinfo_addr, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_addrinfo, "canonname", mrb_uv_addrinfo_canonname, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_addrinfo, "next", mrb_uv_addrinfo_next, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "flags", mrb_uv_addrinfo_flags, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "family", mrb_uv_addrinfo_family, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "socktype", mrb_uv_addrinfo_socktype, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "protocol", mrb_uv_addrinfo_protocol, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "addr", mrb_uv_addrinfo_addr, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "canonname", mrb_uv_addrinfo_canonname, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_addrinfo, "next", mrb_uv_addrinfo_next, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_ip4addr, MRB_TT_DATA);
-  mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, ARGS_REQ(1) | ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_ip4addr, "sin_addr", mrb_uv_ip4addr_sin_addr, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_ip4addr, "sin_port", mrb_uv_ip4addr_sin_port, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip4addr, "initialize", mrb_uv_ip4addr_init, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip4addr, "sin_addr", mrb_uv_ip4addr_sin_addr, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip4addr, "sin_port", mrb_uv_ip4addr_sin_port, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_ip6addr = mrb_define_class_under(mrb, _class_uv, "Ip6Addr", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_ip6addr, MRB_TT_DATA);
-  mrb_define_method(mrb, _class_uv_ip6addr, "initialize", mrb_uv_ip6addr_init, ARGS_REQ(1) | ARGS_OPT(1));
-  mrb_define_method(mrb, _class_uv_ip6addr, "to_s", mrb_uv_ip6addr_to_s, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_ip6addr, "sin_addr", mrb_uv_ip6addr_sin_addr, ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_ip6addr, "sin_port", mrb_uv_ip6addr_sin_port, ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip6addr, "initialize", mrb_uv_ip6addr_init, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_ip6addr, "to_s", mrb_uv_ip6addr_to_s, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip6addr, "sin_addr", mrb_uv_ip6addr_sin_addr, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip6addr, "sin_port", mrb_uv_ip6addr_sin_port, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   /* TODO
