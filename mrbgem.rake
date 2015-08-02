@@ -7,7 +7,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
 
   is_cross = build.kind_of? MRuby::CrossBuild
 
-  if not is_cross and ENV['OS'] == 'Windows_NT'
+  if (not is_cross and ENV['OS'] == 'Windows_NT') || (is_cross && spec.build.host_target && spec.build.host_target.include?("mingw32"))
     spec.linker.libraries << ['uv', 'psapi', 'iphlpapi', 'ws2_32']
   elsif (not is_cross and `uname`.chomp =~ /darwin/i) || (is_cross && spec.build.host_target && spec.build.host_target.include?("darwin"))
     spec.linker.libraries << ['uv', 'pthread', 'm']
