@@ -75,6 +75,8 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
       configure_opts = %w(--disable-shared --enable-static)
       if is_cross && spec.build.host_target && spec.build.build_target
         configure_opts += ["--host #{spec.build.host_target}", "--build #{spec.build.build_target}"]
+        e['LD'] = "x86_64-w64-mingw32-ld #{spec.build.linker.flags.join(' ')}" if build.host_target == 'x86_64-w64-mingw32'
+        e['LD'] = "i686-w64-mingw32-ld #{spec.build.linker.flags.join(' ')}" if build.host_target == 'i686-w64-mingw32'
       end
       run_command e, './autogen.sh' if File.exists? 'autogen.sh'
       run_command e, "./configure #{configure_opts.join(" ")}"
