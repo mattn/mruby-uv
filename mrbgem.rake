@@ -67,10 +67,11 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   file libuv_lib => header do |t|
     Dir.chdir(libuv_dir) do
       e = {
-        'CC' => spec.build.cc.command,
-        'CXX' => spec.build.cxx.command,
-        'LD' => spec.build.linker.command,
-        'AR' => spec.build.archiver.command }
+        'CC'  => "#{spec.build.cc.command} #{spec.build.cc.flags.join(' ')}",
+        'CXX' => "#{spec.build.cxx.command} #{spec.build.cxx.flags.join(' ')}",
+        'LD'  => "#{spec.build.linker.command} #{spec.build.linker.flags.join(' ')}",
+        'AR'  => spec.build.archiver.command
+      }
       _pp 'autotools', libuv_dir
       configure_opts = %w(--disable-shared --enable-static)
       if is_cross && spec.build.host_target && spec.build.build_target
