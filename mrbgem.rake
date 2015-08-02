@@ -72,8 +72,12 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
         'LD' => spec.build.linker.command,
         'AR' => spec.build.archiver.command }
       _pp 'autotools', libuv_dir
+      configure_opts = %w(--disable-shared --enable-static)
+      if is_cross && spec.build.host_target && spec.build.build_target
+        configure_opts += ["--host #{spec.build.host_target}", "--build #{spec.build.build_target}"]
+      end
       run_command e, './autogen.sh' if File.exists? 'autogen.sh'
-      run_command e, './configure --disable-shared --enable-static'
+      run_command e, "./configure #{configure_opts.join(" ")}"
       run_command e, 'make'
     end
   end
