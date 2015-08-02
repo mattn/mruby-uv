@@ -2,8 +2,8 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   spec.license = 'MIT'
   spec.authors = 'mattn'
   spec.summary = 'libuv mruby binding'
-  spec.add_dependency 'mruby-time'
-  spec.add_dependency 'mruby-sprintf'
+  spec.add_dependency 'mruby-time',    core: 'mruby-time'
+  spec.add_dependency 'mruby-sprintf', core: 'mruby-sprintf'
 
   is_cross = build.kind_of? MRuby::CrossBuild
 
