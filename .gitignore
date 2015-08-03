@@ -3,3 +3,4 @@ gem-*
 mrb-*.a
 src/*.o
 .local.vimrc
+mruby/
