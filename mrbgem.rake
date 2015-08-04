@@ -7,9 +7,9 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
 
   is_cross = build.kind_of? MRuby::CrossBuild
 
-  if not is_cross and ENV['OS'] == 'Windows_NT'
+  if (not is_cross and ENV['OS'] == 'Windows_NT') || (is_cross && spec.build.host_target && spec.build.host_target.include?("mingw32"))
     spec.linker.libraries << ['uv', 'psapi', 'iphlpapi', 'ws2_32']
-  elsif not is_cross and `uname`.chomp =~ /darwin/i
+  elsif (not is_cross and `uname`.chomp =~ /darwin/i) || (is_cross && spec.build.host_target && spec.build.host_target.include?("darwin"))
     spec.linker.libraries << ['uv', 'pthread', 'm']
   else
     spec.linker.libraries << ['uv', 'pthread', 'rt', 'm', 'dl']
@@ -67,13 +67,20 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   file libuv_lib => header do |t|
     Dir.chdir(libuv_dir) do
       e = {
-        'CC' => spec.build.cc.command,
-        'CXX' => spec.build.cxx.command,
-        'LD' => spec.build.linker.command,
-        'AR' => spec.build.archiver.command }
+        'CC'  => "#{spec.build.cc.command} #{spec.build.cc.flags.join(' ')}",
+        'CXX' => "#{spec.build.cxx.command} #{spec.build.cxx.flags.join(' ')}",
+        'LD'  => "#{spec.build.linker.command} #{spec.build.linker.flags.join(' ')}",
+        'AR'  => spec.build.archiver.command
+      }
       _pp 'autotools', libuv_dir
+      configure_opts = %w(--disable-shared --enable-static)
+      if is_cross && spec.build.host_target && spec.build.build_target
+        configure_opts += ["--host #{spec.build.host_target}", "--build #{spec.build.build_target}"]
+        e['LD'] = "x86_64-w64-mingw32-ld #{spec.build.linker.flags.join(' ')}" if build.host_target == 'x86_64-w64-mingw32'
+        e['LD'] = "i686-w64-mingw32-ld #{spec.build.linker.flags.join(' ')}" if build.host_target == 'i686-w64-mingw32'
+      end
       run_command e, './autogen.sh' if File.exists? 'autogen.sh'
-      run_command e, './configure --disable-shared --enable-static'
+      run_command e, "./configure #{configure_opts.join(" ")}"
       run_command e, 'make'
     end
   end
