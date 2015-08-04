@@ -143,3 +143,24 @@ assert 'UV.thread_self' do
   s = UV.thread_self
   assert_equal s, s
 end
+
+assert 'UV.getaddrinfo ipv4' do
+  UV::getaddrinfo('google.com', 'http', {:ai_family => :ipv4}) do |x, info|
+    assert_true(info.addr.is_a?(UV::Ip4Addr), "Expected UV::Ip4Addr but got #{info.addr.class}")
+  end
+  UV::run()
+end
+
+assert 'UV.getaddrinfo ipv6' do
+  UV::getaddrinfo('google.com', 'http', {:ai_family => :ipv6}) do |x, info|
+    assert_true(info.addr.is_a?(UV::Ip6Addr), "Expected UV::Ip4Addr but got #{info.addr.class}")
+  end
+  UV::run()
+end
+
+assert 'UV.getaddrinfo' do
+  req = UV::getaddrinfo('google.com', 'http') {}
+  UV::run()
+
+  assert_true req.is_a?(UV::Req)
+end
