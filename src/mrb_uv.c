@@ -531,19 +531,51 @@ static mrb_value
 mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
 {
   mrb_value node, service, b = mrb_nil_value(), req_val;
+  mrb_value mrb_hints = mrb_hash_new(mrb);
   mrb_uv_req_t* req;
+  struct addrinfo hints;
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = 0;
+  hints.ai_protocol = 0;
+  hints.ai_flags = 0;
 
-  mrb_get_args(mrb, "SS&", &node, &service, &b);
+  mrb_get_args(mrb, "SS|H&", &node, &service, &mrb_hints, &b);
 
   if (mrb_nil_p(b)) {
     mrb_raise(mrb, E_ARGUMENT_ERROR, "Expected callback in uv_getaddrinfo.");
+  }
+
+  // parse hints
+  mrb_value value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "ai_family")));
+  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ipv4")))) {
+    hints.ai_family = AF_INET;
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ipv6")))) {
+    hints.ai_family = AF_INET6;
+  }
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "datagram")));
+  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "dgram")))) {
+    hints.ai_socktype = SOCK_DGRAM;
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "stream")))) {
+    hints.ai_socktype = SOCK_STREAM;
+  }
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "protocol")));
+  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ip")))) {
+    hints.ai_protocol = IPPROTO_IP;
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "udp")))) {
+    hints.ai_protocol = IPPROTO_UDP;
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "tcp")))) {
+    hints.ai_protocol = IPPROTO_TCP;
+  }
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "flags")));
+  if (mrb_obj_is_kind_of(mrb, value, mrb->fixnum_class)) {
+    hints.ai_flags = mrb_int(mrb, value);
   }
 
   req_val = mrb_uv_req_alloc(mrb, UV_GETADDRINFO, b);
   req = (mrb_uv_req_t*)DATA_PTR(req_val);
   mrb_uv_check_error(mrb, uv_getaddrinfo(
       uv_default_loop(), (uv_getaddrinfo_t*)&req->req, _uv_getaddrinfo_cb,
-      RSTRING_PTR(node), RSTRING_PTR(service), NULL));
+      RSTRING_PTR(node), RSTRING_PTR(service), &hints));
   return req_val;
 }
 
