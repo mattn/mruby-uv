@@ -1819,7 +1819,7 @@ static mrb_value
 mrb_uv_poll_init(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_handle *ctx;
-  mrb_value fd, loop;
+  mrb_value fd, loop = mrb_nil_value();
   mrb_get_args(mrb, "o|o", &fd, &loop);
 
   ctx = mrb_uv_handle_alloc(mrb, sizeof(uv_poll_t), self);
