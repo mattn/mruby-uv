@@ -771,6 +771,23 @@ void mrb_uv_check_error(mrb_state *mrb, int err)
 }
 
 static mrb_value
+mrb_uv_get_error(mrb_state *mrb, mrb_value self)
+{
+  mrb_int err;
+  mrb_value argv[2];
+
+  mrb_get_args(mrb, "i", &err);
+
+  if (err >= 0) {
+    return mrb_nil_value();
+  }
+
+  argv[0] = mrb_str_new_cstr(mrb, uv_strerror(err));
+  argv[1] = mrb_symbol_value(mrb_intern_cstr(mrb, uv_err_name(err)));
+  return mrb_obj_new(mrb, E_UV_ERROR, 2, argv);
+}
+
+static mrb_value
 mrb_uv_free_memory(mrb_state *mrb, mrb_value self)
 {
   return mrb_uv_from_uint64(mrb, uv_get_free_memory());
@@ -1122,6 +1139,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "queue_work", mrb_uv_queue_work, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "resident_set_memory", mrb_uv_resident_set_memory, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "uptime", mrb_uv_uptime, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "get_error", mrb_uv_get_error, MRB_ARGS_REQ(1));
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
