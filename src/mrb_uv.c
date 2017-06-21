@@ -513,7 +513,7 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
   mrb_state* mrb = addr->mrb;
 
   mrb_value c = mrb_nil_value();
-  if (status != -1) {
+  if (status == 0) {
     struct RClass* _class_uv = mrb_module_get(mrb, "UV");
     struct RClass* _class_uv_addrinfo = mrb_class_get_under(mrb, _class_uv, "Addrinfo");
     c = mrb_obj_new(mrb, _class_uv_addrinfo, 0, NULL);
