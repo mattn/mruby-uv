@@ -1,5 +1,6 @@
 #include "mruby.h"
 #include "mruby/proc.h"
+#include "mruby/uv.h"
 #include <signal.h>
 
 static mrb_value raise_signal(mrb_state* mrb, mrb_value self) {
@@ -25,6 +26,12 @@ static mrb_value get_work_result(mrb_state *mrb, mrb_value self) {
 }
 
 void mrb_mruby_uv_gem_test(mrb_state* mrb) {
+  int argc = 1;
+  char *argv[2] = {NULL, NULL};
+
+  argv[0] = strdup("mrbtest"); // will not free until program exit
+  mrb_uv_setup_args(mrb, &argc, (char **)argv, 0);
+
   mrb_define_method(mrb, mrb->object_class, "raise_signal", raise_signal, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, mrb->kernel_module, "get_work_result", get_work_result, MRB_ARGS_NONE());
   mrb_define_const(mrb, mrb->object_class, "WorkCFunc", mrb_obj_value(mrb_proc_new_cfunc(mrb, work_cfunc)));
