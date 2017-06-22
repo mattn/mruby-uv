@@ -1071,7 +1071,10 @@ mrb_uv_setup_args(mrb_state *mrb, int *argc, char **argv, mrb_bool set_global)
   } else {
     char **it = new_argv;
     new_argc = 0;
-    while (*it) { ++new_argc; }
+    while (*it) {
+        ++new_argc;
+        ++it;
+    }
   }
 
   if (set_global) {
