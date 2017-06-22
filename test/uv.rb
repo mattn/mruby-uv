@@ -164,3 +164,10 @@ assert 'UV.getaddrinfo' do
 
   assert_true req.is_a?(UV::Req)
 end
+
+assert 'UV.get_error' do
+  err = UV::get_error(-61)
+  assert_true err.is_a?(UVError)
+  assert_equal :ECONNREFUSED, err.name
+  assert_equal 'connection refused', err.message
+end
