@@ -27,6 +27,20 @@
 #define mrb_uv_args_int mrb_int
 #endif
 
+#ifdef ARY_SET_LEN
+#define RARRAY_SET_LEN(ary, len) do {\
+  struct RArray *a = mrb_ary_ptr(ary);\
+  ARY_SET_LEN(a, len);\
+} while(0)
+#else
+#define RARRAY_SET_LEN(ary, len) do {\
+  RARRAY_LEN(ary) = len;\
+} while (0)
+#endif
+#ifndef ARY_PTR
+#define ARY_PTR(a) (a->ptr)
+#endif
+
 #define symbol_value_lit(mrb, lit) (mrb_symbol_value(mrb_intern_lit(mrb, lit)))
 
 extern const struct mrb_data_type mrb_uv_ip4addr_type;

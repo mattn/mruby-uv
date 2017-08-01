@@ -565,10 +565,10 @@ mrb_uv_key_set(mrb_state *mrb, mrb_value self)
     for (i = 0, dst = 0; i < RARRAY_LEN(ary); ++i) {
       mrb_value v = RARRAY_PTR(ary)[i];
       if (mrb_ptr(v) != p) {
-        mrb_ary_ptr(ary)->ptr[dst++] = v;
+        ARY_PTR(mrb_ary_ptr(ary))[dst++] = v;
       }
     }
-    RARRAY_LEN(ary) = dst;
+    RARRAY_SET_LEN(ary, dst);
   }
 
   uv_key_set(key, mrb_ptr(new_val));
