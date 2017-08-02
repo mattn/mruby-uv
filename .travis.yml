@@ -6,5 +6,5 @@ script:
   - cd "$TRAVIS_BUILD_DIR"
   - curl "http://forum.mruby.org/download/source/mruby-1.2.0.tar.gz" > mruby-1.2.0.tar.gz
   - tar xf mruby-1.2.0.tar.gz
-  - cd mruby-1.2.0
+  - cd mruby
   - ./minirake all test
