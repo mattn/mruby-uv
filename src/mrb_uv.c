@@ -538,6 +538,7 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
   hints.ai_socktype = 0;
   hints.ai_protocol = 0;
   hints.ai_flags = 0;
+  mrb_value value;
 
   mrb_get_args(mrb, "SS|H&", &node, &service, &mrb_hints, &b);
 
@@ -546,7 +547,7 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
   }
 
   // parse hints
-  mrb_value value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "ai_family")));
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "ai_family")));
   if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ipv4")))) {
     hints.ai_family = AF_INET;
   } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ipv6")))) {

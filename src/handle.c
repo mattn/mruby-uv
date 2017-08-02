@@ -261,7 +261,7 @@ mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_name;
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
-  char* name = "";
+  const char* name;
 
   mrb_get_args(mrb, "S", &arg_name);
   if (mrb_nil_p(arg_name) || mrb_type(arg_name) != MRB_TT_STRING) {
