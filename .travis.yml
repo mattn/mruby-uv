@@ -4,7 +4,7 @@ script:
   - cd mruby
   - ./minirake all test
   - cd "$TRAVIS_BUILD_DIR"
-  - curl "http://forum.mruby.org/download/source/mruby-1.0.0.tar.gz" > mruby-1.0.0.tar.gz
-  - tar xf mruby-1.0.0.tar.gz
-  - cd mruby-1.0.0
+  - curl "http://forum.mruby.org/download/source/mruby-1.2.0.tar.gz" > mruby-1.2.0.tar.gz
+  - tar xf mruby-1.2.0.tar.gz
+  - cd mruby-1.2.0
   - ./minirake all test
