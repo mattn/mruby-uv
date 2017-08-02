@@ -28,7 +28,7 @@ mrb_uv_gc_table_clean(mrb_state *mrb)
       ary[new_i++] = ary[i];
     }
   }
-  RARRAY_LEN(t) = new_i;
+  RARRAY_SET_LEN(t, new_i);
 }
 
 void
