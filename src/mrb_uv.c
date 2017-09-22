@@ -533,12 +533,12 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
   mrb_value node, service, b = mrb_nil_value(), req_val;
   mrb_value mrb_hints = mrb_hash_new(mrb);
   mrb_uv_req_t* req;
+  mrb_value value;
   struct addrinfo hints = {0};
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = 0;
   hints.ai_protocol = 0;
   hints.ai_flags = 0;
-  mrb_value value;
 
   mrb_get_args(mrb, "SS|H&", &node, &service, &mrb_hints, &b);
 
