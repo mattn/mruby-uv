@@ -1110,10 +1110,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_addrinfo;
   struct RClass* _class_uv_ip4addr;
   struct RClass* _class_uv_ip6addr;
-  struct RClass* _class_uv_error;
   struct RClass* _class_uv_req;
 
-  _class_uv_error = mrb_define_class(mrb, "UVError", E_NAME_ERROR);
+  mrb_define_class(mrb, "UVError", E_NAME_ERROR);
 
   _class_uv = mrb_define_module(mrb, "UV");
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, MRB_ARGS_NONE());
