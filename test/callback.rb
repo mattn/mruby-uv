@@ -136,7 +136,7 @@ assert_uv 'UV::Stat' do
 end
 
 assert_uv 'UV.getaddrinfo' do
-  req = UV.getaddrinfo('www.google.com', 'http') { |x, a|
+  req = UV.getaddrinfo('localhost', 'http') { |x, a|
     next unless a
 
     assert_equal 80, a.addr.sin_port
