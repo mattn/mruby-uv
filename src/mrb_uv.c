@@ -547,27 +547,27 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
   }
 
   // parse hints
-  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "ai_family")));
-  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ipv4")))) {
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_lit(mrb, "ai_family")));
+  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "ipv4")))) {
     hints.ai_family = AF_INET;
-  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ipv6")))) {
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "ipv6")))) {
     hints.ai_family = AF_INET6;
   }
-  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "datagram")));
-  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "dgram")))) {
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_lit(mrb, "datagram")));
+  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "dgram")))) {
     hints.ai_socktype = SOCK_DGRAM;
-  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "stream")))) {
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "stream")))) {
     hints.ai_socktype = SOCK_STREAM;
   }
-  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "protocol")));
-  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ip")))) {
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_lit(mrb, "protocol")));
+  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "ip")))) {
     hints.ai_protocol = IPPROTO_IP;
-  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "udp")))) {
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "udp")))) {
     hints.ai_protocol = IPPROTO_UDP;
-  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "tcp")))) {
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "tcp")))) {
     hints.ai_protocol = IPPROTO_TCP;
   }
-  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "flags")));
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_lit(mrb, "flags")));
   if (mrb_obj_is_kind_of(mrb, value, mrb->fixnum_class)) {
     hints.ai_flags = mrb_int(mrb, value);
   }
