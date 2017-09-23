@@ -1,4 +1,5 @@
 assert('UV.guess_handle') do
+  skip if UV.guess_handle(0) == :pipe
   assert_equal :tty, UV.guess_handle(0)
   assert_equal :tty, UV.guess_handle(1)
   assert_equal :tty, UV.guess_handle(2)
