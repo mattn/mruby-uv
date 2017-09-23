@@ -205,17 +205,17 @@ assert 'UV::Loop' do
 end
 
 assert_uv 'UV::Signal' do
-  skip if UV::IS_WINDOWS
+  skip if UV::IS_WINDOWS || !UV::Signal.const_defined?(:SIGUSR1)
 
   s = UV::Signal.new
-  s.start UV::Signal::SIGWINCH do |x|
-    assert_equal UV::Signal::SIGWINCH, x
+  s.start UV::Signal::SIGUSR1 do |x|
+    assert_equal UV::Signal::SIGUSR1, x
     s.close
   end
 
   t = UV::Timer.new
   t.start UV_INTERVAL, 0 do
-    raise_signal UV::Signal::SIGWINCH
+    raise_signal UV::Signal::SIGUSR1
     t.close
   end
 end
