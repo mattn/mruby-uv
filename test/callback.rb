@@ -4,6 +4,7 @@ def remove_uv_test_tmpfile
   UV::FS.unlink(UV::IS_WINDOWS ? '\\\\.\\pipe\\mruby-uv' : '/tmp/mruby-uv') rescue nil
   UV::FS.unlink 'foo-bar/bar.txt' rescue nil
   UV::FS.unlink 'foo-bar/foo.txt' rescue nil
+  UV::FS.rmdir 'foo-bar/dir' rescue nil
   UV::FS.rmdir 'foo-bar' rescue nil
 end
 
@@ -54,7 +55,7 @@ assert_uv 'UV::FS' do
   remove_uv_test_tmpfile
 end
 
-assert_uv 'UV::FS.readdir' do
+assert_uv 'UV::FS.scandir' do
   remove_uv_test_tmpfile
 
   test_str = 'helloworld'
@@ -68,16 +69,20 @@ assert_uv 'UV::FS.readdir' do
   f.write(test_str)
   f.close
 
+  UV::FS.mkdir 'foo-bar/dir'
+
+  res = [['bar.txt', :file], ['dir', :dir], ['foo.txt', :file]]
+
   # async version
-  UV::FS.readdir 'foo-bar', 0 do |a|
-    assert_equal [['bar.txt', :file], ['foo.txt', :file]], a.sort
+  UV::FS.scandir 'foo-bar', 0 do |a|
+    assert_equal res, a.sort
 
     remove_uv_test_tmpfile
   end
 
   # sync version
-  a = UV::FS.readdir 'foo-bar', 0
-  assert_equal [['bar.txt', :file], ['foo.txt', :file]], a.sort
+  a = UV::FS.scandir 'foo-bar', 0
+  assert_equal res, a.sort
 end
 
 assert_uv 'UV::FS.symlink' do
