@@ -12,12 +12,6 @@ get_loop(mrb_state *mrb, mrb_value v)
   }
 }
 
-typedef struct {
-  mrb_state* mrb;
-  mrb_value instance;
-  uv_handle_t handle;
-} mrb_uv_handle;
-
 static void
 no_yield_close_cb(uv_handle_t *h)
 {
@@ -29,17 +23,17 @@ static void
 mrb_uv_handle_free(mrb_state *mrb, void *p)
 {
   mrb_uv_handle* context = (mrb_uv_handle*) p;
-  if (context) {
-    if (context->handle.type == UV_UNKNOWN_HANDLE) {
-      mrb_free(context->mrb, context);
-    }
-    else if (!uv_is_closing(&context->handle)) {
-      uv_close(&context->handle, no_yield_close_cb);
-    }
+  if (!context) { return; }
+
+  mrb_assert(context->handle.type != UV_UNKNOWN_HANDLE);
+  // mrb_assert(!uv_has_ref(&context->handle));
+
+  if (!uv_is_closing(&context->handle)) {
+    uv_close(&context->handle, no_yield_close_cb);
   }
 }
 
-static const struct mrb_data_type mrb_uv_handle_type = {
+const struct mrb_data_type mrb_uv_handle_type = {
   "uv_handle", mrb_uv_handle_free
 };
 

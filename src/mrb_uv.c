@@ -18,17 +18,22 @@ mrb_uv_gc_table_get(mrb_state *mrb)
 }
 
 void
-mrb_uv_gc_table_clean(mrb_state *mrb)
+mrb_uv_gc_table_clean(mrb_state *mrb, uv_loop_t *target)
 {
   int i, new_i;
   mrb_value t = mrb_uv_gc_table_get(mrb);
   mrb_value *ary = RARRAY_PTR(t);
   for (i = 0, new_i = 0; i < RARRAY_LEN(t); ++i) {
-    if (DATA_PTR(ary[i]) || mrb_iv_defined(mrb, ary[i], mrb_intern_lit(mrb, "close_cb"))) {
+    mrb_value const v = ary[i];
+    if (!DATA_PTR(v) ||
+        (DATA_TYPE(v) == &mrb_uv_handle_type && ((mrb_uv_handle*)DATA_PTR(v))->handle.loop == target) ||
+        mrb_iv_defined(mrb, ary[i], mrb_intern_lit(mrb, "close_cb"))) {
       ary[new_i++] = ary[i];
     }
   }
-  RARRAY_SET_LEN(t, new_i);
+  mrb_ary_resize(mrb, t, new_i);
+  mrb_full_gc(mrb);
+  uv_run(uv_default_loop(), UV_RUN_ONCE);
 }
 
 void
@@ -41,7 +46,9 @@ mrb_uv_gc_protect(mrb_state *mrb, mrb_value v)
 static mrb_value
 mrb_uv_gc(mrb_state *mrb, mrb_value self)
 {
-  return mrb_uv_gc_table_clean(mrb), self;
+  mrb_uv_gc_table_clean(mrb, NULL);
+  mrb_full_gc(mrb);
+  return self;
 }
 
 static mrb_value
@@ -154,7 +161,9 @@ static void
 mrb_uv_loop_free(mrb_state *mrb, void *p)
 {
   uv_loop_t *l = (uv_loop_t*)p;
+
   if (l && l != uv_default_loop()) {
+    mrb_uv_gc_table_clean(mrb, l);
     mrb_uv_check_error(mrb, uv_loop_close(l));
     mrb_free(mrb, p);
   }
@@ -197,11 +206,15 @@ mrb_uv_loop_close(mrb_state *mrb, mrb_value self)
 {
   uv_loop_t* loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
 
+  if (loop == uv_default_loop()) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "cannot close default uv loop");
+  }
+
+  mrb_uv_gc_table_clean(mrb, loop);
   mrb_uv_check_error(mrb, uv_loop_close(loop));
   DATA_PTR(self) = NULL;
-  if (loop != uv_default_loop()) {
-    mrb_free(mrb, loop);
-  }
+  mrb_free(mrb, loop);
+
   return self;
 }
 
@@ -757,7 +770,8 @@ mrb_uv_get_ptr(mrb_state *mrb, mrb_value v, struct mrb_data_type const *t)
   return mrb_data_get_ptr(mrb, v, t);
 }
 
-void mrb_uv_check_error(mrb_state *mrb, int err)
+void
+mrb_uv_check_error(mrb_state *mrb, int err)
 {
   mrb_value argv[2];
 
@@ -1219,8 +1233,13 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
 void
 mrb_mruby_uv_gem_final(mrb_state* mrb) {
-  mrb_uv_gc_table_clean(mrb);
-  uv_loop_close(uv_default_loop());
+  // clear gc table
+  mrb_value t = mrb_uv_gc_table_get(mrb);
+  mrb_ary_resize(mrb, t, 0);
+  mrb_full_gc(mrb);
+
+  // run close callbacks to release objects related to mruby
+  uv_run(uv_default_loop(), UV_RUN_ONCE);
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */

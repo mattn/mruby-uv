@@ -11,7 +11,6 @@ def assert_uv(name, &block)
   assert name do
     block.call
     UV.run
-    UV.default_loop.close
     UV.gc
     true
   end
@@ -348,7 +347,6 @@ assert_uv 'UV::TCP IPv6 server/client' do
   end
 end
 
-=begin
 assert_uv 'UV::TCP IPv4 server/client' do
   test_str = "helloworld\r\n"
 
@@ -376,7 +374,6 @@ assert_uv 'UV::TCP IPv4 server/client' do
     s.close
   end
 end
-=end
 
 =begin
 assert_uv 'UV::FS::Event rename' do
