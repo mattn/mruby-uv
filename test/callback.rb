@@ -73,16 +73,20 @@ assert_uv 'UV::FS.scandir' do
 
   res = [['bar.txt', :file], ['dir', :dir], ['foo.txt', :file]]
 
+  # sync version
+  a = UV::FS.scandir 'foo-bar', 0
+  if a[0][1] == :unknown
+    remove_uv_test_tmpfile
+    skip
+  end
+  assert_equal res, a.sort
+
   # async version
-  UV::FS.scandir 'foo-bar', 0 do |a|
-    assert_equal res, a.sort
+  UV::FS.scandir 'foo-bar', 0 do |d|
+    assert_equal res, d.sort
 
     remove_uv_test_tmpfile
   end
-
-  # sync version
-  a = UV::FS.scandir 'foo-bar', 0
-  assert_equal res, a.sort
 end
 
 assert_uv 'UV::FS.symlink' do
