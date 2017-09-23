@@ -324,6 +324,50 @@ mrb_uv_pipe_pending_instances(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+static mrb_value
+mrb_uv_pipe_getsockname(mrb_state *mrb, mrb_value self)
+{
+  enum { BUF_SIZE = 128 };
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_value buf = mrb_str_buf_new(mrb, BUF_SIZE);
+  int res;
+  size_t s = BUF_SIZE;
+  mrb_get_args(mrb, "");
+
+  mrb_str_resize(mrb, buf, BUF_SIZE);
+  res = uv_pipe_getsockname((uv_pipe_t*)&context->handle, RSTRING_PTR(buf), &s);
+  if (res == UV_ENOBUFS) {
+    mrb_str_resize(mrb, buf, s);
+    res = uv_pipe_getsockname((uv_pipe_t*)&context->handle, RSTRING_PTR(buf), &s);
+  }
+  mrb_uv_check_error(mrb, res);
+
+  mrb_str_resize(mrb, buf, s - 1);
+  return buf;
+}
+
+static mrb_value
+mrb_uv_pipe_getpeername(mrb_state *mrb, mrb_value self)
+{
+  enum { BUF_SIZE = 128 };
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_value buf = mrb_str_buf_new(mrb, BUF_SIZE);
+  int res;
+  size_t s = BUF_SIZE;
+  mrb_get_args(mrb, "");
+
+  mrb_str_resize(mrb, buf, BUF_SIZE);
+  res = uv_pipe_getpeername((uv_pipe_t*)&context->handle, RSTRING_PTR(buf), &s);
+  if (res == UV_ENOBUFS) {
+    mrb_str_resize(mrb, buf, s);
+    res = uv_pipe_getpeername((uv_pipe_t*)&context->handle, RSTRING_PTR(buf), &s);
+  }
+  mrb_uv_check_error(mrb, res);
+
+  mrb_str_resize(mrb, buf, s - 1);
+  return buf;
+}
+
 /*********************************************************
  * UV::TCP
  *********************************************************/
@@ -333,13 +377,18 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
   mrb_value arg_loop = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
+  mrb_int flags;
 
-  mrb_get_args(mrb, "|o", &arg_loop);
+  mrb_int c = mrb_get_args(mrb, "|oi", &arg_loop, &flags);
   loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_tcp_t), self);
 
-  mrb_uv_check_error(mrb, uv_tcp_init(loop, (uv_tcp_t*)&context->handle));
+  if (c == 2) {
+    mrb_uv_check_error(mrb, uv_tcp_init_ex(loop, (uv_tcp_t*)&context->handle, flags));
+  } else {
+    mrb_uv_check_error(mrb, uv_tcp_init(loop, (uv_tcp_t*)&context->handle));
+  }
   return self;
 }
 
@@ -633,13 +682,18 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
   mrb_value arg_loop = mrb_nil_value();
   mrb_uv_handle* context = NULL;
   uv_loop_t* loop;
+  mrb_int flags;
 
-  mrb_get_args(mrb, "|o", &arg_loop);
+  mrb_int c = mrb_get_args(mrb, "|oi", &arg_loop, &flags);
   loop = get_loop(mrb, arg_loop);
 
   context = mrb_uv_handle_alloc(mrb, sizeof(uv_udp_t), self);
 
-  mrb_uv_check_error(mrb, uv_udp_init(loop, (uv_udp_t*)&context->handle));
+  if (c == 2) {
+    mrb_uv_check_error(mrb, uv_udp_init_ex(loop, (uv_udp_t*)&context->handle, flags));
+  } else {
+    mrb_uv_check_error(mrb, uv_udp_init(loop, (uv_udp_t*)&context->handle));
+  }
   return self;
 }
 
@@ -1107,10 +1161,24 @@ mrb_uv_tty_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_tty_set_mode(mrb_state *mrb, mrb_value self)
 {
-  mrb_int arg_mode;
+  mrb_int arg_mode = -1;
+  mrb_value mode_val;
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
-  mrb_get_args(mrb, "i", &arg_mode);
+  mrb_get_args(mrb, "o", &mode_val);
+
+  if (mrb_fixnum_p(mode_val)) {
+    arg_mode = mrb_fixnum(mode_val);
+  } else if (mrb_symbol_p(mode_val)) {
+    mrb_sym s = mrb_symbol(mode_val);
+    if (s == mrb_intern_lit(mrb, "raw")) { arg_mode = UV_TTY_MODE_RAW; }
+    else if (s == mrb_intern_lit(mrb, "normal")) { arg_mode = UV_TTY_MODE_NORMAL; }
+    else if (s == mrb_intern_lit(mrb, "io")) { arg_mode = UV_TTY_MODE_IO; }
+  }
+
+  if (arg_mode == -1) {
+    mrb_raisef(mrb, E_ARGUMENT_ERROR, "invalid tty mode: %S", mode_val);
+  }
 
   return mrb_fixnum_value(uv_tty_set_mode((uv_tty_t*)&context->handle, arg_mode));
 }
@@ -1456,6 +1524,30 @@ mrb_uv_fs_poll_stop(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(uv_fs_poll_stop((uv_fs_poll_t*)&context->handle));
 }
 
+static mrb_value
+mrb_uv_fs_poll_getpath(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  enum { BUF_SIZE = 128 };
+  mrb_value buf = mrb_str_buf_new(mrb, BUF_SIZE);
+  int res;
+  size_t s = BUF_SIZE;
+  char const *env;
+  mrb_get_args(mrb, "z", &env);
+
+  mrb_str_resize(mrb, buf, BUF_SIZE);
+
+  res = uv_fs_poll_getpath((uv_fs_poll_t*)&context->handle, RSTRING_PTR(buf), &s);
+  if (res == UV_ENOBUFS) {
+    mrb_str_resize(mrb, buf, s);
+    res = uv_fs_poll_getpath((uv_fs_poll_t*)&context->handle, RSTRING_PTR(buf), &s);
+  }
+  mrb_uv_check_error(mrb, res);
+
+  mrb_str_resize(mrb, buf, s - 1);
+  return buf;
+}
+
 /*********************************************************
  * UV::Check
  *********************************************************/
@@ -1553,6 +1645,24 @@ mrb_uv_signal_start(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "signal_cb"), b);
 
   return mrb_fixnum_value(uv_signal_start((uv_signal_t*)&context->handle, signal_cb, arg_signum));
+}
+
+static mrb_value
+mrb_uv_signal_start_oneshot(mrb_state *mrb, mrb_value self)
+{
+  mrb_int arg_signum;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_value b = mrb_nil_value();
+  uv_signal_cb signal_cb = _uv_signal_cb;
+
+  mrb_get_args(mrb, "&i", &b, &arg_signum);
+
+  if (mrb_nil_p(b)) {
+    signal_cb = NULL;
+  }
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "signal_cb"), b);
+
+  return mrb_fixnum_value(uv_signal_start_oneshot((uv_signal_t*)&context->handle, signal_cb, arg_signum));
 }
 
 static mrb_value
@@ -1922,14 +2032,18 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_include_module(mrb, _class_uv_tty, _class_uv_stream);
   mrb_define_method(mrb, _class_uv_tty, "initialize", mrb_uv_tty_init, MRB_ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tty, "set_mode", mrb_uv_tty_set_mode, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_tty, "mode=", mrb_uv_tty_set_mode, MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_tty, "reset_mode", mrb_uv_tty_reset_mode, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tty, "get_winsize", mrb_uv_tty_get_winsize, MRB_ARGS_NONE());
+  mrb_define_const(mrb, _class_uv_tty, "MODE_NORMAL", mrb_fixnum_value(UV_TTY_MODE_NORMAL));
+  mrb_define_const(mrb, _class_uv_tty, "MODE_RAW", mrb_fixnum_value(UV_TTY_MODE_RAW));
+  mrb_define_const(mrb, _class_uv_tty, "MODE_IO", mrb_fixnum_value(UV_TTY_MODE_IO));
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_udp = mrb_define_class_under(mrb, UV, "UDP", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_udp, MRB_TT_DATA);
   mrb_include_module(mrb, _class_uv_udp, _class_uv_handle);
-  mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_udp, "initialize", mrb_uv_udp_init, MRB_ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_udp, "open", mrb_uv_udp_open, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "set_membership", mrb_uv_udp_set_membership, MRB_ARGS_REQ(3));
   mrb_define_method(mrb, _class_uv_udp, "multicast_loop=", mrb_uv_udp_multicast_loop_set, MRB_ARGS_REQ(1));
@@ -1944,6 +2058,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_udp, "bind", mrb_uv_udp_bind4, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "bind6", mrb_uv_udp_bind6, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_udp, "getsockname", mrb_uv_udp_getsockname, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_udp, "sockname", mrb_uv_udp_getsockname, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "try_send", mrb_uv_udp_try_send, MRB_ARGS_REQ(1));
   mrb_define_const(mrb, _class_uv_udp, "LEAVE_GROUP", mrb_fixnum_value(UV_LEAVE_GROUP));
   mrb_define_const(mrb, _class_uv_udp, "JOIN_GROUP", mrb_fixnum_value(UV_JOIN_GROUP));
@@ -1968,6 +2083,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_include_module(mrb, _class_uv_signal, _class_uv_handle);
   mrb_define_method(mrb, _class_uv_signal, "initialize", mrb_uv_signal_init, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_signal, "start", mrb_uv_signal_start, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_signal, "start_oneshot", mrb_uv_signal_start_oneshot, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_signal, "stop", mrb_uv_signal_stop, MRB_ARGS_NONE());
   mrb_define_const(mrb, _class_uv_signal, "SIGINT", mrb_fixnum_value(SIGINT));
 #ifdef SIGUSR1
@@ -1975,6 +2091,9 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
 #endif
 #ifdef SIGUSR2
   mrb_define_const(mrb, _class_uv_signal, "SIGUSR2", mrb_fixnum_value(SIGUSR2));
+#endif
+#ifdef SIGPROF
+  mrb_define_const(mrb, _class_uv_signal, "SIGPROF", mrb_fixnum_value(SIGPROF));
 #endif
 #ifdef SIGPIPE
   mrb_define_const(mrb, _class_uv_signal, "SIGPIPE", mrb_fixnum_value(SIGPIPE));
@@ -1998,6 +2117,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_fs_poll, "initialize", mrb_uv_fs_poll_init, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_fs_poll, "start", mrb_uv_fs_poll_start, MRB_ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs_poll, "stop", mrb_uv_fs_poll_stop, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs_poll, "path", mrb_uv_fs_poll_getpath, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_timer = mrb_define_class_under(mrb, UV, "Timer", mrb->object_class);
@@ -2037,7 +2157,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   _class_uv_tcp = mrb_define_class_under(mrb, UV, "TCP", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_tcp, MRB_TT_DATA);
   mrb_include_module(mrb, _class_uv_tcp, _class_uv_stream);
-  mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "initialize", mrb_uv_tcp_init, MRB_ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_tcp, "open", mrb_uv_tcp_open, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_tcp, "connect", mrb_uv_tcp_connect4, MRB_ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_tcp, "connect6", mrb_uv_tcp_connect6, MRB_ARGS_REQ(2));
@@ -2054,6 +2174,8 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_tcp, "nodelay?", mrb_uv_tcp_nodelay_get, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "getpeername", mrb_uv_tcp_getpeername, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "getsockname", mrb_uv_tcp_getsockname, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "peername", mrb_uv_tcp_getpeername, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_tcp, "sockname", mrb_uv_tcp_getsockname, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_pipe = mrb_define_class_under(mrb, UV, "Pipe", mrb->object_class);
@@ -2066,6 +2188,8 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_pipe, "listen", mrb_uv_pipe_listen, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_pipe, "pending_instances=", mrb_uv_pipe_pending_instances, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_pipe, "peername", mrb_uv_pipe_getpeername, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_pipe, "sockname", mrb_uv_pipe_getsockname, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_check = mrb_define_class_under(mrb, UV, "Check", mrb->object_class);
@@ -2097,4 +2221,6 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_poll, "stop", mrb_uv_poll_stop, MRB_ARGS_NONE());
   mrb_define_const(mrb, _class_uv_poll, "READABLE", mrb_fixnum_value(UV_READABLE));
   mrb_define_const(mrb, _class_uv_poll, "WRITABLE", mrb_fixnum_value(UV_WRITABLE));
+  mrb_define_const(mrb, _class_uv_poll, "DISCONNECT", mrb_fixnum_value(UV_DISCONNECT));
+  mrb_define_const(mrb, _class_uv_poll, "PRIORITIZED", mrb_fixnum_value(UV_PRIORITIZED));
 }
