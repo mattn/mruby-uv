@@ -159,6 +159,18 @@ assert 'UV.getaddrinfo ipv6' do
   UV::run()
 end
 
+assert 'UV.getaddrinfo.next' do
+  UV::getaddrinfo('localhost', 'http') do |x, info|
+    while info
+      assert_kind_of UV::Addrinfo, info
+      info = info.next
+    end
+
+    assert_nil info
+  end
+  UV::run()
+end
+
 assert 'UV.get_error' do
   err = UV::get_error(-1)
   assert_true err.is_a?(UVError)
