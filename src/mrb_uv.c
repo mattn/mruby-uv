@@ -1,3 +1,4 @@
+#define _WIN32_WINNT 0x0600
 #include "mruby/uv.h"
 #include "mrb_uv.h"
 
@@ -18,17 +19,22 @@ mrb_uv_gc_table_get(mrb_state *mrb)
 }
 
 void
-mrb_uv_gc_table_clean(mrb_state *mrb)
+mrb_uv_gc_table_clean(mrb_state *mrb, uv_loop_t *target)
 {
   int i, new_i;
   mrb_value t = mrb_uv_gc_table_get(mrb);
-  mrb_value *ary = RARRAY_PTR(t);
+  mrb_value const *ary = RARRAY_PTR(t);
   for (i = 0, new_i = 0; i < RARRAY_LEN(t); ++i) {
-    if (DATA_PTR(ary[i]) || mrb_iv_defined(mrb, ary[i], mrb_intern_lit(mrb, "close_cb"))) {
-      ary[new_i++] = ary[i];
+    mrb_value const v = ary[i];
+    if (!DATA_PTR(v) ||
+        (DATA_TYPE(v) == &mrb_uv_handle_type && ((mrb_uv_handle*)DATA_PTR(v))->handle.loop == target) ||
+        mrb_iv_defined(mrb, ary[i], mrb_intern_lit(mrb, "close_cb"))) {
+      mrb_ary_set(mrb, t, new_i++, ary[i]);
     }
   }
-  RARRAY_SET_LEN(t, new_i);
+  mrb_ary_resize(mrb, t, new_i);
+  mrb_full_gc(mrb);
+  uv_run(uv_default_loop(), UV_RUN_ONCE);
 }
 
 void
@@ -41,7 +47,9 @@ mrb_uv_gc_protect(mrb_state *mrb, mrb_value v)
 static mrb_value
 mrb_uv_gc(mrb_state *mrb, mrb_value self)
 {
-  return mrb_uv_gc_table_clean(mrb), self;
+  mrb_uv_gc_table_clean(mrb, NULL);
+  mrb_full_gc(mrb);
+  return self;
 }
 
 static mrb_value
@@ -154,7 +162,9 @@ static void
 mrb_uv_loop_free(mrb_state *mrb, void *p)
 {
   uv_loop_t *l = (uv_loop_t*)p;
+
   if (l && l != uv_default_loop()) {
+    mrb_uv_gc_table_clean(mrb, l);
     mrb_uv_check_error(mrb, uv_loop_close(l));
     mrb_free(mrb, p);
   }
@@ -197,11 +207,15 @@ mrb_uv_loop_close(mrb_state *mrb, mrb_value self)
 {
   uv_loop_t* loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
 
+  if (loop == uv_default_loop()) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "cannot close default uv loop");
+  }
+
+  mrb_uv_gc_table_clean(mrb, loop);
   mrb_uv_check_error(mrb, uv_loop_close(loop));
   DATA_PTR(self) = NULL;
-  if (loop != uv_default_loop()) {
-    mrb_free(mrb, loop);
-  }
+  mrb_free(mrb, loop);
+
   return self;
 }
 
@@ -501,9 +515,24 @@ uv_addrinfo_free(mrb_state *mrb, void *p)
   uv_freeaddrinfo((struct addrinfo*)p);
 }
 
+static void
+uv_addrinfo_nofree(mrb_state *mrb, void *p) {}
+
 static const struct mrb_data_type uv_addrinfo_type = {
   "uv_addrinfo", uv_addrinfo_free,
 };
+
+static const struct mrb_data_type uv_addrinfo_nofree_type = {
+  "uv_addrinfo", uv_addrinfo_nofree,
+};
+
+static struct addrinfo const *
+addrinfo_ptr(mrb_state *mrb, mrb_value v)
+{
+  void *ret = mrb_data_check_get_ptr(mrb, v, &uv_addrinfo_type);
+  if (ret) { return (struct addrinfo*)ret; }
+  return (struct addrinfo*)mrb_data_get_ptr(mrb, v, &uv_addrinfo_nofree_type);
+}
 
 static void
 _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
@@ -533,12 +562,12 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
   mrb_value node, service, b = mrb_nil_value(), req_val;
   mrb_value mrb_hints = mrb_hash_new(mrb);
   mrb_uv_req_t* req;
+  mrb_value value;
   struct addrinfo hints = {0};
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = 0;
   hints.ai_protocol = 0;
   hints.ai_flags = 0;
-  mrb_value value;
 
   mrb_get_args(mrb, "SS|H&", &node, &service, &mrb_hints, &b);
 
@@ -547,27 +576,27 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
   }
 
   // parse hints
-  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "ai_family")));
-  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ipv4")))) {
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_lit(mrb, "ai_family")));
+  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "ipv4")))) {
     hints.ai_family = AF_INET;
-  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ipv6")))) {
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "ipv6")))) {
     hints.ai_family = AF_INET6;
   }
-  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "datagram")));
-  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "dgram")))) {
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_lit(mrb, "datagram")));
+  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "dgram")))) {
     hints.ai_socktype = SOCK_DGRAM;
-  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "stream")))) {
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "stream")))) {
     hints.ai_socktype = SOCK_STREAM;
   }
-  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "protocol")));
-  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "ip")))) {
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_lit(mrb, "protocol")));
+  if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "ip")))) {
     hints.ai_protocol = IPPROTO_IP;
-  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "udp")))) {
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "udp")))) {
     hints.ai_protocol = IPPROTO_UDP;
-  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_cstr(mrb, "tcp")))) {
+  } else if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "tcp")))) {
     hints.ai_protocol = IPPROTO_TCP;
   }
-  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_cstr(mrb, "flags")));
+  value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_lit(mrb, "flags")));
   if (mrb_obj_is_kind_of(mrb, value, mrb->fixnum_class)) {
     hints.ai_flags = mrb_int(mrb, value);
   }
@@ -583,46 +612,34 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_addrinfo_flags(mrb_state *mrb, mrb_value self)
 {
-  struct addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->ai_flags);
+  return mrb_fixnum_value(addrinfo_ptr(mrb, self)->ai_flags);
 }
 
 static mrb_value
 mrb_uv_addrinfo_family(mrb_state *mrb, mrb_value self)
 {
-  struct addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->ai_family);
+  return mrb_fixnum_value(addrinfo_ptr(mrb, self)->ai_family);
 }
 
 static mrb_value
 mrb_uv_addrinfo_socktype(mrb_state *mrb, mrb_value self)
 {
-  struct addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->ai_socktype);
+  return mrb_fixnum_value(addrinfo_ptr(mrb, self)->ai_socktype);
 }
 
 static mrb_value
 mrb_uv_addrinfo_protocol(mrb_state *mrb, mrb_value self)
 {
-  struct addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
-  return mrb_fixnum_value(addr->ai_protocol);
+  return mrb_fixnum_value(addrinfo_ptr(mrb, self)->ai_protocol);
 }
 
 static mrb_value
 mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
 {
-  struct addrinfo* addr = NULL;
-  struct RClass* _class_uv;
+  struct addrinfo const* addr = addrinfo_ptr(mrb, self);
+  struct RClass* _class_uv = mrb_module_get(mrb, "UV");
   mrb_value c = mrb_nil_value();
   mrb_value args[1];
-
-  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
-
-  _class_uv = mrb_module_get(mrb, "UV");
 
   switch (addr->ai_family) {
   case AF_INET:
@@ -654,8 +671,7 @@ mrb_uv_addrinfo_addr(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_addrinfo_canonname(mrb_state *mrb, mrb_value self)
 {
-  struct addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
+  struct addrinfo const* addr = addrinfo_ptr(mrb, self);
   return mrb_str_new_cstr(mrb,
     addr->ai_canonname ? addr->ai_canonname : "");
 }
@@ -663,19 +679,18 @@ mrb_uv_addrinfo_canonname(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
 {
-  struct addrinfo* addr = NULL;
-  Data_Get_Struct(mrb, self, &uv_addrinfo_type, addr);
+  struct addrinfo const* addr = addrinfo_ptr(mrb, self);
 
-  if (addr->ai_next) {
-    struct RClass* _class_uv = mrb_module_get(mrb, "UV");
-    struct RClass* _class_uv_ip4addr = mrb_class_get_under(mrb, _class_uv, "Addrinfo");
+  if (!addr->ai_next) { return mrb_nil_value(); }
 
-    mrb_value c = mrb_obj_new(mrb, _class_uv_ip4addr, 0, NULL);
-    DATA_PTR(c) = addr->ai_next;
-    DATA_TYPE(c) = &uv_addrinfo_type;
-    return c;
-  }
-  return self;
+  struct RClass* _class_uv = mrb_module_get(mrb, "UV");
+  struct RClass* _class_uv_addrinfo = mrb_class_get_under(mrb, _class_uv, "Addrinfo");
+
+  mrb_value c = mrb_obj_new(mrb, _class_uv_addrinfo, 0, NULL);
+  mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "parent_addrinfo"), self);
+  DATA_PTR(c) = addr->ai_next;
+  DATA_TYPE(c) = &uv_addrinfo_nofree_type;
+  return c;
 }
 
 static mrb_value
@@ -757,7 +772,8 @@ mrb_uv_get_ptr(mrb_state *mrb, mrb_value v, struct mrb_data_type const *t)
   return mrb_data_get_ptr(mrb, v, t);
 }
 
-void mrb_uv_check_error(mrb_state *mrb, int err)
+void
+mrb_uv_check_error(mrb_state *mrb, int err)
 {
   mrb_value argv[2];
 
@@ -1110,10 +1126,9 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_addrinfo;
   struct RClass* _class_uv_ip4addr;
   struct RClass* _class_uv_ip6addr;
-  struct RClass* _class_uv_error;
   struct RClass* _class_uv_req;
 
-  _class_uv_error = mrb_define_class(mrb, "UVError", E_NAME_ERROR);
+  mrb_define_class(mrb, "UVError", E_NAME_ERROR);
 
   _class_uv = mrb_define_module(mrb, "UV");
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, MRB_ARGS_NONE());
@@ -1181,6 +1196,30 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_addrinfo, "addr", mrb_uv_addrinfo_addr, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "canonname", mrb_uv_addrinfo_canonname, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "next", mrb_uv_addrinfo_next, MRB_ARGS_NONE());
+
+  mrb_define_const(mrb, _class_uv_addrinfo, "AF_INET", mrb_fixnum_value(AF_INET));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AF_INET6", mrb_fixnum_value(AF_INET6));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AF_UNSPEC", mrb_fixnum_value(AF_UNSPEC));
+#ifdef AF_UNIX
+  mrb_define_const(mrb, _class_uv_addrinfo, "AF_UNIX", mrb_fixnum_value(AF_UNIX));
+#endif
+
+  mrb_define_const(mrb, _class_uv_addrinfo, "SOCK_STREAM", mrb_fixnum_value(SOCK_STREAM));
+  mrb_define_const(mrb, _class_uv_addrinfo, "SOCK_DGRAM", mrb_fixnum_value(SOCK_DGRAM));
+  mrb_define_const(mrb, _class_uv_addrinfo, "SOCK_RAW", mrb_fixnum_value(SOCK_RAW));
+  mrb_define_const(mrb, _class_uv_addrinfo, "SOCK_SEQPACKET", mrb_fixnum_value(SOCK_SEQPACKET));
+
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_PASSIVE", mrb_fixnum_value(AI_PASSIVE));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_CANONNAME", mrb_fixnum_value(AI_CANONNAME));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_NUMERICHOST", mrb_fixnum_value(AI_NUMERICHOST));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_NUMERICSERV", mrb_fixnum_value(AI_NUMERICSERV));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_V4MAPPED", mrb_fixnum_value(AI_V4MAPPED));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_ALL", mrb_fixnum_value(AI_ALL));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_ADDRCONFIG", mrb_fixnum_value(AI_ADDRCONFIG));
+
+  mrb_define_const(mrb, _class_uv_addrinfo, "IPPROTO_TCP", mrb_fixnum_value(IPPROTO_TCP));
+  mrb_define_const(mrb, _class_uv_addrinfo, "IPPROTO_UDP", mrb_fixnum_value(IPPROTO_UDP));
+
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
@@ -1220,8 +1259,13 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 
 void
 mrb_mruby_uv_gem_final(mrb_state* mrb) {
-  mrb_uv_gc_table_clean(mrb);
-  uv_loop_close(uv_default_loop());
+  // clear gc table
+  mrb_value t = mrb_uv_gc_table_get(mrb);
+  mrb_ary_resize(mrb, t, 0);
+  mrb_full_gc(mrb);
+
+  // run close callbacks to release objects related to mruby
+  uv_run(uv_default_loop(), UV_RUN_ONCE);
 }
 
 /* vim:set et ts=2 sts=2 sw=2 tw=0: */

@@ -1,4 +1,5 @@
 assert('UV.guess_handle') do
+  skip if UV.guess_handle(0) == :pipe
   assert_equal :tty, UV.guess_handle(0)
   assert_equal :tty, UV.guess_handle(1)
   assert_equal :tty, UV.guess_handle(2)
@@ -145,24 +146,29 @@ assert 'UV.thread_self' do
 end
 
 assert 'UV.getaddrinfo ipv4' do
-  UV::getaddrinfo('google.com', 'http', {:ai_family => :ipv4}) do |x, info|
-    assert_true(info.addr.is_a?(UV::Ip4Addr), "Expected UV::Ip4Addr but got #{info.addr.class}")
+  UV::getaddrinfo('localhost', 'http', {:ai_family => :ipv4}) do |x, info|
+    assert_kind_of UV::Ip4Addr, info.addr
   end
   UV::run()
 end
 
 assert 'UV.getaddrinfo ipv6' do
-  UV::getaddrinfo('google.com', 'http', {:ai_family => :ipv6}) do |x, info|
-    assert_true(info.addr.is_a?(UV::Ip6Addr), "Expected UV::Ip4Addr but got #{info.addr.class}")
+  UV::getaddrinfo('localhost', 'http', {:ai_family => :ipv6}) do |x, info|
+    assert_kind_of UV::Ip6Addr, info.addr
   end
   UV::run()
 end
 
-assert 'UV.getaddrinfo' do
-  req = UV::getaddrinfo('google.com', 'http') {}
-  UV::run()
+assert 'UV.getaddrinfo.next' do
+  UV::getaddrinfo('localhost', 'http') do |x, info|
+    while info
+      assert_kind_of UV::Addrinfo, info
+      info = info.next
+    end
 
-  assert_true req.is_a?(UV::Req)
+    assert_nil info
+  end
+  UV::run()
 end
 
 assert 'UV.get_error' do
@@ -170,4 +176,11 @@ assert 'UV.get_error' do
   assert_true err.is_a?(UVError)
   assert_equal :EPERM, err.name
   assert_equal 'operation not permitted', err.message
+end
+
+assert 'UV::Addrinfo constants' do
+  assert_true UV::Addrinfo.const_defined? :AF_INET
+  assert_true UV::Addrinfo.const_defined? :SOCK_STREAM
+  assert_true UV::Addrinfo.const_defined? :AI_PASSIVE
+  assert_true UV::Addrinfo.const_defined? :IPPROTO_TCP
 end

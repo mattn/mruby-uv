@@ -1,10 +1,23 @@
+sudo: false
+addons:
+  apt:
+    packages:
+      - gperf
+compiler:
+  - gcc
+  - clang
+env:
+  matrix:
+    - MRUBY_VERSION=master
+    - MRUBY_VERSION=1.2.0
+    - MRUBY_VERSION=1.3.0
 script:
   - export MRUBY_CONFIG="$TRAVIS_BUILD_DIR/.travis_config.rb"
-  - git clone --depth 1 "https://github.com/mruby/mruby.git"
-  - cd mruby
-  - ./minirake all test
-  - cd "$TRAVIS_BUILD_DIR"
-  - curl "http://forum.mruby.org/download/source/mruby-1.2.0.tar.gz" > mruby-1.2.0.tar.gz
-  - tar xf mruby-1.2.0.tar.gz
-  - cd mruby
+  - 'if [ "$MRUBY_VERSION" = "master" ] ; then
+      git clone --depth 1 "https://github.com/mruby/mruby.git" mruby-$MRUBY_VERSION;
+    else
+      curl -L "https://github.com/mruby/mruby/archive/$MRUBY_VERSION.tar.gz" > mruby-$MRUBY_VERSION.tar.gz;
+      tar xf mruby-$MRUBY_VERSION.tar.gz;
+    fi'
+  - cd mruby-$MRUBY_VERSION
   - ./minirake all test

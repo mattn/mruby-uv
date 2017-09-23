@@ -4,6 +4,7 @@ def remove_uv_test_tmpfile
   UV::FS.unlink(UV::IS_WINDOWS ? '\\\\.\\pipe\\mruby-uv' : '/tmp/mruby-uv') rescue nil
   UV::FS.unlink 'foo-bar/bar.txt' rescue nil
   UV::FS.unlink 'foo-bar/foo.txt' rescue nil
+  UV::FS.rmdir 'foo-bar/dir' rescue nil
   UV::FS.rmdir 'foo-bar' rescue nil
 end
 
@@ -11,7 +12,6 @@ def assert_uv(name, &block)
   assert name do
     block.call
     UV.run
-    UV.default_loop.close
     UV.gc
     true
   end
@@ -55,7 +55,7 @@ assert_uv 'UV::FS' do
   remove_uv_test_tmpfile
 end
 
-assert_uv 'UV::FS.readdir' do
+assert_uv 'UV::FS.scandir' do
   remove_uv_test_tmpfile
 
   test_str = 'helloworld'
@@ -69,16 +69,24 @@ assert_uv 'UV::FS.readdir' do
   f.write(test_str)
   f.close
 
+  UV::FS.mkdir 'foo-bar/dir'
+
+  res = [['bar.txt', :file], ['dir', :dir], ['foo.txt', :file]]
+
+  # sync version
+  a = UV::FS.scandir 'foo-bar', 0
+  if a[0][1] == :unknown
+    remove_uv_test_tmpfile
+    skip
+  end
+  assert_equal res, a.sort
+
   # async version
-  UV::FS.readdir 'foo-bar', 0 do |a|
-    assert_equal [['bar.txt', :file], ['foo.txt', :file]], a.sort
+  UV::FS.scandir 'foo-bar', 0 do |d|
+    assert_equal res, d.sort
 
     remove_uv_test_tmpfile
   end
-
-  # sync version
-  a = UV::FS.readdir 'foo-bar', 0
-  assert_equal [['bar.txt', :file], ['foo.txt', :file]], a.sort
 end
 
 assert_uv 'UV::FS.symlink' do
@@ -136,7 +144,7 @@ assert_uv 'UV::Stat' do
 end
 
 assert_uv 'UV.getaddrinfo' do
-  req = UV.getaddrinfo('www.google.com', 'http') { |x, a|
+  req = UV.getaddrinfo('localhost', 'http') { |x, a|
     next unless a
 
     assert_equal 80, a.addr.sin_port
@@ -205,17 +213,17 @@ assert 'UV::Loop' do
 end
 
 assert_uv 'UV::Signal' do
-  skip if UV::IS_WINDOWS
+  skip if UV::IS_WINDOWS || !UV::Signal.const_defined?(:SIGUSR1)
 
   s = UV::Signal.new
-  s.start UV::Signal::SIGWINCH do |x|
-    assert_equal UV::Signal::SIGWINCH, x
+  s.start UV::Signal::SIGUSR1 do |x|
+    assert_equal UV::Signal::SIGUSR1, x
     s.close
   end
 
   t = UV::Timer.new
   t.start UV_INTERVAL, 0 do
-    raise_signal UV::Signal::SIGWINCH
+    raise_signal UV::Signal::SIGUSR1
     t.close
   end
 end
@@ -348,7 +356,6 @@ assert_uv 'UV::TCP IPv6 server/client' do
   end
 end
 
-=begin
 assert_uv 'UV::TCP IPv4 server/client' do
   test_str = "helloworld\r\n"
 
@@ -376,7 +383,6 @@ assert_uv 'UV::TCP IPv4 server/client' do
     s.close
   end
 end
-=end
 
 =begin
 assert_uv 'UV::FS::Event rename' do

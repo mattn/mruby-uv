@@ -63,7 +63,7 @@ void* mrb_uv_get_ptr(mrb_state*, mrb_value, struct mrb_data_type const*);
 uv_file mrb_uv_to_fd(mrb_state *mrb, mrb_value v);
 
 mrb_value mrb_uv_gc_table_get(mrb_state *mrb);
-void mrb_uv_gc_table_clean(mrb_state *mrb);
+void mrb_uv_gc_table_clean(mrb_state *mrb, uv_loop_t *l);
 void mrb_uv_gc_protect(mrb_state *mrb, mrb_value v);
 
 mrb_value mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t, mrb_value proc);
@@ -74,6 +74,14 @@ typedef struct mrb_uv_req_t {
   mrb_value instance, block;
   uv_req_t req;
 } mrb_uv_req_t;
+
+typedef struct {
+  mrb_state* mrb;
+  mrb_value instance;
+  uv_handle_t handle;
+} mrb_uv_handle;
+
+extern const struct mrb_data_type mrb_uv_handle_type;
 
 uv_os_sock_t mrb_uv_to_socket(mrb_state *mrb, mrb_value v);
 
