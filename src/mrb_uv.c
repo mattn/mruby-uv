@@ -1047,6 +1047,7 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
   mrb_uv_check_error(mrb, uv_queue_work(
       uv_default_loop(), (uv_work_t*)&req->req, mrb_uv_work_cb, mrb_uv_after_work_cb));
+  mrb_uv_gc_protect(mrb, req_val);
   return req_val;
 }
 
