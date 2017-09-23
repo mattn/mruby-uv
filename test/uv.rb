@@ -177,3 +177,10 @@ assert 'UV.get_error' do
   assert_equal :EPERM, err.name
   assert_equal 'operation not permitted', err.message
 end
+
+assert 'UV::Addrinfo constants' do
+  assert_true UV::Addrinfo.const_defined? :AF_INET
+  assert_true UV::Addrinfo.const_defined? :SOCK_STREAM
+  assert_true UV::Addrinfo.const_defined? :AI_PASSIVE
+  assert_true UV::Addrinfo.const_defined? :IPPROTO_TCP
+end

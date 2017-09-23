@@ -1195,6 +1195,30 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_addrinfo, "addr", mrb_uv_addrinfo_addr, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "canonname", mrb_uv_addrinfo_canonname, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_addrinfo, "next", mrb_uv_addrinfo_next, MRB_ARGS_NONE());
+
+  mrb_define_const(mrb, _class_uv_addrinfo, "AF_INET", mrb_fixnum_value(AF_INET));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AF_INET6", mrb_fixnum_value(AF_INET6));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AF_UNSPEC", mrb_fixnum_value(AF_UNSPEC));
+#ifdef AF_UNIX
+  mrb_define_const(mrb, _class_uv_addrinfo, "AF_UNIX", mrb_fixnum_value(AF_UNIX));
+#endif
+
+  mrb_define_const(mrb, _class_uv_addrinfo, "SOCK_STREAM", mrb_fixnum_value(SOCK_STREAM));
+  mrb_define_const(mrb, _class_uv_addrinfo, "SOCK_DGRAM", mrb_fixnum_value(SOCK_DGRAM));
+  mrb_define_const(mrb, _class_uv_addrinfo, "SOCK_RAW", mrb_fixnum_value(SOCK_RAW));
+  mrb_define_const(mrb, _class_uv_addrinfo, "SOCK_SEQPACKET", mrb_fixnum_value(SOCK_SEQPACKET));
+
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_PASSIVE", mrb_fixnum_value(AI_PASSIVE));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_CANONNAME", mrb_fixnum_value(AI_CANONNAME));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_NUMERICHOST", mrb_fixnum_value(AI_NUMERICHOST));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_NUMERICSERV", mrb_fixnum_value(AI_NUMERICSERV));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_V4MAPPED", mrb_fixnum_value(AI_V4MAPPED));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_ALL", mrb_fixnum_value(AI_ALL));
+  mrb_define_const(mrb, _class_uv_addrinfo, "AI_ADDRCONFIG", mrb_fixnum_value(AI_ADDRCONFIG));
+
+  mrb_define_const(mrb, _class_uv_addrinfo, "IPPROTO_TCP", mrb_fixnum_value(IPPROTO_TCP));
+  mrb_define_const(mrb, _class_uv_addrinfo, "IPPROTO_UDP", mrb_fixnum_value(IPPROTO_UDP));
+
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_ip4addr = mrb_define_class_under(mrb, _class_uv, "Ip4Addr", mrb->object_class);
