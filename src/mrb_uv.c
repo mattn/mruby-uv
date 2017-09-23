@@ -22,13 +22,13 @@ mrb_uv_gc_table_clean(mrb_state *mrb, uv_loop_t *target)
 {
   int i, new_i;
   mrb_value t = mrb_uv_gc_table_get(mrb);
-  mrb_value *ary = RARRAY_PTR(t);
+  mrb_value const *ary = RARRAY_PTR(t);
   for (i = 0, new_i = 0; i < RARRAY_LEN(t); ++i) {
     mrb_value const v = ary[i];
     if (!DATA_PTR(v) ||
         (DATA_TYPE(v) == &mrb_uv_handle_type && ((mrb_uv_handle*)DATA_PTR(v))->handle.loop == target) ||
         mrb_iv_defined(mrb, ary[i], mrb_intern_lit(mrb, "close_cb"))) {
-      ary[new_i++] = ary[i];
+      mrb_ary_set(mrb, t, new_i++, ary[i]);
     }
   }
   mrb_ary_resize(mrb, t, new_i);
