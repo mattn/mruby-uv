@@ -102,7 +102,7 @@ assert_uv 'UV::FS.readlink' do
   f.write "test\n"
   f.close
 
-  UV::FS.symlink 'foo-bar/foo.txt', 'foo-bar/bar.txt', 0
+  UV::FS.symlink 'foo-bar/foo.txt', 'foo-bar/bar.txt'
 
   # async version
   UV::FS.readlink 'foo-bar/bar.txt' do |v|
@@ -112,6 +112,31 @@ assert_uv 'UV::FS.readlink' do
 
   # sync version
   assert_equal 'foo-bar/foo.txt', UV::FS.readlink('foo-bar/bar.txt')
+end
+
+assert_uv 'UV::FS.realpath' do
+  # async version
+  UV::FS.realpath '.' do |v|
+    assert_kind_of String, v
+  end
+
+  # sync version
+  assert_kind_of String, UV::FS.realpath('..')
+end
+
+assert_uv 'UV::FS.copyfile' do
+  remove_uv_test_tmpfile
+  UV::FS.mkdir 'foo-bar'
+
+  f = UV::FS.open 'foo-bar/foo.txt', UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+  f.write "test\n"
+  f.close
+
+  # async version
+  UV::FS.copyfile 'foo-bar/foo.txt', 'foo-bar/bar.txt' do |v|
+    assert_equal "test\n", UV::FS.open('foo-bar/bar.txt', UV::FS::O_RDONLY, UV::FS::S_IREAD).read(5)
+    remove_uv_test_tmpfile
+  end
 end
 
 assert_uv 'UV::FS.mkdtemp' do
@@ -253,6 +278,9 @@ assert_uv 'UV::Pipe' do
   client = UV::Pipe.new(1)
   client.connect path do |x|
     if x == 0
+      assert_kind_of String, client.peername
+      assert_kind_of String, client.sockname
+
       client.read_start do |b|
         assert_equal "helloworld\r\n", b.to_s
         client.close

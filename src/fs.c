@@ -899,13 +899,13 @@ static mrb_value
 mrb_uv_fs_symlink(mrb_state *mrb, mrb_value self)
 {
   char *path, *new_path;
-  mrb_int flags;
+  mrb_int flags = 0;
   mrb_value b;
   uv_fs_t *req;
   int err;
   static mrb_uv_file ctx;
 
-  mrb_get_args(mrb, "&zzi", &b, &path, &new_path, &flags);
+  mrb_get_args(mrb, "&zz|i", &b, &path, &new_path, &flags);
 
   if (!mrb_nil_p(b)) {
     mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
@@ -1059,14 +1059,14 @@ fs_req_cb(uv_fs_t *req)
   mrb_uv_req_t *req_data = (mrb_uv_req_t*)req->data;
   mrb_state *mrb = req_data->mrb;
   mrb_value b = req_data->block;
-
+  ssize_t res = req->result;
 
   switch (req->fs_type) {
   case UV_FS_MKDTEMP: {
     mrb_value args[] = { mrb_str_new_cstr(mrb, req->path) };
 
-    mrb_uv_check_error(mrb, req->result);
     mrb_uv_req_release(mrb, req_data->instance);
+    mrb_uv_check_error(mrb, res);
     mrb_yield_argv(mrb, b, 1, args);
   } break;
 
@@ -1077,6 +1077,12 @@ fs_req_cb(uv_fs_t *req)
     }
     mrb_uv_req_release(mrb, req_data->instance);
     mrb_yield_argv(mrb, b, 2, args);
+  } break;
+
+  case UV_FS_COPYFILE: {
+    mrb_uv_req_release(mrb, req_data->instance);
+    mrb_uv_check_error(mrb, res);
+    mrb_yield_argv(mrb, b, 0, NULL);
   } break;
 
   default: mrb_assert(FALSE);
@@ -1138,10 +1144,10 @@ static mrb_value
 mrb_uv_fs_copyfile(mrb_state *mrb, mrb_value self)
 {
   const char *old_path, *new_path;
-  mrb_int flags;
+  mrb_int flags = 0;
   mrb_value proc;
 
-  mrb_get_args(mrb, "&zzi", &proc, &old_path, &new_path, &flags);
+  mrb_get_args(mrb, "&zz|i", &proc, &old_path, &new_path, &flags);
   if (mrb_nil_p(proc)) {
     uv_fs_t req;
     mrb_uv_check_error(mrb, uv_fs_copyfile(uv_default_loop(), &req, old_path, new_path, flags, NULL));

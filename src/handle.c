@@ -342,7 +342,7 @@ mrb_uv_pipe_getsockname(mrb_state *mrb, mrb_value self)
   }
   mrb_uv_check_error(mrb, res);
 
-  mrb_str_resize(mrb, buf, s - 1);
+  mrb_str_resize(mrb, buf, s);
   return buf;
 }
 
@@ -364,7 +364,7 @@ mrb_uv_pipe_getpeername(mrb_state *mrb, mrb_value self)
   }
   mrb_uv_check_error(mrb, res);
 
-  mrb_str_resize(mrb, buf, s - 1);
+  mrb_str_resize(mrb, buf, s);
   return buf;
 }
 
@@ -1544,7 +1544,7 @@ mrb_uv_fs_poll_getpath(mrb_state *mrb, mrb_value self)
   }
   mrb_uv_check_error(mrb, res);
 
-  mrb_str_resize(mrb, buf, s - 1);
+  mrb_str_resize(mrb, buf, s);
   return buf;
 }
 

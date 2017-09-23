@@ -1238,7 +1238,7 @@ mrb_uv_os_homedir(mrb_state *mrb, mrb_value self)
   }
   mrb_uv_check_error(mrb, res);
 
-  mrb_str_resize(mrb, buf, s - 1);
+  mrb_str_resize(mrb, buf, s);
   return buf;
 }
 
@@ -1258,7 +1258,7 @@ mrb_uv_os_tmpdir(mrb_state *mrb, mrb_value self)
   }
   mrb_uv_check_error(mrb, res);
 
-  mrb_str_resize(mrb, buf, s - 1);
+  mrb_str_resize(mrb, buf, s);
   return buf;
 }
 
@@ -1279,9 +1279,12 @@ mrb_uv_os_getenv(mrb_state *mrb, mrb_value self)
     mrb_str_resize(mrb, buf, s);
     res = uv_os_getenv(env, RSTRING_PTR(buf), &s);
   }
+
+  if (res == UV_ENOENT) { return mrb_nil_value(); }
+
   mrb_uv_check_error(mrb, res);
 
-  mrb_str_resize(mrb, buf, s - 1);
+  mrb_str_resize(mrb, buf, s);
   return buf;
 }
 
@@ -1319,7 +1322,7 @@ mrb_uv_os_gethostname(mrb_state *mrb, mrb_value self)
   }
   mrb_uv_check_error(mrb, res);
 
-  mrb_str_resize(mrb, buf, s - 1);
+  mrb_str_resize(mrb, buf, s);
   return buf;
 }
 
