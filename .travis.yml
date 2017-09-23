@@ -16,7 +16,7 @@ script:
   - 'if [ "$MRUBY_VERSION" = "master" ] ; then
       git clone --depth 1 "https://github.com/mruby/mruby.git" mruby-$MRUBY_VERSION;
     else
-      curl -L "https://github.com/mruby/mruby/archive/$MRUBY_VERSION.tar.gz" > mruby-$MRUBY_VERSION.tar.gz:
+      curl -L "https://github.com/mruby/mruby/archive/$MRUBY_VERSION.tar.gz" > mruby-$MRUBY_VERSION.tar.gz;
       tar xf mruby-$MRUBY_VERSION.tar.gz;
     fi'
   - cd mruby-$MRUBY_VERSION
