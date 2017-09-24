@@ -18,7 +18,7 @@ static const struct mrb_data_type dl_type = {
 mrb_value
 mrb_uv_dlopen(mrb_state *mrb, char const *name)
 {
-  mrb_value ret = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, mrb_class_get_under(mrb, mrb_class_get(mrb, "UV"), "DL")));
+  mrb_value ret = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "DL")));
   uv_lib_t *lib = (uv_lib_t*)mrb_malloc(mrb, sizeof(uv_lib_t));
   int err;
 
