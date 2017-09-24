@@ -1,7 +1,7 @@
 #!mruby
 begin; require 'mruby-uv'; rescue Exception; end
 
-UV::FS::readdir(".", 0) do |x,a|
-  puts a
+UV::FS::readdir(ARGV[0] || ".", 0) do |x|
+  puts x
 end
 UV::run()
