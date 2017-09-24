@@ -162,6 +162,7 @@ _uv_fs_cb(uv_fs_t* req)
     }
     break;
 
+  case UV_FS_REALPATH:
   case UV_FS_READLINK: {
     mrb_value res;
     mrb_assert(!mrb_nil_p(proc));
@@ -898,13 +899,13 @@ static mrb_value
 mrb_uv_fs_symlink(mrb_state *mrb, mrb_value self)
 {
   char *path, *new_path;
-  mrb_int flags;
+  mrb_int flags = 0;
   mrb_value b;
   uv_fs_t *req;
   int err;
   static mrb_uv_file ctx;
 
-  mrb_get_args(mrb, "&zzi", &b, &path, &new_path, &flags);
+  mrb_get_args(mrb, "&zz|i", &b, &path, &new_path, &flags);
 
   if (!mrb_nil_p(b)) {
     mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
@@ -949,6 +950,41 @@ mrb_uv_fs_readlink(mrb_state *mrb, mrb_value self)
   req = (uv_fs_t*)mrb_malloc(mrb, sizeof(uv_fs_t));
   req->data = &ctx;
   err = uv_fs_readlink(uv_default_loop(), req, path, mrb_nil_p(b)? NULL : _uv_fs_cb);
+  if (err < 0) {
+    mrb_free(mrb, req);
+    mrb_uv_check_error(mrb, err);
+  }
+
+  if (mrb_nil_p(b)) {
+    mrb_value const ret = mrb_str_new_cstr(mrb, req->ptr);
+    uv_fs_req_cleanup(req);
+    mrb_free(mrb, req);
+    return ret;
+  }
+  return self;
+}
+
+static mrb_value
+mrb_uv_fs_realpath(mrb_state *mrb, mrb_value self)
+{
+  char *path;
+  mrb_value b;
+  static mrb_uv_file ctx;
+  uv_fs_t *req;
+  int err;
+
+  mrb_get_args(mrb, "&z", &b, &path);
+
+  if (!mrb_nil_p(b)) {
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "fs_cb"), b);
+    ctx.mrb = mrb;
+    ctx.instance = self;
+    ctx.fd = -1;
+  }
+
+  req = (uv_fs_t*)mrb_malloc(mrb, sizeof(uv_fs_t));
+  req->data = &ctx;
+  err = uv_fs_realpath(uv_default_loop(), req, path, mrb_nil_p(b)? NULL : _uv_fs_cb);
   if (err < 0) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
@@ -1023,14 +1059,14 @@ fs_req_cb(uv_fs_t *req)
   mrb_uv_req_t *req_data = (mrb_uv_req_t*)req->data;
   mrb_state *mrb = req_data->mrb;
   mrb_value b = req_data->block;
-
+  ssize_t res = req->result;
 
   switch (req->fs_type) {
   case UV_FS_MKDTEMP: {
     mrb_value args[] = { mrb_str_new_cstr(mrb, req->path) };
 
-    mrb_uv_check_error(mrb, req->result);
     mrb_uv_req_release(mrb, req_data->instance);
+    mrb_uv_check_error(mrb, res);
     mrb_yield_argv(mrb, b, 1, args);
   } break;
 
@@ -1041,6 +1077,12 @@ fs_req_cb(uv_fs_t *req)
     }
     mrb_uv_req_release(mrb, req_data->instance);
     mrb_yield_argv(mrb, b, 2, args);
+  } break;
+
+  case UV_FS_COPYFILE: {
+    mrb_uv_req_release(mrb, req_data->instance);
+    mrb_uv_check_error(mrb, res);
+    mrb_yield_argv(mrb, b, 0, NULL);
   } break;
 
   default: mrb_assert(FALSE);
@@ -1098,6 +1140,26 @@ mrb_uv_fs_access(mrb_state *mrb, mrb_value self)
   }
 }
 
+static mrb_value
+mrb_uv_fs_copyfile(mrb_state *mrb, mrb_value self)
+{
+  const char *old_path, *new_path;
+  mrb_int flags = 0;
+  mrb_value proc;
+
+  mrb_get_args(mrb, "&zz|i", &proc, &old_path, &new_path, &flags);
+  if (mrb_nil_p(proc)) {
+    uv_fs_t req;
+    mrb_uv_check_error(mrb, uv_fs_copyfile(uv_default_loop(), &req, old_path, new_path, flags, NULL));
+    return mrb_nil_value();
+  } else {
+    mrb_value req_val = mrb_uv_req_alloc(mrb, UV_FS, proc);
+    mrb_uv_req_t *req = (mrb_uv_req_t*)DATA_PTR(req_val);
+    mrb_uv_check_error(mrb, uv_fs_copyfile(uv_default_loop(), (uv_fs_t*)&req->req, old_path, new_path, flags, fs_req_cb));
+    return req_val;
+  }
+}
+
 void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
 {
   struct RClass *_class_uv_fs;
@@ -1126,6 +1188,7 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_const(mrb, _class_uv_fs, "R_OK", mrb_fixnum_value(R_OK));
   mrb_define_const(mrb, _class_uv_fs, "W_OK", mrb_fixnum_value(W_OK));
   mrb_define_const(mrb, _class_uv_fs, "X_OK", mrb_fixnum_value(X_OK));
+  mrb_define_const(mrb, _class_uv_fs, "COPYFILE_EXCL", mrb_fixnum_value(UV_FS_COPYFILE_EXCL));
   mrb_define_method(mrb, _class_uv_fs, "write", mrb_uv_fs_write, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_fs, "read", mrb_uv_fs_read, MRB_ARGS_REQ(0) | MRB_ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_fs, "datasync", mrb_uv_fs_fdatasync, MRB_ARGS_NONE());
@@ -1155,6 +1218,8 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_class_method(mrb, _class_uv_fs, "mkdtemp", mrb_uv_fs_mkdtemp, MRB_ARGS_REQ(1));
   mrb_define_class_method(mrb, _class_uv_fs, "access", mrb_uv_fs_access, MRB_ARGS_REQ(2));
   mrb_define_class_method(mrb, _class_uv_fs, "scandir", mrb_uv_fs_scandir, MRB_ARGS_REQ(2));
+  mrb_define_class_method(mrb, _class_uv_fs, "copyfile", mrb_uv_fs_copyfile, MRB_ARGS_REQ(2) | MRB_ARGS_OPT(1));
+  mrb_define_class_method(mrb, _class_uv_fs, "realpath", mrb_uv_fs_realpath, MRB_ARGS_REQ(1));
 
   /* for compatibility */
   mrb_define_class_method(mrb, _class_uv_fs, "readdir", mrb_uv_fs_scandir, MRB_ARGS_REQ(2));

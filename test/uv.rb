@@ -136,6 +136,11 @@ assert 'UV::Loop#now' do
   assert_kind_of Numeric, UV.default_loop.now
 end
 
+assert 'UV::Loop#configure' do
+  skip unless UV::Signal.const_defined? :SIGPROF
+  UV.default_loop.configure block_signal: UV::Signal::SIGPROF
+end
+
 assert 'UV::SOMAXCONN' do
   assert_kind_of Fixnum, UV::SOMAXCONN
 end
@@ -183,4 +188,28 @@ assert 'UV::Addrinfo constants' do
   assert_true UV::Addrinfo.const_defined? :SOCK_STREAM
   assert_true UV::Addrinfo.const_defined? :AI_PASSIVE
   assert_true UV::Addrinfo.const_defined? :IPPROTO_TCP
+end
+
+assert 'UV::OS' do
+  assert_kind_of String, UV::OS.homedir
+  assert_kind_of String, UV::OS.tmpdir
+
+  assert_kind_of String, UV::OS.getenv('HOME')
+  assert_nil UV::OS.getenv('__gdsgdsgjsngjddsg')
+
+  UV::OS.setenv "aaaaaaa", "bbb"
+  assert_equal "bbb", UV::OS.getenv("aaaaaaa")
+  UV::OS.unsetenv "aaaaaaa"
+  assert_nil UV::OS.getenv "aaaaaaa"
+
+  assert_kind_of String, UV::OS.hostname
+end
+
+assert 'UV::OS::Passwd' do
+  p = UV::OS::Passwd.new
+  assert_kind_of String, p.username
+  p.shell
+  assert_kind_of String, p.homedir
+  assert_kind_of Fixnum, p.uid
+  assert_kind_of Fixnum, p.gid
 end
