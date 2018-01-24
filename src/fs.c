@@ -1,6 +1,7 @@
 #include "mruby/uv.h"
 #include "mrb_uv.h"
 #include <fcntl.h>
+#include <stdlib.h>
 
 /*
  * UV::Stat
@@ -241,7 +242,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
   context->fd = uv_fs_open(uv_default_loop(), req, RSTRING_PTR(arg_filename), arg_flags, arg_mode, fs_cb);
-  if (context->fd < 0) {
+  if (context->fd < 0 || !fs_cb) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, context->fd);
   }
@@ -257,6 +258,7 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_fs_cb fs_cb = _uv_fs_cb;
   uv_fs_t* req;
+  int err;
 
   mrb_get_args(mrb, "&", &b);
   if (mrb_nil_p(b)) {
@@ -267,7 +269,11 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   memset(req, 0, sizeof(uv_fs_t));
   req->data = context;
-  uv_fs_close(uv_default_loop(), req, context->fd, fs_cb);
+  err = uv_fs_close(uv_default_loop(), req, context->fd, fs_cb);
+  if (err < 0 || !fs_cb) {
+    mrb_free(mrb, req);
+    mrb_uv_check_error(mrb, context->fd);
+  }
   return self;
 }
 
@@ -301,7 +307,7 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   buf.base = RSTRING_PTR(arg_data);
   buf.len = arg_length;
   r = uv_fs_write(uv_default_loop(), req, context->fd, &buf, 1, arg_offset, fs_cb);
-  if (r < 0) {
+  if (r < 0 || !fs_cb) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, r);
   }
@@ -319,8 +325,6 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   uv_buf_t buf;
   int len;
   uv_fs_t* req;
-  int ai;
-  mrb_value str;
 
   mrb_get_args(mrb, "&|i|i", &b, &arg_length, &arg_offset);
 
@@ -343,11 +347,15 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, len);
   }
-  ai = mrb_gc_arena_save(mrb);
-  str = mrb_str_new(mrb, buf.base, len);
-  mrb_gc_arena_restore(mrb, ai);
-  mrb_free(mrb, buf.base);
-  return str;
+
+  if (!fs_cb) {
+    mrb_value str = mrb_str_new(mrb, buf.base, len);
+    mrb_free(mrb, buf.base);
+    mrb_free(mrb, req);
+    return str;
+  }
+
+  return mrb_nil_value();
 }
 
 static mrb_value
@@ -374,7 +382,7 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_fs_t));
   req->data = &context;
   err = uv_fs_unlink(uv_default_loop(), req, RSTRING_PTR(arg_path), fs_cb);
-  if (err != 0) {
+  if (err != 0 || !fs_cb) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
@@ -406,7 +414,7 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_fs_t));
   req->data = &context;
   err = uv_fs_mkdir(uv_default_loop(), req, RSTRING_PTR(arg_path), arg_mode, fs_cb);
-  if (err != 0) {
+  if (err != 0 || !fs_cb) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
@@ -437,7 +445,7 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
   memset(req, 0, sizeof(uv_fs_t));
   req->data = &context;
   err = uv_fs_rmdir(uv_default_loop(), req, RSTRING_PTR(arg_path), fs_cb);
-  if (err != 0) {
+  if (err != 0 || !fs_cb) {
     mrb_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
@@ -1098,8 +1106,11 @@ mrb_uv_fs_mkdtemp(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "&z", &proc, &tmp);
   if (mrb_nil_p(proc)) {
     uv_fs_t req;
+    mrb_value ret;
     mrb_uv_check_error(mrb, uv_fs_mkdtemp(uv_default_loop(), &req, tmp, NULL));
-    return mrb_str_new_cstr(mrb, req.path);
+    ret = mrb_str_new_cstr(mrb, req.path);
+    free((char*)req.path);
+    return ret;
   } else {
     mrb_value req_val = mrb_uv_req_alloc(mrb, UV_FS, proc);
     mrb_uv_req_t *req = (mrb_uv_req_t*)DATA_PTR(req_val);

@@ -762,6 +762,7 @@ _uv_udp_send_cb(uv_udp_send_t* req, int status)
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "udp_send_cb"));
   args[0] = mrb_fixnum_value(status);
   mrb_yield_argv(mrb, proc, 0, args);
+  mrb_free(mrb, req);
 }
 
 static mrb_value
@@ -859,6 +860,7 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, const uv_buf_t* buf, const stru
     value_addr = mrb_obj_new(mrb, _class_uv_ipaddr, 1, &value_data);
     args[0] = mrb_str_new(mrb, buf->base, nread);
     args[1] = value_addr;
+    mrb_free(mrb, buf->base);
   } else {
     args[0] = mrb_nil_value();
     args[1] = mrb_nil_value();
@@ -1750,10 +1752,8 @@ mrb_uv_write(mrb_state *mrb, mrb_value self)
   uv_write_t* req;
 
   mrb_get_args(mrb, "&S|o", &b, &arg_data, &send_handle_val);
-  if (mrb_nil_p(b)) {
-    write_cb = NULL;
-  }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "write_cb"), b);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "write_buf"), arg_data);
 
   buf = uv_buf_init((char*) RSTRING_PTR(arg_data), RSTRING_LEN(arg_data));
   req = (uv_write_t*) mrb_malloc(mrb, sizeof(uv_write_t));

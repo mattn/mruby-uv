@@ -771,13 +771,15 @@ static mrb_value
 mrb_uv_addrinfo_next(mrb_state *mrb, mrb_value self)
 {
   struct addrinfo const* addr = addrinfo_ptr(mrb, self);
+  struct RClass* _class_uv, *_class_uv_addrinfo;
+  mrb_value c;
 
   if (!addr->ai_next) { return mrb_nil_value(); }
 
-  struct RClass* _class_uv = mrb_module_get(mrb, "UV");
-  struct RClass* _class_uv_addrinfo = mrb_class_get_under(mrb, _class_uv, "Addrinfo");
+  _class_uv = mrb_module_get(mrb, "UV");
+  _class_uv_addrinfo = mrb_class_get_under(mrb, _class_uv, "Addrinfo");
 
-  mrb_value c = mrb_obj_new(mrb, _class_uv_addrinfo, 0, NULL);
+  c = mrb_obj_new(mrb, _class_uv_addrinfo, 0, NULL);
   mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "parent_addrinfo"), self);
   DATA_PTR(c) = addr->ai_next;
   DATA_TYPE(c) = &uv_addrinfo_nofree_type;
@@ -939,10 +941,10 @@ mrb_uv_process_title(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_process_title_set(mrb_state *mrb, mrb_value self)
 {
-  char *z;
+  char const *z;
   mrb_get_args(mrb, "z", &z);
 
-  uv_set_process_title(z);
+  mrb_uv_check_error(mrb, uv_set_process_title(z));
   return mrb_uv_process_title(mrb, self);
 }
 
@@ -1143,7 +1145,7 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
 
   req_val = mrb_uv_req_alloc(mrb, UV_WORK, blk);
   req = (mrb_uv_req_t*)DATA_PTR(req_val);
-  mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
+  mrb_iv_set(mrb, req_val, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
   mrb_uv_check_error(mrb, uv_queue_work(
       uv_default_loop(), (uv_work_t*)&req->req, mrb_uv_work_cb, mrb_uv_after_work_cb));
   mrb_uv_gc_protect(mrb, req_val);
