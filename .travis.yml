@@ -1,8 +1,4 @@
 sudo: required
-addons:
-  apt:
-    packages:
-      - gperf
 compiler:
   - gcc
   - clang
