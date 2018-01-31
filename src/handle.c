@@ -279,7 +279,7 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
     if (mrb_fixnum_p(arg_ipc))
       ipc = mrb_fixnum(arg_ipc);
     else
-      mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+      ipc = mrb_bool(arg_ipc);
   }
 
   context = mrb_uv_handle_alloc(mrb, UV_NAMED_PIPE, self, arg_loop);
@@ -1332,18 +1332,21 @@ _uv_exit_cb(uv_process_t* process, int64_t exit_status, int term_signal)
 }
 
 static mrb_value
+get_hash_opt(mrb_state *mrb, mrb_value h, const char *str)
+{
+  mrb_value ret = mrb_hash_get(mrb, h, mrb_symbol_value(mrb_intern_cstr(mrb, str)));
+  if (mrb_nil_p(ret)) {
+    ret = mrb_hash_get(mrb, h, mrb_str_new_cstr(mrb, str));
+  }
+  return ret;
+}
+
+static mrb_value
 mrb_uv_process_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value arg_opt = mrb_nil_value();
-  mrb_value arg_file;
-  mrb_value arg_args;
 
   mrb_get_args(mrb, "H", &arg_opt);
-  if (mrb_nil_p(arg_opt)) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-  arg_file = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "file"));
-  if (mrb_type(arg_file) != MRB_TT_STRING) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-  arg_args = mrb_hash_get(mrb, arg_opt, mrb_str_new_cstr(mrb, "args"));
-  if (mrb_type(arg_args) != MRB_TT_ARRAY) mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
 
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "options"), arg_opt);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "stdout_pipe"), mrb_nil_value());
@@ -1360,11 +1363,10 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value();
   uv_exit_cb exit_cb = _uv_exit_cb;
   mrb_value options;
-  mrb_value arg_file;
-  mrb_value arg_args;
-  mrb_value stdin_pipe;
-  mrb_value stdout_pipe;
-  mrb_value stderr_pipe;
+  mrb_value
+      arg_file, arg_args, arg_env, arg_cwd, arg_uid, arg_gid, arg_detached,
+      arg_windows_hide, arg_windows_verbatim_arguments, arg_stdio;
+  mrb_value stdio_pipe[3];
   char cwd[PATH_MAX];
   size_t cwd_size = sizeof(cwd);
   int i, err;
@@ -1375,11 +1377,19 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   uv_loop_t *loop;
 
   options = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "options"));
-  arg_file = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "file"));
-  arg_args = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "args"));
-  stdin_pipe = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stdin_pipe"));
-  stdout_pipe = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stdout_pipe"));
-  stderr_pipe = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stderr_pipe"));
+  arg_file = get_hash_opt(mrb, options, "file");
+  arg_args = get_hash_opt(mrb, options, "args");
+  arg_env = get_hash_opt(mrb, options, "env");
+  arg_cwd = get_hash_opt(mrb, options, "cwd");
+  arg_uid = get_hash_opt(mrb, options, "uid");
+  arg_gid = get_hash_opt(mrb, options, "gid");
+  arg_detached = get_hash_opt(mrb, options, "detached");
+  arg_windows_verbatim_arguments = get_hash_opt(mrb, options, "windows_verbatim_arguments");
+  arg_windows_hide = get_hash_opt(mrb, options, "windows_hide");
+  arg_stdio = get_hash_opt(mrb, options, "stdio");
+  stdio_pipe[0] = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stdin_pipe"));
+  stdio_pipe[1] = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stdout_pipe"));
+  stdio_pipe[2] = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stderr_pipe"));
 
   mrb_get_args(mrb, "|o&", &arg_loop, &b);
   if (mrb_nil_p(b)) {
@@ -1387,53 +1397,107 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "exit_cb"), b);
 
-  uv_cwd(cwd, &cwd_size);
+  // stdio settings
+  opt.stdio_count = 3;
+  opt.stdio = stdio;
+  if (mrb_bool(arg_stdio)) {
+    int len;
+    mrb_check_type(mrb, arg_stdio, MRB_TT_ARRAY);
+    len = RARRAY_LEN(arg_stdio);
+    if (len > 3) { len = 3; }
+    for (i = 0; i < len; ++i) {
+      stdio_pipe[i] = RARRAY_PTR(arg_stdio)[i];
+    }
+    for (; i < 3; ++i) {
+      stdio_pipe[i] = mrb_nil_value();
+    }
+  }
+  for (i = 0; i < 3; ++i) {
+    if (mrb_bool(stdio_pipe[i])) {
+      if (mrb_fixnum_p(stdio_pipe[i])) {
+        stdio[i].flags = UV_INHERIT_FD;
+        stdio[i].data.fd = mrb_fixnum(stdio_pipe[i]);
+      } else {
+        mrb_uv_handle* pcontext = (mrb_uv_handle*)mrb_data_get_ptr(mrb, stdio_pipe[i], &mrb_uv_handle_type);
+        if (uv_is_active(&pcontext->handle)) {
+          stdio[i].flags = UV_INHERIT_STREAM;
+          stdio[i].data.stream = (uv_stream_t*)&pcontext->handle;
+        } else {
+          stdio[i].flags = UV_CREATE_PIPE;
+          if (i == 0) { stdio[i].flags |= UV_READABLE_PIPE; }
+          else { stdio[i].flags |= UV_WRITABLE_PIPE; }
+          stdio[i].data.stream = (uv_stream_t*)&pcontext->handle;
+        }
+      }
+    } else {
+      stdio[i].flags = UV_IGNORE;
+    }
+  }
+
+  // command path
+  opt.file = mrb_string_value_ptr(mrb, arg_file);
+
+  // command line arguments
+  mrb_check_type(mrb, arg_args, MRB_TT_ARRAY);
   args = mrb_malloc(mrb, sizeof(char*) * (RARRAY_LEN(arg_args)+2));
-  args[0] = mrb_string_value_ptr(mrb, arg_file);
+  args[0] = opt.file;
   for (i = 0; i < RARRAY_LEN(arg_args); i++) {
     args[i+1] = mrb_string_value_ptr(mrb, mrb_ary_entry(arg_args, i));
   }
   args[i+1] = NULL;
-
-  if (!mrb_nil_p(stdin_pipe)) {
-    mrb_uv_handle* pcontext = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, stdin_pipe, &mrb_uv_handle_type);
-    stdio[0].flags = UV_CREATE_PIPE | UV_READABLE_PIPE;
-    stdio[0].data.stream = (uv_stream_t*)&pcontext->handle;
-  } else {
-    stdio[0].flags = UV_IGNORE;
-  }
-
-  if (!mrb_nil_p(stdout_pipe)) {
-    mrb_uv_handle* pcontext = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, stdout_pipe, &mrb_uv_handle_type);
-    stdio[1].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
-    stdio[1].data.stream = (uv_stream_t*)&pcontext->handle;
-  } else {
-    stdio[1].flags = UV_IGNORE;
-  }
-
-  if (!mrb_nil_p(stderr_pipe)) {
-    mrb_uv_handle* pcontext = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, stderr_pipe, &mrb_uv_handle_type);
-    stdio[2].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
-    stdio[2].data.stream = (uv_stream_t*)&pcontext->handle;
-  } else {
-    stdio[2].flags = UV_IGNORE;
-  }
-
-  opt.file = RSTRING_PTR(arg_file);
   opt.args = (char**) args;
-  opt.env = NULL; /* inherit parent */
-  opt.cwd = cwd;
-  opt.exit_cb = exit_cb;
-  opt.stdio_count = 3;
-  opt.stdio = stdio;
-  opt.uid = 0;
-  opt.gid = 0;
+
+  if (mrb_bool(arg_env)) {
+    if (mrb_hash_p(arg_env)) {
+      mrb_value keys = mrb_hash_keys(mrb, arg_env);
+      opt.env = mrb_malloc(mrb, sizeof(char*) * (RARRAY_LEN(keys) + 1));
+      for (i = 0; i < RARRAY_LEN(keys); ++i) {
+        mrb_value str = mrb_str_to_str(mrb, RARRAY_PTR(keys)[i]);
+        str = mrb_str_cat_lit(mrb, str, "=");
+        mrb_str_concat(mrb, str, mrb_hash_get(mrb, arg_env, RARRAY_PTR(keys)[i]));
+        opt.env[i] = mrb_str_to_cstr(mrb, str);
+      }
+    } else {
+      mrb_check_type(mrb, arg_env, MRB_TT_ARRAY);
+      opt.env = mrb_malloc(mrb, sizeof(char*) * (RARRAY_LEN(arg_env) + 1));
+      for (i = 0; i < RARRAY_LEN(arg_env); i++) {
+        opt.env[i] = mrb_str_to_cstr(mrb, RARRAY_PTR(arg_env)[i]);
+      }
+    }
+    opt.env[i] = NULL;
+  } else {
+    opt.env = NULL; /* inherit parent */
+  }
+
+  // current directory
+  if (mrb_bool(arg_cwd)) {
+    opt.cwd = mrb_str_to_cstr(mrb, arg_cwd);
+  } else {
+    uv_cwd(cwd, &cwd_size);
+    opt.cwd = cwd;
+  }
+
+  // set flags
   opt.flags = 0;
+  if (mrb_bool(arg_uid)) {
+    opt.uid = mrb_int(mrb, arg_uid);
+    opt.flags |= UV_PROCESS_SETUID;
+  }
+  if (mrb_bool(arg_gid)) {
+    opt.gid = mrb_int(mrb, arg_gid);
+    opt.flags |= UV_PROCESS_SETGID;
+  }
+  if (mrb_bool(arg_detached)) { opt.flags |= UV_PROCESS_DETACHED; }
+  if (mrb_bool(arg_windows_hide)) { opt.flags |= UV_PROCESS_WINDOWS_HIDE; }
+  if (mrb_bool(arg_windows_verbatim_arguments)) { opt.flags |= UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS; }
+
+  opt.exit_cb = exit_cb;
 
   loop = get_loop(mrb, &arg_loop);
   context = mrb_uv_handle_alloc(mrb, UV_PROCESS, self, arg_loop);
   err = uv_spawn(loop, (uv_process_t*)&context->handle, &opt);
   mrb_free(mrb, args);
+  mrb_free(mrb, opt.env);
   if (err != 0) {
     mrb_uv_check_error(mrb, err);
   }

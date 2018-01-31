@@ -259,7 +259,7 @@ end
 
 assert_uv 'UV::Pipe' do
   path = UV::IS_WINDOWS ? '\\\\.\\pipe\\mruby-uv' : '/tmp/mruby-uv'
-  s = UV::Pipe.new 1
+  s = UV::Pipe.new true
   s.bind path
   s.listen 5 do |x|
     return if x != 0
@@ -279,7 +279,7 @@ assert_uv 'UV::Pipe' do
 
   assert_kind_of Fixnum, s.fileno
 
-  client = UV::Pipe.new(1)
+  client = UV::Pipe.new true
   client.connect path do |x|
     if x == 0
       assert_kind_of String, client.peername if client.respond_to? :peername
@@ -478,11 +478,12 @@ assert_uv 'Process' do
   f.write "test\n"
   f.close
 
-  ps = UV::Process.new 'file' => 'grep', 'args' => %w[-r test foo-bar]
-  ps.stdout_pipe = UV::Pipe.new 0
+  out = UV::Pipe.new(false)
+  ps = UV::Process.new file: :grep, args: %w[-r test foo-bar], stdio: [nil, out, nil]
 
   ps.spawn do |x, sig|
-    assert_equal 0, x
+    assert_equal 0, x # exit should be success
+    assert_equal 0, sig # exit should be success
 
     assert_equal UV.default_loop, ps.loop
     assert_equal :process, ps.type_name
@@ -491,8 +492,18 @@ assert_uv 'Process' do
     ps.close
     remove_uv_test_tmpfile
   end
-  ps.stdout_pipe.read_start do |b|
+  out.read_start do |b|
     assert_equal "foo-bar/foo.txt:test\n", b
-    ps.stdout_pipe.close
+    out.close
+  end
+
+  env_out = UV::Pipe.new(false)
+  UV::Process.new(file: :sh, args: ['-c', 'echo $a'], 'env' => { a: :test }, stdio: [nil, env_out, nil]).spawn do |x, sig|
+    assert_equal 0, x
+    assert_equal 0, sig
+  end
+  env_out.read_start do |b|
+    assert_equal "test\n", b
+    env_out.close
   end
 end

@@ -1,7 +1,7 @@
 #!mruby
 begin; require 'mruby-uv'; rescue Exception; end
 
-s = UV::Pipe.new(1)
+s = UV::Pipe.new(true)
 s.bind('/tmp/mruby-uv')
 s.listen(5) {|x|
   return if x != 0
