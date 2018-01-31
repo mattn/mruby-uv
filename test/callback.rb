@@ -178,7 +178,7 @@ assert_uv 'UV.getaddrinfo' do
   assert_equal :getaddrinfo, req.type
 
   # getaddrinfo without callback
-  assert_raise(ArgumentError) { UV.getaddrinfo 'www.google.com', 'http' }
+  assert_raise(ArgumentError) { UV.getaddrinfo 'example.com', 'http' }
 end
 
 assert_uv 'UV.getnameinfo' do
