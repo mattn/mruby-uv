@@ -89,10 +89,14 @@ mrb_uv_fs_free(mrb_state *mrb, void *p)
   }
 }
 
-
 static const struct mrb_data_type mrb_uv_file_type = {
   "uv_file", mrb_uv_fs_free
 };
+
+void mrb_uv_fs_req_free(mrb_state *mrb, uv_fs_t *req) {
+  uv_fs_req_cleanup(req);
+  mrb_free(mrb, req);
+}
 
 uv_file
 mrb_uv_to_fd(mrb_state *mrb, mrb_value v)
@@ -118,8 +122,7 @@ _uv_fs_open_cb(uv_fs_t* req)
     args[0] = mrb_fixnum_value(req->result);
     mrb_yield_argv(mrb, proc, 1, args);
   }
-  uv_fs_req_cleanup(req);
-  mrb_free(mrb, req);
+  mrb_uv_fs_req_free(mrb, req);
 }
 
 static mrb_value
@@ -197,8 +200,7 @@ _uv_fs_cb(uv_fs_t* req)
     break;
   }
 leave:
-  uv_fs_req_cleanup(req);
-  mrb_free(mrb, req);
+  mrb_uv_fs_req_free(mrb, req);
 }
 
 static mrb_value
@@ -483,8 +485,7 @@ mrb_uv_fs_scandir(mrb_state *mrb, mrb_value self)
     while (uv_fs_scandir_next(req, &ent) != UV_EOF) {
       mrb_ary_push(mrb, ret, mrb_assoc_new(mrb, mrb_str_new_cstr(mrb, ent.name), dirtype_to_sym(mrb, ent.type)));
     }
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     return ret;
   }
   return self;
@@ -521,8 +522,7 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
 
   if (mrb_nil_p(b)) {
     mrb_value ret = mrb_uv_create_stat(mrb, &req->statbuf);
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     return ret;
   }
   return self;
@@ -555,8 +555,7 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
 
   if (mrb_nil_p(b)) {
     mrb_value ret = mrb_uv_create_stat(mrb, &req->statbuf);
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     return ret;
   }
   return self;
@@ -593,8 +592,7 @@ mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
 
   if (mrb_nil_p(b)) {
     mrb_value ret = mrb_uv_create_stat(mrb, &req->statbuf);
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     return ret;
   }
   return self;
@@ -836,8 +834,7 @@ mrb_uv_fs_utime(mrb_state *mrb, mrb_value self)
     mrb_uv_check_error(mrb, err);
   }
   if (mrb_nil_p(b)) {
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
   }
   return self;
 }
@@ -866,8 +863,7 @@ mrb_uv_fs_futime(mrb_state *mrb, mrb_value self)
     mrb_uv_check_error(mrb, err);
   }
   if (mrb_nil_p(b)) {
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
   }
   return self;
 }
@@ -897,8 +893,7 @@ mrb_uv_fs_fchmod(mrb_state *mrb, mrb_value self)
   }
 
   if (mrb_nil_p(b)) {
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
   }
   return self;
 }
@@ -931,8 +926,7 @@ mrb_uv_fs_symlink(mrb_state *mrb, mrb_value self)
   }
 
   if (mrb_nil_p(b)) {
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
   }
   return self;
 }
@@ -965,8 +959,7 @@ mrb_uv_fs_readlink(mrb_state *mrb, mrb_value self)
 
   if (mrb_nil_p(b)) {
     mrb_value const ret = mrb_str_new_cstr(mrb, req->ptr);
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     return ret;
   }
   return self;
@@ -1000,8 +993,7 @@ mrb_uv_fs_realpath(mrb_state *mrb, mrb_value self)
 
   if (mrb_nil_p(b)) {
     mrb_value const ret = mrb_str_new_cstr(mrb, req->ptr);
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     return ret;
   }
   return self;
@@ -1028,8 +1020,7 @@ mrb_uv_fs_chown(mrb_state *mrb, mrb_value self)
   }
 
   if (mrb_nil_p(b)) {
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
   }
   return self;
 }
@@ -1055,8 +1046,7 @@ mrb_uv_fs_fchown(mrb_state *mrb, mrb_value self)
   }
 
   if (mrb_nil_p(b)) {
-    uv_fs_req_cleanup(req);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
   }
   return self;
 }
@@ -1109,7 +1099,7 @@ mrb_uv_fs_mkdtemp(mrb_state *mrb, mrb_value self)
     mrb_value ret;
     mrb_uv_check_error(mrb, uv_fs_mkdtemp(uv_default_loop(), &req, tmp, NULL));
     ret = mrb_str_new_cstr(mrb, req.path);
-    free((char*)req.path);
+    uv_fs_req_cleanup(&req);
     return ret;
   } else {
     mrb_value req_val = mrb_uv_req_alloc(mrb, UV_FS, proc);
