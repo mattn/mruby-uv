@@ -21,4 +21,4 @@ script:
       tar xf mruby-$MRUBY_VERSION.tar.gz;
     fi'
   - cd mruby-$MRUBY_VERSION
-  - ./minirake all test
+  - ./minirake -v all test
