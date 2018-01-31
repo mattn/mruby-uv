@@ -142,6 +142,17 @@ assert 'UV::Loop#configure' do
   UV.default_loop.configure block_signal: UV::Signal::SIGPROF
 end
 
+assert 'UV::Loop#make_current' do
+  assert_equal UV.default_loop, UV.current_loop
+
+  l = UV::Loop.new
+  l.make_current
+  assert_equal l, UV.current_loop
+
+  UV.default_loop.make_current
+  assert_equal UV.default_loop, UV.current_loop
+end
+
 assert 'UV::SOMAXCONN' do
   assert_kind_of Fixnum, UV::SOMAXCONN
 end

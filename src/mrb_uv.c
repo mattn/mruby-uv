@@ -56,7 +56,7 @@ mrb_uv_run(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_mode = UV_RUN_DEFAULT;
   mrb_get_args(mrb, "|i", &arg_mode);
-  return mrb_fixnum_value(uv_run(uv_default_loop(), arg_mode));
+  return mrb_fixnum_value(uv_run(mrb_uv_current_loop(mrb), arg_mode));
 }
 
 mrb_value
@@ -310,6 +310,12 @@ mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+mrb_uv_current_loop_meth(mrb_state *mrb, mrb_value self)
+{
+  return mrb_uv_current_loop_obj(mrb);
+}
+
+static mrb_value
 mrb_uv_loop_init(mrb_state *mrb, mrb_value self)
 {
   uv_loop_t *l = (uv_loop_t*)mrb_malloc(mrb, sizeof(uv_loop_t));
@@ -442,6 +448,16 @@ mrb_uv_loop_eq(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "d", &other, &mrb_uv_loop_type);
 
   return mrb_bool_value(loop == other);
+}
+
+static mrb_value
+mrb_uv_loop_make_current(mrb_state *mrb, mrb_value self)
+{
+  mrb_iv_set(
+      mrb, mrb_const_get(
+          mrb, mrb_obj_value(mrb->object_class), mrb_intern_lit(mrb, "UV")),
+      mrb_intern_lit(mrb, "current_loop"), self);
+  return self;
 }
 
 /*********************************************************
@@ -726,7 +742,7 @@ mrb_uv_getnameinfo(mrb_state *mrb, mrb_value self)
   req_val = mrb_uv_req_alloc(mrb, UV_GETNAMEINFO, block);
   req = (mrb_uv_req_t*)DATA_PTR(req_val);
   mrb_uv_check_error(mrb, uv_getnameinfo(
-      uv_default_loop(), (uv_getnameinfo_t*)&req->req,
+      mrb_uv_current_loop(mrb), (uv_getnameinfo_t*)&req->req,
       mrb_uv_getnameinfo_cb, addr, flags));
   return req_val;
 }
@@ -829,7 +845,7 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
   req_val = mrb_uv_req_alloc(mrb, UV_GETADDRINFO, b);
   req = (mrb_uv_req_t*)DATA_PTR(req_val);
   mrb_uv_check_error(mrb, uv_getaddrinfo(
-      uv_default_loop(), (uv_getaddrinfo_t*)&req->req, _uv_getaddrinfo_cb,
+      mrb_uv_current_loop(mrb), (uv_getaddrinfo_t*)&req->req, _uv_getaddrinfo_cb,
       RSTRING_PTR(node), RSTRING_PTR(service), &hints));
   return req_val;
 }
@@ -1285,7 +1301,7 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, req_val, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
   req->block = cfunc;
   mrb_uv_check_error(mrb, uv_queue_work(
-      uv_default_loop(), (uv_work_t*)&req->req, mrb_uv_work_cb, mrb_uv_after_work_cb));
+      mrb_uv_current_loop(mrb), (uv_work_t*)&req->req, mrb_uv_work_cb, mrb_uv_after_work_cb));
   mrb_uv_gc_protect(mrb, req_val);
   return req_val;
 }
@@ -1528,6 +1544,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   _class_uv = mrb_define_module(mrb, "UV");
   mrb_define_module_function(mrb, _class_uv, "run", mrb_uv_run, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "default_loop", mrb_uv_default_loop, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "current_loop", mrb_uv_current_loop_meth, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "ip4_addr", mrb_uv_ip4_addr, MRB_ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "ip6_addr", mrb_uv_ip6_addr, MRB_ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv, "getaddrinfo", mrb_uv_getaddrinfo, MRB_ARGS_REQ(3));
@@ -1593,6 +1610,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_loop, "configure", mrb_uv_loop_configure, MRB_ARGS_REQ(1));
 #endif
   mrb_define_method(mrb, _class_uv_loop, "==", mrb_uv_loop_eq, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_loop, "make_current", mrb_uv_loop_make_current, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   def_loop = mrb_obj_value(mrb_data_object_alloc(mrb, _class_uv_loop, uv_default_loop(), &mrb_uv_loop_type));

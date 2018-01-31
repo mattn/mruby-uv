@@ -5,18 +5,23 @@
 
 
 mrb_value
-mrb_uv_current_loop(mrb_state *mrb) {
+mrb_uv_current_loop_obj(mrb_state *mrb) {
   return mrb_iv_get(
       mrb, mrb_const_get(
           mrb, mrb_obj_value(mrb->object_class), mrb_intern_lit(mrb, "UV")),
       mrb_intern_lit(mrb, "current_loop"));
 }
 
+uv_loop_t*
+mrb_uv_current_loop(mrb_state *mrb) {
+  return (uv_loop_t*)mrb_uv_get_ptr(mrb, mrb_uv_current_loop_obj(mrb), &mrb_uv_loop_type);
+}
+
 static uv_loop_t*
 get_loop(mrb_state *mrb, mrb_value *v)
 {
   if(mrb_nil_p(*v)) {
-    *v = mrb_uv_current_loop(mrb);
+    *v = mrb_uv_current_loop_obj(mrb);
   }
   mrb_assert(!mrb_nil_p(*v));
   return (uv_loop_t*)mrb_uv_get_ptr(mrb, *v, &mrb_uv_loop_type);
