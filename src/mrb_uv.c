@@ -1247,8 +1247,7 @@ static void
 mrb_uv_work_cb(uv_work_t *uv_req)
 {
   mrb_uv_req_t *req = (mrb_uv_req_t*)uv_req->data;
-  mrb_state *mrb = req->mrb;
-  mrb_value cfunc = mrb_iv_get(mrb, req->instance, mrb_intern_lit(mrb, "cfunc_cb"));
+  mrb_value cfunc = req->block;
 
   mrb_assert(mrb_type(cfunc) == MRB_TT_PROC);
   mrb_assert(MRB_PROC_CFUNC_P(mrb_proc_ptr(cfunc)));
@@ -1262,7 +1261,7 @@ mrb_uv_after_work_cb(uv_work_t *uv_req, int err)
   mrb_uv_req_t *req = (mrb_uv_req_t*)uv_req->data;
   mrb_state *mrb = req->mrb;
 
-  mrb_yield_argv(mrb, req->block, 0, NULL);
+  mrb_yield_argv(mrb, mrb_iv_get(mrb, req->instance, mrb_intern_lit(mrb, "uv_cb")), 0, NULL);
   mrb_uv_check_error(mrb, err);
   mrb_uv_req_release(mrb, req->instance);
 }
@@ -1284,6 +1283,7 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
   req_val = mrb_uv_req_alloc(mrb, UV_WORK, blk);
   req = (mrb_uv_req_t*)DATA_PTR(req_val);
   mrb_iv_set(mrb, req_val, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
+  req->block = cfunc;
   mrb_uv_check_error(mrb, uv_queue_work(
       uv_default_loop(), (uv_work_t*)&req->req, mrb_uv_work_cb, mrb_uv_after_work_cb));
   mrb_uv_gc_protect(mrb, req_val);
