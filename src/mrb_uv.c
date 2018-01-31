@@ -21,10 +21,10 @@ mrb_uv_gc_table_get(mrb_state *mrb)
 void
 mrb_uv_gc_table_clean(mrb_state *mrb, uv_loop_t *target)
 {
-  int i, new_i;
+  int i, new_i = 0;
   mrb_value t = mrb_uv_gc_table_get(mrb);
   mrb_value const *ary = RARRAY_PTR(t);
-  for (i = 0, new_i = 0; i < RARRAY_LEN(t); ++i) {
+  for (i = 0; i < RARRAY_LEN(t); ++i) {
     mrb_value const v = ary[i];
     if (!DATA_PTR(v) ||
         (DATA_TYPE(v) == &mrb_uv_handle_type && ((mrb_uv_handle*)DATA_PTR(v))->handle.loop == target) ||
@@ -33,7 +33,6 @@ mrb_uv_gc_table_clean(mrb_state *mrb, uv_loop_t *target)
     }
   }
   mrb_ary_resize(mrb, t, new_i);
-  mrb_full_gc(mrb);
   uv_run(uv_default_loop(), UV_RUN_ONCE);
 }
 
