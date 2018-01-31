@@ -115,6 +115,8 @@ assert_uv 'UV::FS.readlink' do
 end
 
 assert_uv 'UV::FS.realpath' do
+  skip unless UV::FS.respond_to? :realpath
+
   # async version
   UV::FS.realpath '.' do |v|
     assert_kind_of String, v
@@ -125,6 +127,8 @@ assert_uv 'UV::FS.realpath' do
 end
 
 assert_uv 'UV::FS.copyfile' do
+  skip unless UV::FS.respond_to? :realpath
+
   remove_uv_test_tmpfile
   UV::FS.mkdir 'foo-bar'
 
@@ -175,7 +179,7 @@ assert_uv 'UV.getaddrinfo' do
     assert_equal 80, a.addr.sin_port
   }
   assert_kind_of UV::Req, req
-  assert_equal :getaddrinfo, req.type
+  assert_equal :getaddrinfo, req.type_name
 
   # getaddrinfo without callback
   assert_raise(ArgumentError) { UV.getaddrinfo 'example.com', 'http' }
@@ -187,7 +191,7 @@ assert_uv 'UV.getnameinfo' do
     assert_kind_of String, service
   }
   assert_kind_of UV::Req, req
-  assert_equal :getnameinfo, req.type
+  assert_equal :getnameinfo, req.type_name
 
   assert_raise(ArgumentError) { UV.getnameinfo UV::Ip4Addr.new('127.0.0.1', 80) }
 end
@@ -278,7 +282,7 @@ assert_uv 'UV::Pipe' do
   client = UV::Pipe.new(1)
   client.connect path do |x|
     if x == 0
-      assert_kind_of String, client.peername
+      assert_kind_of String, client.peername if client.respond_to? :peername
       assert_kind_of String, client.sockname
 
       client.read_start do |b|
@@ -295,6 +299,8 @@ assert_uv 'UV::UDP server/client' do
   test_str = 'helloworld'
 
   r6 = UV::UDP.new
+  assert_kind_of Integer, r6.send_queue_count
+  assert_kind_of Integer, r6.send_queue_size
   r6.bind6 UV.ip6_addr('::1', 8888)
   assert_equal '::1:8888', r6.getsockname.to_s
   r6.recv_start do |data, addr, flags|
@@ -361,6 +367,7 @@ assert_uv 'UV::TCP IPv6 server/client' do
   t = UV::Timer.new
   t.start UV_INTERVAL, 0 do
     c = UV::TCP.new
+    assert_kind_of Integer, c.write_queue_size
     c.connect6 UV.ip6_addr('::1', 8888) do |connect_status|
       assert_equal 0, connect_status
       c.read_start do |b|
@@ -476,6 +483,11 @@ assert_uv 'Process' do
 
   ps.spawn do |x, sig|
     assert_equal 0, x
+
+    assert_equal UV.default_loop, ps.loop
+    assert_equal :process, ps.type_name
+    assert_kind_of Integer, ps.pid
+
     ps.close
     remove_uv_test_tmpfile
   end

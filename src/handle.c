@@ -1,15 +1,25 @@
 #include "mruby/uv.h"
 #include "mrb_uv.h"
 
+#include <mruby/variable.h>
+
+
+mrb_value
+mrb_uv_current_loop(mrb_state *mrb) {
+  return mrb_iv_get(
+      mrb, mrb_const_get(
+          mrb, mrb_obj_value(mrb->object_class), mrb_intern_lit(mrb, "UV")),
+      mrb_intern_lit(mrb, "current_loop"));
+}
 
 static uv_loop_t*
-get_loop(mrb_state *mrb, mrb_value v)
+get_loop(mrb_state *mrb, mrb_value *v)
 {
-  if(mrb_nil_p(v)) {
-    return uv_default_loop();
-  } else {
-    return (uv_loop_t*)mrb_uv_get_ptr(mrb, v, &mrb_uv_loop_type);
+  if(mrb_nil_p(*v)) {
+    *v = mrb_uv_current_loop(mrb);
   }
+  mrb_assert(!mrb_nil_p(*v));
+  return (uv_loop_t*)mrb_uv_get_ptr(mrb, *v, &mrb_uv_loop_type);
 }
 
 static void
@@ -38,8 +48,9 @@ const struct mrb_data_type mrb_uv_handle_type = {
 };
 
 mrb_uv_handle*
-mrb_uv_handle_alloc(mrb_state* mrb, size_t size, mrb_value instance)
+mrb_uv_handle_alloc(mrb_state* mrb, uv_handle_type t, mrb_value instance, mrb_value loop)
 {
+  size_t const size = uv_handle_size(t);
   mrb_uv_handle* context = (mrb_uv_handle*) mrb_malloc(mrb, sizeof(mrb_uv_handle) + (size - sizeof(uv_handle_t)));
   context->mrb = mrb;
   context->instance = instance;
@@ -48,6 +59,8 @@ mrb_uv_handle_alloc(mrb_state* mrb, size_t size, mrb_value instance)
   mrb_assert(mrb_type(instance) == MRB_TT_DATA);
   DATA_PTR(instance) = context;
   DATA_TYPE(instance) = &mrb_uv_handle_type;
+  mrb_assert(DATA_TYPE(loop) == &mrb_uv_loop_type);
+  mrb_iv_set(mrb, instance, mrb_intern_lit(mrb, "loop"), loop);
   return context;
 }
 
@@ -198,6 +211,52 @@ mrb_uv_fileno(mrb_state *mrb, mrb_value self)
   return mrb_uv_from_uint64(mrb, fd);
 }
 
+#if !MRB_UV_CHECK_VERSION(1, 19, 0)
+#define uv_handle_get_loop(h) ((h)->loop)
+#endif
+
+static mrb_value
+mrb_uv_handle_loop(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_value ret = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "loop"));
+
+  mrb_assert(uv_handle_get_loop(&ctx->handle) == ((uv_loop_t*)mrb_uv_get_ptr(mrb, ret, &mrb_uv_loop_type)));
+
+  return ret;
+}
+
+#if MRB_UV_CHECK_VERSION(1, 19, 0)
+
+static mrb_value
+mrb_uv_handle_get_type(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  return mrb_fixnum_value(uv_handle_get_type(&ctx->handle));
+}
+
+#endif
+
+static mrb_value
+mrb_uv_handle_type_name(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+#if MRB_UV_CHECK_VERSION(1, 19, 0)
+  return mrb_symbol_value(mrb_intern_cstr(mrb, uv_handle_type_name(uv_handle_get_type(&ctx->handle))));
+#else
+  uv_handle_type const t = ctx->handle.type;
+  switch(t) {
+#define XX(u, l) case UV_ ## u: return symbol_value_lit(mrb, #l);
+      UV_HANDLE_TYPE_MAP(XX)
+#undef XX
+
+  default:
+    mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_handle_t type: %S", mrb_fixnum_value(t));
+    return self;
+  }
+#endif
+}
+
 /*********************************************************
  * UV::Pipe
  *********************************************************/
@@ -210,7 +269,7 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
   int ipc = 0;
 
   mrb_get_args(mrb, "o|o", &arg_ipc, &arg_loop);
-  loop = get_loop(mrb, arg_loop);
+  loop = get_loop(mrb, &arg_loop);
   if (!mrb_nil_p(arg_ipc)) {
     if (mrb_fixnum_p(arg_ipc))
       ipc = mrb_fixnum(arg_ipc);
@@ -218,7 +277,7 @@ mrb_uv_pipe_init(mrb_state *mrb, mrb_value self)
       mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
   }
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_pipe_t), self);
+  context = mrb_uv_handle_alloc(mrb, UV_NAMED_PIPE, self, arg_loop);
 
   mrb_uv_check_error(mrb, uv_pipe_init(loop, (uv_pipe_t*)&context->handle, ipc));
   return self;
@@ -346,6 +405,8 @@ mrb_uv_pipe_getsockname(mrb_state *mrb, mrb_value self)
   return buf;
 }
 
+#if MRB_UV_CHECK_VERSION(1, 3, 0)
+
 static mrb_value
 mrb_uv_pipe_getpeername(mrb_state *mrb, mrb_value self)
 {
@@ -368,6 +429,23 @@ mrb_uv_pipe_getpeername(mrb_state *mrb, mrb_value self)
   return buf;
 }
 
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 16, 0)
+
+static mrb_value
+mrb_uv_pipe_chmod(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_int mode;
+  mrb_get_args(mrb, "i", &mode);
+
+  mrb_uv_check_error(mrb, uv_pipe_chmod((uv_pipe_t*)&context->handle, mode));
+  return self;
+}
+
+#endif
+
 /*********************************************************
  * UV::TCP
  *********************************************************/
@@ -380,12 +458,14 @@ mrb_uv_tcp_init(mrb_state *mrb, mrb_value self)
   mrb_int flags;
 
   mrb_int c = mrb_get_args(mrb, "|oi", &arg_loop, &flags);
-  loop = get_loop(mrb, arg_loop);
+  loop = get_loop(mrb, &arg_loop);
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_tcp_t), self);
+  context = mrb_uv_handle_alloc(mrb, UV_TCP, self, arg_loop);
 
-  if (c == 2) {
+  if (c == 2 && MRB_UV_CHECK_VERSION(1, 7, 0)) {
+#if MRB_UV_CHECK_VERSION(1, 7, 0)
     mrb_uv_check_error(mrb, uv_tcp_init_ex(loop, (uv_tcp_t*)&context->handle, flags));
+#endif
   } else {
     mrb_uv_check_error(mrb, uv_tcp_init(loop, (uv_tcp_t*)&context->handle));
   }
@@ -685,12 +765,14 @@ mrb_uv_udp_init(mrb_state *mrb, mrb_value self)
   mrb_int flags;
 
   mrb_int c = mrb_get_args(mrb, "|oi", &arg_loop, &flags);
-  loop = get_loop(mrb, arg_loop);
+  loop = get_loop(mrb, &arg_loop);
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_udp_t), self);
+  context = mrb_uv_handle_alloc(mrb, UV_UDP, self, arg_loop);
 
-  if (c == 2) {
+  if (c == 2 && MRB_UV_CHECK_VERSION(1, 7, 0)) {
+#if MRB_UV_CHECK_VERSION(1, 7, 0)
     mrb_uv_check_error(mrb, uv_udp_init_ex(loop, (uv_udp_t*)&context->handle, flags));
+#endif
   } else {
     mrb_uv_check_error(mrb, uv_udp_init(loop, (uv_udp_t*)&context->handle));
   }
@@ -991,6 +1073,25 @@ mrb_uv_udp_try_send(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(err);
 }
 
+#if !MRB_UV_CHECK_VERSION(1, 19, 0)
+#define uv_udp_get_send_queue_size(u) ((u)->send_queue_size)
+#define uv_udp_get_send_queue_count(u) ((u)->send_queue_count)
+#endif
+
+static mrb_value
+mrb_uv_udp_send_queue_count(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  return mrb_fixnum_value(uv_udp_get_send_queue_count((uv_udp_t*)&ctx->handle));
+}
+
+static mrb_value
+mrb_uv_udp_send_queue_size(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  return mrb_fixnum_value(uv_udp_get_send_queue_size((uv_udp_t*)&ctx->handle));
+}
+
 /*********************************************************
  * UV::Prepare
  *********************************************************/
@@ -1011,9 +1112,9 @@ mrb_uv_prepare_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  loop = get_loop(mrb, arg_loop);
+  loop = get_loop(mrb, &arg_loop);
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_prepare_t), self);
+  context = mrb_uv_handle_alloc(mrb, UV_PREPARE, self, arg_loop);
 
   mrb_uv_check_error(mrb, uv_prepare_init(loop, (uv_prepare_t*)&context->handle));
   return self;
@@ -1067,9 +1168,9 @@ mrb_uv_async_init(mrb_state *mrb, mrb_value self)
   uv_async_cb async_cb = _uv_async_cb;
 
   mrb_get_args(mrb, "&|o", &b, &arg_loop);
-  loop = get_loop(mrb, arg_loop);
+  loop = get_loop(mrb, &arg_loop);
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_async_t), self);
+  context = mrb_uv_handle_alloc(mrb, UV_ASYNC, self, arg_loop);
 
   if (mrb_nil_p(b)) {
     async_cb = NULL;
@@ -1100,9 +1201,9 @@ mrb_uv_idle_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  loop = get_loop(mrb, arg_loop);
+  loop = get_loop(mrb, &arg_loop);
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_idle_t), self);
+  context = mrb_uv_handle_alloc(mrb, UV_IDLE, self, arg_loop);
 
   mrb_uv_check_error(mrb, uv_idle_init(loop, (uv_idle_t*)&context->handle));
   return self;
@@ -1152,9 +1253,9 @@ mrb_uv_tty_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "ii|o", &arg_file, &arg_readable, &arg_loop);
-  loop = get_loop(mrb, arg_loop);
+  loop = get_loop(mrb, &arg_loop);
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_tty_t), self);
+  context = mrb_uv_handle_alloc(mrb, UV_TTY, self, arg_loop);
 
   mrb_uv_check_error(mrb, uv_tty_init(loop, (uv_tty_t*)&context->handle, arg_file, arg_readable));
   return self;
@@ -1171,11 +1272,13 @@ mrb_uv_tty_set_mode(mrb_state *mrb, mrb_value self)
 
   if (mrb_fixnum_p(mode_val)) {
     arg_mode = mrb_fixnum(mode_val);
+#if MRB_UV_CHECK_VERSION(1, 2, 0)
   } else if (mrb_symbol_p(mode_val)) {
     mrb_sym s = mrb_symbol(mode_val);
     if (s == mrb_intern_lit(mrb, "raw")) { arg_mode = UV_TTY_MODE_RAW; }
     else if (s == mrb_intern_lit(mrb, "normal")) { arg_mode = UV_TTY_MODE_NORMAL; }
     else if (s == mrb_intern_lit(mrb, "io")) { arg_mode = UV_TTY_MODE_IO; }
+#endif
   }
 
   if (arg_mode == -1) {
@@ -1263,6 +1366,8 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   uv_stdio_container_t stdio[3];
   uv_process_options_t opt = {0};
   const char** args;
+  mrb_value arg_loop = mrb_nil_value();
+  uv_loop_t *loop;
 
   options = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "options"));
   arg_file = mrb_hash_get(mrb, options, mrb_str_new_cstr(mrb, "file"));
@@ -1271,7 +1376,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   stdout_pipe = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stdout_pipe"));
   stderr_pipe = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stderr_pipe"));
 
-  mrb_get_args(mrb, "&", &b);
+  mrb_get_args(mrb, "|o&", &arg_loop, &b);
   if (mrb_nil_p(b)) {
     exit_cb = NULL;
   }
@@ -1320,8 +1425,9 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   opt.gid = 0;
   opt.flags = 0;
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_process_t), self);
-  err = uv_spawn(uv_default_loop(), (uv_process_t*)&context->handle, &opt);
+  loop = get_loop(mrb, &arg_loop);
+  context = mrb_uv_handle_alloc(mrb, UV_PROCESS, self, arg_loop);
+  err = uv_spawn(loop, (uv_process_t*)&context->handle, &opt);
   mrb_free(mrb, args);
   if (err != 0) {
     mrb_uv_check_error(mrb, err);
@@ -1338,6 +1444,17 @@ mrb_uv_process_kill(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "i", &arg_signum);
 
   return mrb_fixnum_value(uv_process_kill((uv_process_t*)&context->handle, arg_signum));
+}
+
+#if !MRB_UV_CHECK_VERSION(1, 19, 0)
+#define uv_process_get_pid(p) ((p)->pid)
+#endif
+
+static mrb_value
+mrb_uv_process_pid(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  return mrb_fixnum_value(uv_process_get_pid((uv_process_t*)&context->handle));
 }
 
 static mrb_value
@@ -1396,9 +1513,9 @@ mrb_uv_timer_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  loop = get_loop(mrb, arg_loop);
+  loop = get_loop(mrb, &arg_loop);
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_timer_t), self);
+  context = mrb_uv_handle_alloc(mrb, UV_TIMER, self, arg_loop);
 
   mrb_uv_check_error(mrb, uv_timer_init(loop, (uv_timer_t*)&context->handle));
   return self;
@@ -1492,9 +1609,9 @@ mrb_uv_fs_poll_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  loop = get_loop(mrb, arg_loop);
+  loop = get_loop(mrb, &arg_loop);
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_fs_poll_t), self);
+  context = mrb_uv_handle_alloc(mrb, UV_FS_POLL, self, arg_loop);
 
   mrb_uv_check_error(mrb, uv_fs_poll_init(loop, (uv_fs_poll_t*)&context->handle));
   return self;
@@ -1558,10 +1675,12 @@ mrb_uv_check_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value l = mrb_nil_value();
   mrb_uv_handle *context;
+  uv_loop_t *loop;
   mrb_get_args(mrb, "|o", &l);
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_check_t), self);
-  mrb_uv_check_error(mrb, uv_check_init(get_loop(mrb, l), (uv_check_t*)&context->handle));
+  loop = get_loop(mrb, &l);
+  context = mrb_uv_handle_alloc(mrb, UV_CHECK, self, l);
+  mrb_uv_check_error(mrb, uv_check_init(loop, (uv_check_t*)&context->handle));
   return self;
 }
 
@@ -1623,9 +1742,9 @@ mrb_uv_signal_init(mrb_state *mrb, mrb_value self)
   uv_loop_t* loop;
 
   mrb_get_args(mrb, "|o", &arg_loop);
-  loop = get_loop(mrb, arg_loop);
+  loop = get_loop(mrb, &arg_loop);
 
-  context = mrb_uv_handle_alloc(mrb, sizeof(uv_signal_t), self);
+  context = mrb_uv_handle_alloc(mrb, UV_SIGNAL, self, arg_loop);
 
   mrb_uv_check_error(mrb, uv_signal_init(loop, (uv_signal_t*)&context->handle));
   return self;
@@ -1649,6 +1768,8 @@ mrb_uv_signal_start(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(uv_signal_start((uv_signal_t*)&context->handle, signal_cb, arg_signum));
 }
 
+#if MRB_UV_CHECK_VERSION(1, 12, 0)
+
 static mrb_value
 mrb_uv_signal_start_oneshot(mrb_state *mrb, mrb_value self)
 {
@@ -1666,6 +1787,8 @@ mrb_uv_signal_start_oneshot(mrb_state *mrb, mrb_value self)
 
   return mrb_fixnum_value(uv_signal_start_oneshot((uv_signal_t*)&context->handle, signal_cb, arg_signum));
 }
+
+#endif
 
 static mrb_value
 mrb_uv_signal_stop(mrb_state *mrb, mrb_value self)
@@ -1842,6 +1965,17 @@ mrb_uv_writable(mrb_state *mrb, mrb_value self)
   return mrb_bool_value(uv_is_writable((uv_stream_t*)&ctx->handle));
 }
 
+#if !MRB_UV_CHECK_VERSION(1, 19, 0)
+#define uv_stream_get_write_queue_size(s) ((s)->write_queue_size)
+#endif
+
+static mrb_value
+mrb_uv_stream_write_queue_size(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle* ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  return mrb_fixnum_value(uv_stream_get_write_queue_size((uv_stream_t*)&ctx->handle));
+}
+
 /*
  * UV::FS::Event
  */
@@ -1850,10 +1984,12 @@ mrb_uv_fs_event_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value l = mrb_nil_value();
   mrb_uv_handle *ctx;
+  uv_loop_t *loop;
   mrb_get_args(mrb, "|o", &l);
 
-  ctx = mrb_uv_handle_alloc(mrb, sizeof(uv_fs_event_t), self);
-  mrb_uv_check_error(mrb, uv_fs_event_init(get_loop(mrb, l), (uv_fs_event_t*)&ctx->handle));
+  loop = get_loop(mrb, &l);
+  ctx = mrb_uv_handle_alloc(mrb, UV_FS_EVENT, self, l);
+  mrb_uv_check_error(mrb, uv_fs_event_init(loop, (uv_fs_event_t*)&ctx->handle));
   return self;
 }
 
@@ -1923,24 +2059,28 @@ static mrb_value
 mrb_uv_poll_init(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_handle *ctx;
-  mrb_value fd, loop = mrb_nil_value();
-  mrb_get_args(mrb, "o|o", &fd, &loop);
+  mrb_value fd, l = mrb_nil_value();
+  uv_loop_t *loop;
+  mrb_get_args(mrb, "o|o", &fd, &l);
 
-  ctx = mrb_uv_handle_alloc(mrb, sizeof(uv_poll_t), self);
-  mrb_uv_check_error(mrb, uv_poll_init(get_loop(mrb, loop), (uv_poll_t*)&ctx->handle, mrb_uv_to_fd(mrb, fd)));
+  loop = get_loop(mrb, &l);
+  ctx = mrb_uv_handle_alloc(mrb, UV_POLL, self, l);
+  mrb_uv_check_error(mrb, uv_poll_init(loop, (uv_poll_t*)&ctx->handle, mrb_uv_to_fd(mrb, fd)));
   return self;
 }
 
 static mrb_value
 mrb_uv_poll_init_socket(mrb_state *mrb, mrb_value self)
 {
-  mrb_value sock, loop = mrb_nil_value(), ret;
+  mrb_value sock, l = mrb_nil_value(), ret;
   mrb_uv_handle *ctx;
-  mrb_get_args(mrb, "o|o", &sock, &loop);
+  uv_loop_t *loop;
+  mrb_get_args(mrb, "o|o", &sock, &l);
 
+  loop = get_loop(mrb, &l);
   ret = mrb_obj_value(mrb_data_object_alloc(mrb, mrb_class_ptr(self), NULL, NULL));
-  ctx = mrb_uv_handle_alloc(mrb, sizeof(uv_poll_t), ret);
-  mrb_uv_check_error(mrb, uv_poll_init_socket(get_loop(mrb, loop), (uv_poll_t*)&ctx->handle, mrb_uv_to_socket(mrb, sock)));
+  ctx = mrb_uv_handle_alloc(mrb, UV_POLL, ret, l);
+  mrb_uv_check_error(mrb, uv_poll_init_socket(loop, (uv_poll_t*)&ctx->handle, mrb_uv_to_socket(mrb, sock)));
   return ret;
 }
 
@@ -2016,6 +2156,11 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_handle, "send_buffer_size", mrb_uv_send_buffer_size, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_handle, "send_buffer_size=", mrb_uv_send_buffer_size_set, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_handle, "fileno", mrb_uv_fileno, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_handle, "loop", mrb_uv_handle_loop, MRB_ARGS_NONE());
+#if MRB_UV_CHECK_VERSION(1, 19, 0)
+  mrb_define_method(mrb, _class_uv_handle, "type", mrb_uv_handle_get_type, MRB_ARGS_NONE());
+#endif
+  mrb_define_method(mrb, _class_uv_handle, "type_name", mrb_uv_handle_type_name, MRB_ARGS_NONE());
 
   _class_uv_stream = mrb_define_module_under(mrb, UV, "Stream");
   mrb_include_module(mrb, _class_uv_stream, _class_uv_handle);
@@ -2026,6 +2171,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_stream, "read_stop", mrb_uv_read_stop, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_stream, "readable?", mrb_uv_readable, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_stream, "writable?", mrb_uv_writable, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_stream, "write_queue_size", mrb_uv_stream_write_queue_size, MRB_ARGS_NONE());
 
   _class_uv_tty = mrb_define_class_under(mrb, UV, "TTY", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_tty, MRB_TT_DATA);
@@ -2035,9 +2181,11 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_tty, "mode=", mrb_uv_tty_set_mode, MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_tty, "reset_mode", mrb_uv_tty_reset_mode, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tty, "get_winsize", mrb_uv_tty_get_winsize, MRB_ARGS_NONE());
+#if MRB_UV_CHECK_VERSION(1, 2, 0)
   mrb_define_const(mrb, _class_uv_tty, "MODE_NORMAL", mrb_fixnum_value(UV_TTY_MODE_NORMAL));
   mrb_define_const(mrb, _class_uv_tty, "MODE_RAW", mrb_fixnum_value(UV_TTY_MODE_RAW));
   mrb_define_const(mrb, _class_uv_tty, "MODE_IO", mrb_fixnum_value(UV_TTY_MODE_IO));
+#endif
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_udp = mrb_define_class_under(mrb, UV, "UDP", mrb->object_class);
@@ -2060,6 +2208,8 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_udp, "getsockname", mrb_uv_udp_getsockname, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "sockname", mrb_uv_udp_getsockname, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_udp, "try_send", mrb_uv_udp_try_send, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv_udp, "send_queue_count", mrb_uv_udp_send_queue_count, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_udp, "send_queue_size", mrb_uv_udp_send_queue_size, MRB_ARGS_NONE());
   mrb_define_const(mrb, _class_uv_udp, "LEAVE_GROUP", mrb_fixnum_value(UV_LEAVE_GROUP));
   mrb_define_const(mrb, _class_uv_udp, "JOIN_GROUP", mrb_fixnum_value(UV_JOIN_GROUP));
   mrb_gc_arena_restore(mrb, ai);
@@ -2076,6 +2226,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_process, "stderr_pipe=", mrb_uv_process_stderr_pipe_set, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_process, "stderr_pipe", mrb_uv_process_stderr_pipe_get, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "kill", mrb_uv_process_kill, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_process, "pid", mrb_uv_process_pid, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_signal = mrb_define_class_under(mrb, UV, "Signal", mrb->object_class);
@@ -2083,7 +2234,9 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_include_module(mrb, _class_uv_signal, _class_uv_handle);
   mrb_define_method(mrb, _class_uv_signal, "initialize", mrb_uv_signal_init, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_signal, "start", mrb_uv_signal_start, MRB_ARGS_REQ(1));
+#if MRB_UV_CHECK_VERSION(1, 12, 0)
   mrb_define_method(mrb, _class_uv_signal, "start_oneshot", mrb_uv_signal_start_oneshot, MRB_ARGS_REQ(1));
+#endif
   mrb_define_method(mrb, _class_uv_signal, "stop", mrb_uv_signal_stop, MRB_ARGS_NONE());
   mrb_define_const(mrb, _class_uv_signal, "SIGINT", mrb_fixnum_value(SIGINT));
 #ifdef SIGUSR1
@@ -2188,8 +2341,13 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_pipe, "listen", mrb_uv_pipe_listen, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, _class_uv_pipe, "accept", mrb_uv_pipe_accept, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_pipe, "pending_instances=", mrb_uv_pipe_pending_instances, MRB_ARGS_REQ(1));
+#if MRB_UV_CHECK_VERSION(1, 3, 0)
   mrb_define_method(mrb, _class_uv_pipe, "peername", mrb_uv_pipe_getpeername, MRB_ARGS_NONE());
+#endif
   mrb_define_method(mrb, _class_uv_pipe, "sockname", mrb_uv_pipe_getsockname, MRB_ARGS_NONE());
+#if MRB_UV_CHECK_VERSION(1, 16, 0)
+  mrb_define_method(mrb, _class_uv_pipe, "chmod", mrb_uv_pipe_chmod, MRB_ARGS_REQ(1));
+#endif
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_check = mrb_define_class_under(mrb, UV, "Check", mrb->object_class);
@@ -2221,6 +2379,13 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_poll, "stop", mrb_uv_poll_stop, MRB_ARGS_NONE());
   mrb_define_const(mrb, _class_uv_poll, "READABLE", mrb_fixnum_value(UV_READABLE));
   mrb_define_const(mrb, _class_uv_poll, "WRITABLE", mrb_fixnum_value(UV_WRITABLE));
+#if MRB_UV_CHECK_VERSION(1, 9, 0)
   mrb_define_const(mrb, _class_uv_poll, "DISCONNECT", mrb_fixnum_value(UV_DISCONNECT));
+#endif
+#if MRB_UV_CHECK_VERSION(1, 14, 0)
   mrb_define_const(mrb, _class_uv_poll, "PRIORITIZED", mrb_fixnum_value(UV_PRIORITIZED));
+#endif
+
+  mrb_define_const(mrb, UV, "READABLE", mrb_fixnum_value(UV_READABLE));
+  mrb_define_const(mrb, UV, "WRITABLE", mrb_fixnum_value(UV_WRITABLE));
 }

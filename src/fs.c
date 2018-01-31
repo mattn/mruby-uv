@@ -166,7 +166,9 @@ _uv_fs_cb(uv_fs_t* req)
     }
     break;
 
+#if MRB_UV_CHECK_VERSION(1, 8, 0)
   case UV_FS_REALPATH:
+#endif
   case UV_FS_READLINK: {
     mrb_value res;
     mrb_assert(!mrb_nil_p(proc));
@@ -965,6 +967,8 @@ mrb_uv_fs_readlink(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+#if MRB_UV_CHECK_VERSION(1, 8, 0)
+
 static mrb_value
 mrb_uv_fs_realpath(mrb_state *mrb, mrb_value self)
 {
@@ -998,6 +1002,8 @@ mrb_uv_fs_realpath(mrb_state *mrb, mrb_value self)
   }
   return self;
 }
+
+#endif
 
 static mrb_value
 mrb_uv_fs_chown(mrb_state *mrb, mrb_value self)
@@ -1077,11 +1083,13 @@ fs_req_cb(uv_fs_t *req)
     mrb_yield_argv(mrb, b, 2, args);
   } break;
 
+#if MRB_UV_CHECK_VERSION(1, 14, 0)
   case UV_FS_COPYFILE: {
     mrb_uv_req_release(mrb, req_data->instance);
     mrb_uv_check_error(mrb, res);
     mrb_yield_argv(mrb, b, 0, NULL);
   } break;
+#endif
 
   default: mrb_assert(FALSE);
   }
@@ -1141,6 +1149,8 @@ mrb_uv_fs_access(mrb_state *mrb, mrb_value self)
   }
 }
 
+#if MRB_UV_CHECK_VERSION(1, 14, 0)
+
 static mrb_value
 mrb_uv_fs_copyfile(mrb_state *mrb, mrb_value self)
 {
@@ -1160,6 +1170,8 @@ mrb_uv_fs_copyfile(mrb_state *mrb, mrb_value self)
     return req_val;
   }
 }
+
+#endif
 
 void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
 {
@@ -1189,7 +1201,9 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_const(mrb, _class_uv_fs, "R_OK", mrb_fixnum_value(R_OK));
   mrb_define_const(mrb, _class_uv_fs, "W_OK", mrb_fixnum_value(W_OK));
   mrb_define_const(mrb, _class_uv_fs, "X_OK", mrb_fixnum_value(X_OK));
+#if MRB_UV_CHECK_VERSION(1, 14, 0)
   mrb_define_const(mrb, _class_uv_fs, "COPYFILE_EXCL", mrb_fixnum_value(UV_FS_COPYFILE_EXCL));
+#endif
   mrb_define_method(mrb, _class_uv_fs, "write", mrb_uv_fs_write, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_fs, "read", mrb_uv_fs_read, MRB_ARGS_REQ(0) | MRB_ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_fs, "datasync", mrb_uv_fs_fdatasync, MRB_ARGS_NONE());
@@ -1219,8 +1233,12 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_class_method(mrb, _class_uv_fs, "mkdtemp", mrb_uv_fs_mkdtemp, MRB_ARGS_REQ(1));
   mrb_define_class_method(mrb, _class_uv_fs, "access", mrb_uv_fs_access, MRB_ARGS_REQ(2));
   mrb_define_class_method(mrb, _class_uv_fs, "scandir", mrb_uv_fs_scandir, MRB_ARGS_REQ(2));
+#if MRB_UV_CHECK_VERSION(1, 14, 0)
   mrb_define_class_method(mrb, _class_uv_fs, "copyfile", mrb_uv_fs_copyfile, MRB_ARGS_REQ(2) | MRB_ARGS_OPT(1));
+#endif
+#if MRB_UV_CHECK_VERSION(1, 8, 0)
   mrb_define_class_method(mrb, _class_uv_fs, "realpath", mrb_uv_fs_realpath, MRB_ARGS_REQ(1));
+#endif
 
   /* for compatibility */
   mrb_define_class_method(mrb, _class_uv_fs, "readdir", mrb_uv_fs_scandir, MRB_ARGS_REQ(2));

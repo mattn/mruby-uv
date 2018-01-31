@@ -100,4 +100,11 @@ mrb_value mrb_uv_from_uint64(mrb_state *mrb, uint64_t v);
 #  endif
 #endif
 
+#define MRB_UV_CHECK_VERSION(maj, min, pat)                             \
+  ((UV_VERSION_MAJOR >  (maj)) ||                                       \
+   (UV_VERSION_MAJOR >= (maj) && UV_VERSION_MINOR >  (min)) ||          \
+   (UV_VERSION_MAJOR >= (maj) && UV_VERSION_MINOR >= (min) && UV_VERSION_PATCH >= (pat))) \
+
+mrb_value mrb_uv_current_loop(mrb_state *mrb);
+
 #endif

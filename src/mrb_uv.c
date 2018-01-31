@@ -75,6 +75,8 @@ mrb_uv_data_set(mrb_state *mrb, mrb_value self)
   return self;
 }
 
+#if MRB_UV_CHECK_VERSION(1, 9, 0)
+
 // UV::Passwd
 static void
 mrb_uv_passwd_free(mrb_state *mrb, void *p)
@@ -144,6 +146,8 @@ mrb_uv_passwd_gid(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(p->gid);
 }
 
+#endif
+
 /*
  * UV::Req
  */
@@ -169,7 +173,7 @@ mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t, mrb_value proc)
   int ai;
 
   ai = mrb_gc_arena_save(mrb);
-  cls = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "Req");
+  cls = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), t == UV_FS? "FsReq" : "Req");
   p = (mrb_uv_req_t*)mrb_malloc(mrb, sizeof(mrb_uv_req_t) - sizeof(uv_req_t) + uv_req_size(t));
   ret = mrb_obj_value(mrb_data_object_alloc(mrb, cls, p, &req_type));
   p->mrb = mrb;
@@ -198,6 +202,29 @@ mrb_uv_req_type(mrb_state *mrb, mrb_value self)
   mrb_uv_req_t *req;
 
   req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
+  return mrb_fixnum_value(req->req.type);
+  switch(req->req.type) {
+#define XX(u, l) case UV_ ## u: return symbol_value_lit(mrb, #l);
+      UV_REQ_TYPE_MAP(XX)
+#undef XX
+
+  case UV_UNKNOWN_REQ: return symbol_value_lit(mrb, "unknown");
+
+  default:
+    mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_req_t type: %S", mrb_fixnum_value(req->req.type));
+    return self;
+  }
+}
+
+static mrb_value
+mrb_uv_req_type_name(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_req_t *req;
+
+  req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
+#if MRB_UV_CHECK_VERSION(1, 19, 0)
+  return mrb_symbol_value(mrb_intern_cstr(mrb, uv_req_type_name(uv_req_get_type(&req->req))));
+#else
   switch(req->req.type) {
 #define XX(u, l) case UV_ ## u: return symbol_value_lit(mrb, #l);
       UV_REQ_TYPE_MAP(XX)
@@ -209,20 +236,51 @@ mrb_uv_req_type(mrb_state *mrb, mrb_value self)
       mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_req_t type: %S", mrb_fixnum_value(req->req.type));
       return self;
   }
+#endif
 }
 
 void
 mrb_uv_req_release(mrb_state *mrb, mrb_value v)
 {
-  mrb_uv_req_t *req;
-
-  req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, v, &req_type);
+  mrb_uv_req_t *req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, v, &req_type);
   if (req->req.type == UV_FS) {
     uv_fs_req_cleanup((uv_fs_t*)&req->req);
   }
   mrb_free(mrb, req);
   DATA_PTR(v) = NULL;
 }
+
+#if MRB_UV_CHECK_VERSION(1, 19, 0)
+
+static mrb_value
+mrb_uv_fs_req_result(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_req_t *req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
+  return mrb_fixnum_value(uv_fs_get_result((uv_fs_t*)&req->req));
+}
+
+static mrb_value
+mrb_uv_fs_req_statbuf(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_req_t *req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
+  return mrb_uv_create_stat(mrb, uv_fs_get_statbuf((uv_fs_t*)&req->req));
+}
+
+static mrb_value
+mrb_uv_fs_req_path(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_req_t *req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
+  return mrb_str_new_cstr(mrb, uv_fs_get_path((uv_fs_t*)&req->req));
+}
+
+static mrb_value
+mrb_uv_fs_req_type(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_req_t *req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
+  return mrb_fixnum_value(uv_fs_get_type((uv_fs_t*)&req->req));
+}
+
+#endif
 
 /*********************************************************
  * UV::Loop
@@ -246,8 +304,10 @@ const struct mrb_data_type mrb_uv_loop_type = {
 static mrb_value
 mrb_uv_default_loop(mrb_state *mrb, mrb_value self)
 {
-  struct RClass* _class_uv_loop = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "Loop");
-  return mrb_obj_value(Data_Wrap_Struct(mrb, _class_uv_loop, &mrb_uv_loop_type, uv_default_loop()));
+  return mrb_iv_get(
+      mrb, mrb_const_get(
+          mrb, mrb_obj_value(mrb->object_class), mrb_intern_lit(mrb, "UV")),
+      mrb_intern_lit(mrb, "default_loop"));
 }
 
 static mrb_value
@@ -344,6 +404,8 @@ mrb_uv_loadavg(mrb_state *mrb, mrb_value self)
   return ret;
 }
 
+#if MRB_UV_CHECK_VERSION(1, 0, 2)
+
 static mrb_value
 mrb_uv_loop_configure(mrb_state *mrb, mrb_value self) {
   mrb_value h, block_signal;
@@ -358,12 +420,29 @@ mrb_uv_loop_configure(mrb_state *mrb, mrb_value self) {
   return self;
 }
 
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 12, 0)
+
 static mrb_value
 mrb_uv_loop_fork(mrb_state *mrb, mrb_value self)
 {
   uv_loop_t *loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
   mrb_uv_check_error(mrb, uv_loop_fork(loop));
   return self;
+}
+
+#endif
+
+static mrb_value
+mrb_uv_loop_eq(mrb_state *mrb, mrb_value self)
+{
+  uv_loop_t *loop = (uv_loop_t*)mrb_uv_get_ptr(mrb, self, &mrb_uv_loop_type);
+  uv_loop_t *other;
+
+  mrb_get_args(mrb, "d", &other, &mrb_uv_loop_type);
+
+  return mrb_bool_value(loop == other);
 }
 
 /*********************************************************
@@ -553,6 +632,62 @@ mrb_uv_ip6addr_sin_port(mrb_state *mrb, mrb_value self)
   Data_Get_Struct(mrb, self, &mrb_uv_ip6addr_type, addr);
   return mrb_fixnum_value(htons(addr->sin6_port));
 }
+
+static mrb_value
+mrb_uv_ip6addr_sin6_scope_id(mrb_state *mrb, mrb_value self)
+{
+  struct sockaddr_in6* addr = NULL;
+  Data_Get_Struct(mrb, self, &mrb_uv_ip6addr_type, addr);
+  return mrb_fixnum_value(addr->sin6_scope_id);
+}
+
+#if MRB_UV_CHECK_VERSION(1, 16, 0)
+
+static mrb_value
+mrb_uv_ip6addr_if_indextoiid(mrb_state *mrb, mrb_value self)
+{
+  struct sockaddr_in6* addr = NULL;
+  char ifname[UV_IF_NAMESIZE];
+  size_t ifname_size = sizeof(ifname);
+  Data_Get_Struct(mrb, self, &mrb_uv_ip6addr_type, addr);
+  mrb_uv_check_error(mrb, uv_if_indextoiid(addr->sin6_scope_id, ifname, &ifname_size));
+  return mrb_str_new(mrb, ifname, ifname_size);
+}
+
+static mrb_value
+mrb_uv_ip6addr_if_indextoname(mrb_state *mrb, mrb_value self)
+{
+  struct sockaddr_in6* addr = NULL;
+  char ifname[UV_IF_NAMESIZE];
+  size_t ifname_size = sizeof(ifname);
+  Data_Get_Struct(mrb, self, &mrb_uv_ip6addr_type, addr);
+  mrb_uv_check_error(mrb, uv_if_indextoname(addr->sin6_scope_id, ifname, &ifname_size));
+  return mrb_str_new(mrb, ifname, ifname_size);
+}
+
+static mrb_value
+mrb_uv_if_indextoiid(mrb_state *mrb, mrb_value self)
+{
+  char ifname[UV_IF_NAMESIZE];
+  size_t ifname_size = sizeof(ifname);
+  mrb_int idx;
+  mrb_get_args(mrb, "i", &idx);
+  mrb_uv_check_error(mrb, uv_if_indextoiid(idx, ifname, &ifname_size));
+  return mrb_str_new(mrb, ifname, ifname_size);
+}
+
+static mrb_value
+mrb_uv_if_indextoname(mrb_state *mrb, mrb_value self)
+{
+  char ifname[UV_IF_NAMESIZE];
+  size_t ifname_size = sizeof(ifname);
+  mrb_int idx;
+  mrb_get_args(mrb, "i", &idx);
+  mrb_uv_check_error(mrb, uv_if_indextoname(idx, ifname, &ifname_size));
+  return mrb_str_new(mrb, ifname, ifname_size);
+}
+
+#endif
 
 /*
  * UV.getnameinfo
@@ -897,6 +1032,8 @@ mrb_uv_get_error(mrb_state *mrb, mrb_value self)
   return mrb_obj_new(mrb, E_UV_ERROR, 2, argv);
 }
 
+#if MRB_UV_CHECK_VERSION(1, 10, 0)
+
 static mrb_value
 mrb_uv_translate_sys_error(mrb_state *mrb, mrb_value self)
 {
@@ -904,6 +1041,8 @@ mrb_uv_translate_sys_error(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "i", &err);
   return mrb_fixnum_value(uv_translate_sys_error(err));
 }
+
+#endif
 
 static mrb_value
 mrb_uv_free_memory(mrb_state *mrb, mrb_value self)
@@ -1215,6 +1354,8 @@ mrb_uv_setup_args(mrb_state *mrb, int *argc, char **argv, mrb_bool set_global)
   return new_argv;
 }
 
+#if MRB_UV_CHECK_VERSION(1, 12, 0)
+
 // OS
 static mrb_value
 mrb_uv_get_osfhandle(mrb_state *mrb, mrb_value self)
@@ -1223,6 +1364,10 @@ mrb_uv_get_osfhandle(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "i", &i);
   return mrb_cptr_value(mrb, (void*)(uintptr_t)uv_get_osfhandle(i));
 }
+
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 6, 0)
 
 static mrb_value
 mrb_uv_os_homedir(mrb_state *mrb, mrb_value self)
@@ -1244,6 +1389,10 @@ mrb_uv_os_homedir(mrb_state *mrb, mrb_value self)
   return buf;
 }
 
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 9, 0)
+
 static mrb_value
 mrb_uv_os_tmpdir(mrb_state *mrb, mrb_value self)
 {
@@ -1263,6 +1412,10 @@ mrb_uv_os_tmpdir(mrb_state *mrb, mrb_value self)
   mrb_str_resize(mrb, buf, s);
   return buf;
 }
+
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 12, 0)
 
 static mrb_value
 mrb_uv_os_getenv(mrb_state *mrb, mrb_value self)
@@ -1328,6 +1481,28 @@ mrb_uv_os_gethostname(mrb_state *mrb, mrb_value self)
   return buf;
 }
 
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 18, 0)
+
+static mrb_value
+mrb_uv_os_getpid(mrb_state *mrb, mrb_value self)
+{
+  return mrb_fixnum_value(uv_os_getpid());
+}
+
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 16, 0)
+
+static mrb_value
+mrb_uv_os_getppid(mrb_state *mrb, mrb_value self)
+{
+  return mrb_fixnum_value(uv_os_getppid());
+}
+
+#endif
+
 /*********************************************************
  * register
  *********************************************************/
@@ -1342,8 +1517,12 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_ip4addr;
   struct RClass* _class_uv_ip6addr;
   struct RClass* _class_uv_req;
+  struct RClass* _class_uv_fs_req;
   struct RClass* _class_uv_os;
+#if MRB_UV_CHECK_VERSION(1, 9, 0)
   struct RClass* _class_uv_passwd;
+#endif
+  mrb_value def_loop;
 
   mrb_define_class(mrb, "UVError", E_NAME_ERROR);
 
@@ -1376,8 +1555,12 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "resident_set_memory", mrb_uv_resident_set_memory, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "uptime", mrb_uv_uptime, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "get_error", mrb_uv_get_error, MRB_ARGS_REQ(1));
+#if MRB_UV_CHECK_VERSION(1, 10, 0)
   mrb_define_module_function(mrb, _class_uv, "translate_sys_error", mrb_uv_translate_sys_error, MRB_ARGS_REQ(1));
+#endif
+#if MRB_UV_CHECK_VERSION(1, 12, 0)
   mrb_define_module_function(mrb, _class_uv, "osfhandle", mrb_uv_get_osfhandle, MRB_ARGS_REQ(1));
+#endif
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
   mrb_define_const(mrb, _class_uv, "UV_RUN_ONCE", mrb_fixnum_value(UV_RUN_ONCE));
@@ -1404,9 +1587,18 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_loop, "backend_fd", mrb_uv_backend_fd, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "backend_timeout", mrb_uv_backend_timeout, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_loop, "now", mrb_uv_now, MRB_ARGS_NONE());
+#if MRB_UV_CHECK_VERSION(1, 12, 0)
   mrb_define_method(mrb, _class_uv_loop, "fork", mrb_uv_loop_fork, MRB_ARGS_NONE());
+#endif
+#if MRB_UV_CHECK_VERSION(1, 12, 2)
   mrb_define_method(mrb, _class_uv_loop, "configure", mrb_uv_loop_configure, MRB_ARGS_REQ(1));
+#endif
+  mrb_define_method(mrb, _class_uv_loop, "==", mrb_uv_loop_eq, MRB_ARGS_REQ(1));
   mrb_gc_arena_restore(mrb, ai);
+
+  def_loop = mrb_obj_value(mrb_data_object_alloc(mrb, _class_uv_loop, uv_default_loop(), &mrb_uv_loop_type));
+  mrb_iv_set(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "default_loop"), def_loop);
+  mrb_iv_set(mrb, mrb_obj_value(_class_uv), mrb_intern_lit(mrb, "current_loop"), def_loop);
 
   _class_uv_addrinfo = mrb_define_class_under(mrb, _class_uv, "Addrinfo", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_addrinfo, MRB_TT_DATA);
@@ -1449,15 +1641,29 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_ip4addr, "to_s", mrb_uv_ip4addr_to_s, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_ip4addr, "sin_addr", mrb_uv_ip4addr_sin_addr, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_ip4addr, "sin_port", mrb_uv_ip4addr_sin_port, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip4addr, "addr", mrb_uv_ip4addr_sin_addr, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip4addr, "port", mrb_uv_ip4addr_sin_port, MRB_ARGS_NONE());
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_ip6addr = mrb_define_class_under(mrb, _class_uv, "Ip6Addr", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_ip6addr, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_ip6addr, "initialize", mrb_uv_ip6addr_init, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_ip6addr, "to_s", mrb_uv_ip6addr_to_s, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip6addr, "addr", mrb_uv_ip6addr_sin_addr, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip6addr, "port", mrb_uv_ip6addr_sin_port, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_ip6addr, "sin_addr", mrb_uv_ip6addr_sin_addr, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_ip6addr, "sin_port", mrb_uv_ip6addr_sin_port, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip6addr, "scope_id", mrb_uv_ip6addr_sin6_scope_id, MRB_ARGS_NONE());
+#if MRB_UV_CHECK_VERSION(1, 16, 0)
+  mrb_define_method(mrb, _class_uv_ip6addr, "if_indextoname", mrb_uv_ip6addr_if_indextoname, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_ip6addr, "if_indextoiid", mrb_uv_ip6addr_if_indextoiid, MRB_ARGS_NONE());
+#endif
   mrb_gc_arena_restore(mrb, ai);
+
+#if MRB_UV_CHECK_VERSION(1, 16, 0)
+  mrb_define_module_function(mrb, _class_uv, "if_indextoname", mrb_uv_if_indextoname, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "if_indextoiid", mrb_uv_if_indextoiid, MRB_ARGS_NONE());
+#endif
 
   /* TODO
   uv_inet_ntop
@@ -1469,16 +1675,38 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   MRB_SET_INSTANCE_TT(_class_uv_req, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_req, "cancel", mrb_uv_cancel, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_req, "type", mrb_uv_req_type, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_req, "type_name", mrb_uv_req_type_name, MRB_ARGS_NONE());
   mrb_undef_class_method(mrb, _class_uv_req, "new");
 
+  _class_uv_fs_req = mrb_define_class_under(mrb, _class_uv, "FsReq", _class_uv_req);
+#if MRB_UV_CHECK_VERSION(1, 19, 0)
+  mrb_define_method(mrb, _class_uv_fs_req, "path", mrb_uv_fs_req_path, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs_req, "result", mrb_uv_fs_req_result, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs_req, "statbuf", mrb_uv_fs_req_statbuf, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs_req, "type", mrb_uv_fs_req_type, MRB_ARGS_NONE());
+#endif
+
   _class_uv_os = mrb_define_module_under(mrb, _class_uv, "OS");
+#if MRB_UV_CHECK_VERSION(1, 6, 0)
   mrb_define_module_function(mrb, _class_uv_os, "homedir", mrb_uv_os_homedir, MRB_ARGS_NONE());
+#endif
+#if MRB_UV_CHECK_VERSION(1, 9, 0)
   mrb_define_module_function(mrb, _class_uv_os, "tmpdir", mrb_uv_os_tmpdir, MRB_ARGS_NONE());
+#endif
+#if MRB_UV_CHECK_VERSION(1, 12, 0)
   mrb_define_module_function(mrb, _class_uv_os, "getenv", mrb_uv_os_getenv, MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_os, "setenv", mrb_uv_os_setenv, MRB_ARGS_REQ(2));
   mrb_define_module_function(mrb, _class_uv_os, "unsetenv", mrb_uv_os_unsetenv, MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv_os, "hostname", mrb_uv_os_gethostname, MRB_ARGS_NONE());
+#endif
+#if MRB_UV_CHECK_VERSION(1, 16, 0)
+  mrb_define_module_function(mrb, _class_uv_os, "getppid", mrb_uv_os_getppid, MRB_ARGS_NONE());
+#endif
+#if MRB_UV_CHECK_VERSION(1, 18, 0)
+  mrb_define_module_function(mrb, _class_uv_os, "getpid", mrb_uv_os_getpid, MRB_ARGS_NONE());
+#endif
 
+#if MRB_UV_CHECK_VERSION(1, 9, 0)
   _class_uv_passwd = mrb_define_class_under(mrb, _class_uv_os, "Passwd", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_passwd, MRB_TT_DATA);
   mrb_define_method(mrb, _class_uv_passwd, "initialize", mrb_uv_passwd_init, MRB_ARGS_NONE());
@@ -1487,6 +1715,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_passwd, "homedir", mrb_uv_passwd_homedir, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_passwd, "uid", mrb_uv_passwd_uid, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_passwd, "gid", mrb_uv_passwd_gid, MRB_ARGS_NONE());
+#endif
 
   mrb_mruby_uv_gem_init_fs(mrb, _class_uv);
   mrb_mruby_uv_gem_init_handle(mrb, _class_uv);
