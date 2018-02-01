@@ -46,7 +46,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
     file libuv_lib => header do |t|
       Dir.chdir(libuv_dir) do
         e = {
-          'CC'  => "#{build.cc.command} #{build.cc.flags.join(' ')}",
+          'CC'  => "#{build.cc.command} #{build.cc.flags.join(' ')} -DNDEBUG",
           'CXX' => "#{build.cxx.command} #{build.cxx.flags.join(' ')}",
           'LD'  => "#{build.linker.command} #{build.linker.flags.join(' ')}",
           'AR'  => build.archiver.command
