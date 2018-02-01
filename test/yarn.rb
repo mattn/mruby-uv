@@ -16,8 +16,9 @@ end
 assert 'Yarn process' do
   y = UV::Yarn.new do
     str = UV.quote('echo test')
-    __t_printstr__ str
     assert_equal "test\n", str
+    str = UV.quote('echo test1')
+    assert_equal "test1\n", str
   end
   y.start
   y.loop.run
