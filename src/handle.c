@@ -31,6 +31,8 @@ static void
 no_yield_close_cb(uv_handle_t *h)
 {
   mrb_uv_handle *ctx = (mrb_uv_handle*)h->data;
+  DATA_PTR(ctx->instance) = NULL;
+  DATA_TYPE(ctx->instance) = NULL;
   mrb_free(ctx->mrb, ctx);
 }
 
@@ -40,12 +42,25 @@ mrb_uv_handle_free(mrb_state *mrb, void *p)
   mrb_uv_handle* context = (mrb_uv_handle*) p;
   if (!context) { return; }
 
+  mrb_assert(mrb == context->mrb);
   mrb_assert(context->handle.type != UV_UNKNOWN_HANDLE);
   // mrb_assert(!uv_has_ref(&context->handle));
 
   if (!uv_is_closing(&context->handle)) {
     uv_close(&context->handle, no_yield_close_cb);
   }
+}
+
+void
+mrb_uv_close_handle_belongs_to_vm(uv_handle_t *h, void *arg)
+{
+  mrb_state *mrb = (mrb_state*)arg;
+  mrb_uv_handle* handle = (mrb_uv_handle*)h->data;
+
+  if (!handle) { return; }
+  if (handle->mrb != mrb) { return; }
+
+  mrb_uv_handle_type.dfree(mrb, handle);
 }
 
 const struct mrb_data_type mrb_uv_handle_type = {

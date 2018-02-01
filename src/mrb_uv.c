@@ -26,11 +26,14 @@ mrb_uv_gc_table_clean(mrb_state *mrb, uv_loop_t *target)
   mrb_value const *ary = RARRAY_PTR(t);
   for (i = 0; i < RARRAY_LEN(t); ++i) {
     mrb_value const v = ary[i];
-    if (!DATA_PTR(v) ||
-        (DATA_TYPE(v) == &mrb_uv_handle_type && ((mrb_uv_handle*)DATA_PTR(v))->handle.loop == target) ||
-        mrb_iv_defined(mrb, ary[i], mrb_intern_lit(mrb, "close_cb"))) {
-      mrb_ary_set(mrb, t, new_i++, ary[i]);
-    }
+    mrb_uv_handle *h;
+    if (!DATA_PTR(v)) { continue; }
+    if (DATA_TYPE(v) != &mrb_uv_handle_type) { continue; }
+
+    h = (mrb_uv_handle*)DATA_PTR(v);
+    if (target && h->handle.loop != target) { continue; }
+
+    mrb_uv_handle_type.dfree(mrb, h);
   }
   mrb_ary_resize(mrb, t, new_i);
   uv_run(uv_default_loop(), UV_RUN_ONCE);
@@ -289,11 +292,13 @@ mrb_uv_loop_free(mrb_state *mrb, void *p)
 {
   uv_loop_t *l = (uv_loop_t*)p;
 
-  if (l && l != uv_default_loop()) {
-    mrb_uv_gc_table_clean(mrb, l);
-    mrb_uv_check_error(mrb, uv_loop_close(l));
-    mrb_free(mrb, p);
-  }
+  if (!l || l == uv_default_loop()) { return; }
+
+  // mrb_uv_gc_table_clean(mrb, l);
+  uv_walk(l, mrb_uv_close_handle_belongs_to_vm, mrb);
+  uv_run(l, UV_RUN_ONCE);
+  mrb_uv_check_error(mrb, uv_loop_close(l));
+  mrb_free(mrb, p);
 }
 
 const struct mrb_data_type mrb_uv_loop_type = {
@@ -346,8 +351,11 @@ mrb_uv_loop_close(mrb_state *mrb, mrb_value self)
   }
 
   mrb_uv_gc_table_clean(mrb, loop);
+  uv_walk(loop, mrb_uv_close_handle_belongs_to_vm, mrb);
+  uv_run(loop, UV_RUN_ONCE);
   mrb_uv_check_error(mrb, uv_loop_close(loop));
   DATA_PTR(self) = NULL;
+  DATA_TYPE(self) = NULL;
   mrb_free(mrb, loop);
 
   return self;
@@ -1745,11 +1753,10 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 void
 mrb_mruby_uv_gem_final(mrb_state* mrb) {
   // clear gc table
-  mrb_value t = mrb_uv_gc_table_get(mrb);
-  mrb_ary_resize(mrb, t, 0);
-  mrb_full_gc(mrb);
+  mrb_uv_gc_table_clean(mrb, NULL);
 
   // run close callbacks to release objects related to mruby
+  uv_walk(uv_default_loop(), mrb_uv_close_handle_belongs_to_vm, mrb);
   uv_run(uv_default_loop(), UV_RUN_ONCE);
 }
 

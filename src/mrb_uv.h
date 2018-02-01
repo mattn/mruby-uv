@@ -108,4 +108,6 @@ mrb_value mrb_uv_from_uint64(mrb_state *mrb, uint64_t v);
 uv_loop_t* mrb_uv_current_loop(mrb_state *mrb);
 mrb_value mrb_uv_current_loop_obj(mrb_state *mrb);
 
+void mrb_uv_close_handle_belongs_to_vm(uv_handle_t * h, void *arg);
+
 #endif
