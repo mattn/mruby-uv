@@ -448,9 +448,9 @@ mrb_uv_fs_rmdir(mrb_state *mrb, mrb_value self)
   req = (uv_fs_t*) mrb_malloc(mrb, sizeof(uv_fs_t));
   memset(req, 0, sizeof(uv_fs_t));
   req->data = &context;
-  err = uv_fs_rmdir(mrb_uv_current_loop(mrb), req, RSTRING_PTR(arg_path), fs_cb);
+  err = uv_fs_rmdir(mrb_uv_current_loop(mrb), req, mrb_string_value_ptr(mrb, arg_path), fs_cb);
   if (err != 0 || !fs_cb) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   return self;
