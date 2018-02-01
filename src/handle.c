@@ -1420,7 +1420,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
     mrb_check_type(mrb, arg_stdio, MRB_TT_ARRAY);
     len = RARRAY_LEN(arg_stdio);
     if (len > 3) { len = 3; }
-    for (i = 0; i < len; ++i) {
+    for (i = 0; i < len; i++) {
       stdio_pipe[i] = RARRAY_PTR(arg_stdio)[i];
     }
     for (; i < 3; ++i) {
@@ -1428,12 +1428,13 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
     }
   }
   for (i = 0; i < 3; ++i) {
-    if (mrb_bool(stdio_pipe[i])) {
-      if (mrb_fixnum_p(stdio_pipe[i])) {
+    mrb_value obj = stdio_pipe[i];
+    if (mrb_bool(obj)) {
+      if (mrb_fixnum_p(obj)) {
         stdio[i].flags = UV_INHERIT_FD;
-        stdio[i].data.fd = mrb_fixnum(stdio_pipe[i]);
+        stdio[i].data.fd = mrb_fixnum(obj);
       } else {
-        mrb_uv_handle* pcontext = (mrb_uv_handle*)mrb_data_get_ptr(mrb, stdio_pipe[i], &mrb_uv_handle_type);
+        mrb_uv_handle* pcontext = (mrb_uv_handle*)mrb_data_get_ptr(mrb, obj, &mrb_uv_handle_type);
         if (uv_is_active(&pcontext->handle)) {
           stdio[i].flags = UV_INHERIT_STREAM;
           stdio[i].data.stream = (uv_stream_t*)&pcontext->handle;
@@ -1889,19 +1890,22 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
   mrb_value proc;
   if (!mrb) return;
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "read_cb"));
+
+  if (nread != UV_EOF) {
+    mrb_uv_check_error(mrb, nread);
+  }
+
   if (!mrb_nil_p(proc)) {
-    mrb_value args[1];
-    if (nread <= 0) {
-      args[0] = mrb_nil_value();
-      mrb_yield_argv(mrb, proc, 1, args);
-      uv_close(&context->handle, NULL);
+    mrb_value arg;
+    int ai = mrb_gc_arena_save(mrb);
+    if (nread == UV_EOF) {
+      arg = mrb_symbol_value(mrb_intern_lit(mrb, "eof"));
     } else {
-      int ai = mrb_gc_arena_save(mrb);
-      args[0] = mrb_str_new(mrb, buf->base, nread);
-      mrb_gc_arena_restore(mrb, ai);
-      mrb_yield_argv(mrb, proc, 1, args);
-      mrb_free(mrb, buf->base);
+      arg = mrb_str_new(mrb, buf->base, nread);
     }
+    mrb_free(mrb, buf->base);
+    mrb_gc_arena_restore(mrb, ai);
+    mrb_yield_argv(mrb, proc, 1, &arg);
   }
 }
 
@@ -1913,9 +1917,6 @@ mrb_uv_read_start(mrb_state *mrb, mrb_value self)
   uv_read_cb read_cb = _uv_read_cb;
 
   mrb_get_args(mrb, "&", &b);
-  if (mrb_nil_p(b)) {
-    read_cb = NULL;
-  }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "read_cb"), b);
 
   mrb_uv_check_error(mrb, uv_read_start((uv_stream_t*)&context->handle, _uv_alloc_cb, read_cb));

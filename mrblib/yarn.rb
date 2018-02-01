@@ -3,6 +3,10 @@ module UV
     current_yarn.sleep sec
   end
 
+  def self.quote cmd
+    current_yarn.quote(cmd)
+  end
+
   def self.current_yarn
     ret = UV.current_loop.current_yarn
     raise "yarn not running" if ret.nil?
@@ -61,10 +65,26 @@ module UV
     end
 
     def sleep sec
-      timer.start(sec * 1000.0, 0) do
-        self.resume
-      end
+      timer.start(sec * 1000.0, 0, &self)
       Fiber.yield(timer, self)
+    end
+
+    def quote cmd
+      out = UV::Pipe.new false
+      ps = Process.new file: :sh, args: ['-c', cmd], stdio: [nil, out, nil]
+      y = self
+      ps.spawn do |x, sig|
+        str = ''
+        out.read_start do |b|
+          if b == :eof
+            y.resume(str)
+            out.close
+          else
+            str.concat b
+          end
+        end
+      end
+      Fiber.yield ps, self
     end
 
     def resume(*args)
@@ -79,7 +99,7 @@ module UV
       *ret = @fiber.resume(*args)
 
       if @fiber.alive?
-        raise "invalid yield" if !ret.first.kind_of?(UV::Req) && !ret.first.kind_of?(UV::Timer)
+        raise "invalid yield" unless ALIVE_CLASSES.any?{|v| ret.first.kind_of? v }
       else
         @fiber = nil
         @result = ret
@@ -92,5 +112,7 @@ module UV
       @loop.clear_current_yarn self
       prev_loop.make_current if prev_loop
     end
+
+    ALIVE_CLASSES = [UV::Req, UV::Timer, UV::Process]
   end
 end
