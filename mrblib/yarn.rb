@@ -19,7 +19,8 @@ module UV
       @current_yarn = y
     end
 
-    def clear_current_yarn
+    def clear_current_yarn(y)
+      raise 'cannot clear yarn' if y != @current_yarn
       @current_yarn = nil
     end
   end
@@ -88,7 +89,7 @@ module UV
       @error = e
 
     ensure
-      @loop.clear_current_yarn
+      @loop.clear_current_yarn self
       prev_loop.make_current if prev_loop
     end
   end
