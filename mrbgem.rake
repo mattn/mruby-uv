@@ -4,6 +4,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   spec.summary = 'libuv mruby binding'
   spec.add_dependency 'mruby-time',    core: 'mruby-time'
   spec.add_dependency 'mruby-sprintf', core: 'mruby-sprintf'
+  spec.add_dependency 'mruby-fiber',   core: 'mruby-fiber'
 
   def self.run_command(env, command)
     fail "#{command} failed" unless system(env, command)
