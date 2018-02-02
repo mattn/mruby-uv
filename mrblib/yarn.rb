@@ -65,7 +65,7 @@ module UV
     end
 
     def sleep sec
-      timer.start(sec * 1000.0, 0, &self)
+      timer.start(sec * 1000.0, 0, &self.to_proc)
       Fiber.yield(timer, self)
     end
 
