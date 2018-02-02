@@ -1624,6 +1624,9 @@ _uv_timer_cb(uv_timer_t* timer)
   mrb_uv_handle* context = (mrb_uv_handle*) timer->data;
   mrb_state* mrb = context->mrb;
   mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "timer_cb"));
+
+  if (mrb_nil_p(proc)) { return; }
+
   mrb_yield_argv(mrb, proc, 0, NULL);
 }
 
@@ -1632,16 +1635,12 @@ mrb_uv_timer_start(mrb_state *mrb, mrb_value self)
 {
   mrb_int arg_timeout = 0, arg_repeat = 0;
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
-  mrb_value b = mrb_nil_value();
-  uv_timer_cb timer_cb = _uv_timer_cb;
+  mrb_value b;
 
   mrb_get_args(mrb, "&ii", &b, &arg_timeout, &arg_repeat);
-  if (mrb_nil_p(b)) {
-    timer_cb = NULL;
-  }
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "timer_cb"), b);
 
-  mrb_uv_check_error(mrb, uv_timer_start((uv_timer_t*)&context->handle, timer_cb,
+  mrb_uv_check_error(mrb, uv_timer_start((uv_timer_t*)&context->handle, _uv_timer_cb,
                                          arg_timeout, arg_repeat));
   return self;
 }
