@@ -492,8 +492,13 @@ assert_uv 'Process' do
     ps.close
     remove_uv_test_tmpfile
   end
+  str = ''
   out.read_start do |b|
-    assert_equal "foo-bar/foo.txt:test\n", b
+    if b != :eof
+      str << b
+      next
+    end
+    assert_equal "foo-bar/foo.txt:test\n", str
     out.close
   end
 
@@ -502,8 +507,13 @@ assert_uv 'Process' do
     assert_equal 0, x
     assert_equal 0, sig
   end
+  env_str = ''
   env_out.read_start do |b|
-    assert_equal "test\n", b
+    if b != :eof
+      env_str << b
+      next
+    end
+    assert_equal "test\n", env_str
     env_out.close
   end
 end

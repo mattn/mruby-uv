@@ -1284,10 +1284,12 @@ mrb_uv_after_work_cb(uv_work_t *uv_req, int err)
 {
   mrb_uv_req_t *req = (mrb_uv_req_t*)uv_req->data;
   mrb_state *mrb = req->mrb;
+  mrb_value p = mrb_iv_get(mrb, req->instance, mrb_intern_lit(mrb, "uv_cb"));
 
-  mrb_yield_argv(mrb, mrb_iv_get(mrb, req->instance, mrb_intern_lit(mrb, "uv_cb")), 0, NULL);
-  mrb_uv_check_error(mrb, err);
+  mrb_gc_protect(mrb, p);
+  mrb_yield_argv(mrb, p, 0, NULL);
   mrb_uv_req_release(mrb, req->instance);
+  mrb_uv_check_error(mrb, err);
 }
 
 static mrb_value

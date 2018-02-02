@@ -929,46 +929,51 @@ _uv_udp_recv_cb(uv_udp_t* handle, ssize_t nread, const uv_buf_t* buf, const stru
 {
   mrb_uv_handle* context = (mrb_uv_handle*) handle->data;
   mrb_state* mrb = context->mrb;
-  mrb_value proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "udp_recv_cb"));
+  mrb_value proc;
   mrb_value args[3];
-  int ai = mrb_gc_arena_save(mrb);
-  if (addr && nread >= 0) {
-    struct RClass* _class_uv;
-    struct RClass* _class_uv_ipaddr = NULL;
-    struct RData* data = NULL;
-    mrb_value value_data, value_addr = mrb_nil_value();
+  struct RClass* _class_uv;
+  struct RClass* _class_uv_ipaddr = NULL;
+  struct RData* data = NULL;
+  mrb_value value_data, value_addr = mrb_nil_value();
 
-    _class_uv = mrb_module_get(mrb, "UV");
-    switch (addr->sa_family) {
-      case AF_INET:
-        /* IPv4 */
-        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
-        data = Data_Wrap_Struct(mrb, mrb->object_class,
-            &mrb_uv_ip4addr_nofree_type, (void *) addr);
-        break;
-      case AF_INET6:
-        /* IPv6 */
-        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
-        data = Data_Wrap_Struct(mrb, mrb->object_class,
-            &mrb_uv_ip6addr_nofree_type, (void *) addr);
-        break;
+  mrb_uv_check_error(mrb, nread);
 
-      default:
-        /* Non-IP */
-        mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-        break;
-    }
-    value_data = mrb_obj_value((void *) data);
-    value_addr = mrb_obj_new(mrb, _class_uv_ipaddr, 1, &value_data);
-    args[0] = mrb_str_new(mrb, buf->base, nread);
-    args[1] = value_addr;
+  proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "udp_recv_cb"));
+  if (mrb_nil_p(proc)) {
     mrb_free(mrb, buf->base);
-  } else {
-    args[0] = mrb_nil_value();
-    args[1] = mrb_nil_value();
+    return;
   }
-  mrb_gc_arena_restore(mrb, ai);
+  mrb_gc_protect(mrb, proc);
+
+  _class_uv = mrb_module_get(mrb, "UV");
+  switch (addr->sa_family) {
+  case AF_INET:
+    /* IPv4 */
+    _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
+    data = Data_Wrap_Struct(mrb, mrb->object_class,
+                            &mrb_uv_ip4addr_nofree_type, (void *) addr);
+    break;
+  case AF_INET6:
+    /* IPv6 */
+    _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
+    data = Data_Wrap_Struct(mrb, mrb->object_class,
+                            &mrb_uv_ip6addr_nofree_type, (void *) addr);
+    break;
+
+  default:
+    /* Non-IP */
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
+    break;
+  }
+
+  mrb_assert(mrb_obj_ptr(proc)->tt == MRB_TT_PROC);
+  value_data = mrb_obj_value((void *) data);
+  value_addr = mrb_obj_new(mrb, _class_uv_ipaddr, 1, &value_data);
+  args[0] = mrb_str_new(mrb, buf->base, nread);
+  args[1] = value_addr;
   args[2] = mrb_fixnum_value(flags);
+  mrb_free(mrb, buf->base);
+  mrb_assert(mrb_obj_ptr(proc)->tt == MRB_TT_PROC);
   mrb_yield_argv(mrb, proc, 3, args);
 }
 
@@ -980,9 +985,7 @@ mrb_uv_udp_recv_start(mrb_state *mrb, mrb_value self)
   uv_udp_recv_cb udp_recv_cb = _uv_udp_recv_cb;
 
   mrb_get_args(mrb, "&", &b);
-  if (mrb_nil_p(b)) {
-    udp_recv_cb = NULL;
-  }
+
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "udp_recv_cb"), b);
 
   mrb_uv_check_error(mrb, uv_udp_recv_start((uv_udp_t*)&context->handle, _uv_alloc_cb, udp_recv_cb));
@@ -1888,25 +1891,29 @@ _uv_read_cb(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
   mrb_uv_handle* context = (mrb_uv_handle*) stream->data;
   mrb_state* mrb = context->mrb;
   mrb_value proc;
-  if (!mrb) return;
+  mrb_value arg;
+
+  mrb_assert(mrb);
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "read_cb"));
+
+  mrb_gc_protect(mrb, proc);
 
   if (nread != UV_EOF) {
     mrb_uv_check_error(mrb, nread);
   }
 
-  if (!mrb_nil_p(proc)) {
-    mrb_value arg;
-    int ai = mrb_gc_arena_save(mrb);
-    if (nread == UV_EOF) {
-      arg = mrb_symbol_value(mrb_intern_lit(mrb, "eof"));
-    } else {
-      arg = mrb_str_new(mrb, buf->base, nread);
-    }
+  if (mrb_nil_p(proc)) {
     mrb_free(mrb, buf->base);
-    mrb_gc_arena_restore(mrb, ai);
-    mrb_yield_argv(mrb, proc, 1, &arg);
+    return;
   }
+
+  if (nread == UV_EOF) {
+    arg = mrb_symbol_value(mrb_intern_lit(mrb, "eof"));
+  } else {
+    arg = mrb_str_new(mrb, buf->base, nread);
+  }
+  mrb_free(mrb, buf->base);
+  mrb_yield_argv(mrb, proc, 1, &arg);
 }
 
 static mrb_value
