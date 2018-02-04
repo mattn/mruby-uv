@@ -247,7 +247,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   req->data = context;
   context->fd = uv_fs_open(mrb_uv_current_loop(mrb), req, RSTRING_PTR(arg_filename), arg_flags, arg_mode, fs_cb);
   if (context->fd < 0 || !fs_cb) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, context->fd);
   }
 
@@ -275,7 +275,7 @@ mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
   req->data = context;
   err = uv_fs_close(mrb_uv_current_loop(mrb), req, context->fd, fs_cb);
   if (err < 0 || !fs_cb) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, context->fd);
   }
   return self;
@@ -312,7 +312,7 @@ mrb_uv_fs_write(mrb_state *mrb, mrb_value self)
   buf.len = arg_length;
   r = uv_fs_write(mrb_uv_current_loop(mrb), req, context->fd, &buf, 1, arg_offset, fs_cb);
   if (r < 0 || !fs_cb) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, r);
   }
   return mrb_fixnum_value(r);
@@ -348,14 +348,14 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
   len = uv_fs_read(mrb_uv_current_loop(mrb), req, context->fd, &buf, 1, arg_offset, fs_cb);
   if (len < 0) {
     mrb_free(mrb, buf.base);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, len);
   }
 
   if (!fs_cb) {
     mrb_value str = mrb_str_new(mrb, buf.base, len);
     mrb_free(mrb, buf.base);
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     return str;
   }
 
@@ -387,7 +387,7 @@ mrb_uv_fs_unlink(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_unlink(mrb_uv_current_loop(mrb), req, RSTRING_PTR(arg_path), fs_cb);
   if (err != 0 || !fs_cb) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   return self;
@@ -419,7 +419,7 @@ mrb_uv_fs_mkdir(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_mkdir(mrb_uv_current_loop(mrb), req, RSTRING_PTR(arg_path), arg_mode, fs_cb);
   if (err != 0 || !fs_cb) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   return self;
@@ -478,7 +478,7 @@ mrb_uv_fs_scandir(mrb_state *mrb, mrb_value self)
   err = uv_fs_scandir(mrb_uv_current_loop(mrb), req, mrb_string_value_ptr(mrb, arg_path),
                       arg_flags, mrb_nil_p(b)? NULL : _uv_fs_cb);
   if (err < 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   if (mrb_nil_p(b)) {
@@ -518,7 +518,7 @@ mrb_uv_fs_stat(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_stat(mrb_uv_current_loop(mrb), req, RSTRING_PTR(arg_path), fs_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
 
@@ -551,7 +551,7 @@ mrb_uv_fs_fstat(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_fstat(mrb_uv_current_loop(mrb), req, context->fd, fs_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
 
@@ -588,7 +588,7 @@ mrb_uv_fs_lstat(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_lstat(mrb_uv_current_loop(mrb), req, RSTRING_PTR(arg_path), fs_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
 
@@ -625,7 +625,7 @@ mrb_uv_fs_rename(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_rename(mrb_uv_current_loop(mrb), req, RSTRING_PTR(arg_path), RSTRING_PTR(arg_new_path), fs_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   return self;
@@ -652,7 +652,7 @@ mrb_uv_fs_fsync(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_fsync(mrb_uv_current_loop(mrb), req, context->fd, fs_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   return self;
@@ -679,7 +679,7 @@ mrb_uv_fs_fdatasync(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_fdatasync(mrb_uv_current_loop(mrb), req, context->fd, fs_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   return self;
@@ -707,7 +707,7 @@ mrb_uv_fs_ftruncate(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_ftruncate(mrb_uv_current_loop(mrb), req, context->fd, arg_offset, fs_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   return self;
@@ -740,7 +740,7 @@ mrb_uv_fs_sendfile(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_sendfile(mrb_uv_current_loop(mrb), req, arg_infd, arg_outfd, arg_offset, arg_length, fs_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   return self;
@@ -772,7 +772,7 @@ mrb_uv_fs_chmod(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_chmod(mrb_uv_current_loop(mrb), req, RSTRING_PTR(arg_path), arg_mode, fs_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   return self;
@@ -803,7 +803,7 @@ mrb_uv_fs_link(mrb_state *mrb, mrb_value self)
   req->data = &context;
   err = uv_fs_link(mrb_uv_current_loop(mrb), req, RSTRING_PTR(arg_path), RSTRING_PTR(arg_new_path), fs_cb);
   if (err != 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
   return self;
@@ -831,12 +831,9 @@ mrb_uv_fs_utime(mrb_state *mrb, mrb_value self)
   req = (uv_fs_t*)mrb_malloc(mrb, sizeof(uv_fs_t));
   req->data = &context;
   err = uv_fs_utime(mrb_uv_current_loop(mrb), req, path, (double)atime, (double)mtime, mrb_nil_p(b)? NULL : _uv_fs_cb);
-  if (err < 0) {
-    mrb_free(mrb, req);
-    mrb_uv_check_error(mrb, err);
-  }
-  if (mrb_nil_p(b)) {
+  if (err < 0 || mrb_nil_p(b)) {
     mrb_uv_fs_req_free(mrb, req);
+    mrb_uv_check_error(mrb, err);
   }
   return self;
 }
@@ -860,12 +857,9 @@ mrb_uv_fs_futime(mrb_state *mrb, mrb_value self)
   req = (uv_fs_t*)mrb_malloc(mrb, sizeof(uv_fs_t));
   req->data = ctx;
   err = uv_fs_futime(mrb_uv_current_loop(mrb), req, ctx->fd, (double)atime, (double)mtime, mrb_nil_p(b)? NULL : _uv_fs_cb);
-  if (err < 0) {
-    mrb_free(mrb, req);
-    mrb_uv_check_error(mrb, err);
-  }
-  if (mrb_nil_p(b)) {
+  if (err < 0 || mrb_nil_p(b)) {
     mrb_uv_fs_req_free(mrb, req);
+    mrb_uv_check_error(mrb, err);
   }
   return self;
 }
@@ -889,14 +883,11 @@ mrb_uv_fs_fchmod(mrb_state *mrb, mrb_value self)
   req = (uv_fs_t*)mrb_malloc(mrb, sizeof(uv_fs_t));
   req->data = ctx;
   err = uv_fs_fchmod(mrb_uv_current_loop(mrb), req, ctx->fd, mode, mrb_nil_p(b)? NULL : _uv_fs_cb);
-  if (err < 0) {
-    mrb_free(mrb, req);
+  if (err < 0 || mrb_nil_p(b)) {
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
 
-  if (mrb_nil_p(b)) {
-    mrb_uv_fs_req_free(mrb, req);
-  }
   return self;
 }
 
@@ -922,14 +913,11 @@ mrb_uv_fs_symlink(mrb_state *mrb, mrb_value self)
   req = (uv_fs_t*)mrb_malloc(mrb, sizeof(uv_fs_t));
   req->data = &ctx;
   err = uv_fs_symlink(mrb_uv_current_loop(mrb), req, path, new_path, flags, mrb_nil_p(b)? NULL : _uv_fs_cb);
-  if (err < 0) {
-    mrb_free(mrb, req);
+  if (err < 0 || mrb_nil_p(b)) {
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
 
-  if (mrb_nil_p(b)) {
-    mrb_uv_fs_req_free(mrb, req);
-  }
   return self;
 }
 
@@ -955,7 +943,7 @@ mrb_uv_fs_readlink(mrb_state *mrb, mrb_value self)
   req->data = &ctx;
   err = uv_fs_readlink(mrb_uv_current_loop(mrb), req, path, mrb_nil_p(b)? NULL : _uv_fs_cb);
   if (err < 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
 
@@ -991,7 +979,7 @@ mrb_uv_fs_realpath(mrb_state *mrb, mrb_value self)
   req->data = &ctx;
   err = uv_fs_realpath(mrb_uv_current_loop(mrb), req, path, mrb_nil_p(b)? NULL : _uv_fs_cb);
   if (err < 0) {
-    mrb_free(mrb, req);
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
 
@@ -1020,14 +1008,11 @@ mrb_uv_fs_chown(mrb_state *mrb, mrb_value self)
   req = (uv_fs_t*)mrb_malloc(mrb, sizeof(uv_fs_t));
   req->data = &ctx;
   err = uv_fs_chown(mrb_uv_current_loop(mrb), req, path, (uv_uid_t)uid, (uv_gid_t)gid, mrb_nil_p(b)? NULL : _uv_fs_cb);
-  if (err < 0) {
-    mrb_free(mrb, req);
+  if (err < 0 || mrb_nil_p(b)) {
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
 
-  if (mrb_nil_p(b)) {
-    mrb_uv_fs_req_free(mrb, req);
-  }
   return self;
 }
 
@@ -1046,14 +1031,11 @@ mrb_uv_fs_fchown(mrb_state *mrb, mrb_value self)
   req = (uv_fs_t*)mrb_malloc(mrb, sizeof(uv_fs_t));
   req->data = ctx;
   err = uv_fs_fchown(mrb_uv_current_loop(mrb), req, ctx->fd, (uv_uid_t)uid, (uv_gid_t)gid, mrb_nil_p(b)? NULL : _uv_fs_cb);
-  if (err < 0) {
-    mrb_free(mrb, req);
+  if (err < 0 || mrb_nil_p(b)) {
+    mrb_uv_fs_req_free(mrb, req);
     mrb_uv_check_error(mrb, err);
   }
 
-  if (mrb_nil_p(b)) {
-    mrb_uv_fs_req_free(mrb, req);
-  }
   return self;
 }
 
