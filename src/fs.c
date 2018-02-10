@@ -310,7 +310,7 @@ mrb_uv_fs_read(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "&|ii", &b, &arg_length, &arg_offset);
 
-  buf_str = mrb_str_resize(mrb, mrb_str_new_capa(mrb, arg_length), arg_length);
+  buf_str = mrb_str_resize(mrb, mrb_str_buf_new(mrb, arg_length), arg_length);
   req = mrb_uv_req_current(mrb, b, &ret);
   mrb_uv_req_set_buf(req, &buf, buf_str);
   res = uv_fs_read(mrb_uv_current_loop(mrb), &req->req.fs, context->fd,
