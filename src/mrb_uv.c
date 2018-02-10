@@ -334,28 +334,32 @@ static mrb_value
 mrb_uv_fs_req_result(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_req_t *req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
-  return mrb_fixnum_value(uv_fs_get_result((uv_fs_t*)&req->req));
+  if (req->req.req.type != UV_FS) { mrb_raise(mrb, E_TYPE_ERROR, "not fs request"); }
+  return mrb_fixnum_value(uv_fs_get_result(&req->req.fs));
 }
 
 static mrb_value
 mrb_uv_fs_req_statbuf(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_req_t *req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
-  return mrb_uv_create_stat(mrb, uv_fs_get_statbuf((uv_fs_t*)&req->req));
+  if (req->req.req.type != UV_FS) { mrb_raise(mrb, E_TYPE_ERROR, "not fs request"); }
+  return mrb_uv_create_stat(mrb, uv_fs_get_statbuf(&req->req.fs));
 }
 
 static mrb_value
 mrb_uv_fs_req_path(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_req_t *req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
-  return mrb_str_new_cstr(mrb, uv_fs_get_path((uv_fs_t*)&req->req));
+  if (req->req.req.type != UV_FS) { mrb_raise(mrb, E_TYPE_ERROR, "not fs request"); }
+  return mrb_str_new_cstr(mrb, uv_fs_get_path(&req->req.fs));
 }
 
 static mrb_value
 mrb_uv_fs_req_type(mrb_state *mrb, mrb_value self)
 {
   mrb_uv_req_t *req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
-  return mrb_fixnum_value(uv_fs_get_type((uv_fs_t*)&req->req));
+  if (req->req.req.type != UV_FS) { mrb_raise(mrb, E_TYPE_ERROR, "not fs request"); }
+  return mrb_fixnum_value(uv_fs_get_type(&req->req.fs));
 }
 
 #endif
@@ -1625,7 +1629,6 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   struct RClass* _class_uv_ip4addr;
   struct RClass* _class_uv_ip6addr;
   struct RClass* _class_uv_req;
-  struct RClass* _class_uv_fs_req;
   struct RClass* _class_uv_os;
 #if MRB_UV_CHECK_VERSION(1, 9, 0)
   struct RClass* _class_uv_passwd;
@@ -1786,15 +1789,13 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_req, "cancel", mrb_uv_cancel, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_req, "type", mrb_uv_req_type, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_req, "type_name", mrb_uv_req_type_name, MRB_ARGS_NONE());
-  mrb_undef_class_method(mrb, _class_uv_req, "new");
-
-  _class_uv_fs_req = mrb_define_class_under(mrb, _class_uv, "FsReq", _class_uv_req);
 #if MRB_UV_CHECK_VERSION(1, 19, 0)
-  mrb_define_method(mrb, _class_uv_fs_req, "path", mrb_uv_fs_req_path, MRB_ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_fs_req, "result", mrb_uv_fs_req_result, MRB_ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_fs_req, "statbuf", mrb_uv_fs_req_statbuf, MRB_ARGS_NONE());
-  mrb_define_method(mrb, _class_uv_fs_req, "type", mrb_uv_fs_req_type, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_req, "path", mrb_uv_fs_req_path, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_req, "result", mrb_uv_fs_req_result, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_req, "statbuf", mrb_uv_fs_req_statbuf, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_req, "type", mrb_uv_fs_req_type, MRB_ARGS_NONE());
 #endif
+  mrb_undef_class_method(mrb, _class_uv_req, "new");
 
   _class_uv_os = mrb_define_module_under(mrb, _class_uv, "OS");
 #if MRB_UV_CHECK_VERSION(1, 6, 0)
