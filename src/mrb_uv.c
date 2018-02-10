@@ -212,8 +212,9 @@ mrb_uv_req_current(mrb_state *mrb, mrb_value blk, mrb_value *result)
       ret = mrb_uv_req_alloc(mrb);
       mrb_iv_set(mrb, target, sym, ret->instance);
     } else {
-      ret = ((mrb_uv_req_t*)DATA_PTR(req));
+      ret = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, req, &req_type);
     }
+    req = ret->instance;
 
     if (mrb_nil_p(cur_yarn)) {
       *result = ret->instance;
@@ -591,7 +592,7 @@ mrb_uv_ip4addr_init(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "o|o", &arg_host, &arg_port);
   if (mrb_type(arg_host) == MRB_TT_STRING && !mrb_nil_p(arg_port) && mrb_fixnum_p(arg_port)) {
-    mrb_uv_check_error(mrb, uv_ip4_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port), &vaddr));
+    mrb_uv_check_error(mrb, uv_ip4_addr(mrb_str_to_cstr(mrb, arg_host), mrb_fixnum(arg_port), &vaddr));
     addr = (struct sockaddr_in*) mrb_malloc(mrb, sizeof(struct sockaddr_in));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {
@@ -685,7 +686,7 @@ mrb_uv_ip6addr_init(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "o|o", &arg_host, &arg_port);
   if (mrb_type(arg_host) == MRB_TT_STRING && !mrb_nil_p(arg_port) && mrb_fixnum_p(arg_port)) {
-    mrb_uv_check_error(mrb, uv_ip6_addr((const char*) RSTRING_PTR(arg_host), mrb_fixnum(arg_port), &vaddr));
+    mrb_uv_check_error(mrb, uv_ip6_addr(mrb_str_to_cstr(mrb, arg_host), mrb_fixnum(arg_port), &vaddr));
     addr = (struct sockaddr_in6*) mrb_malloc(mrb, sizeof(struct sockaddr_in6));
     memcpy(addr, &vaddr, sizeof(struct sockaddr_in6));
   } else if (mrb_type(arg_host) == MRB_TT_DATA) {

@@ -340,17 +340,11 @@ mrb_uv_pipe_connect(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_pipe_bind(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_name;
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
   const char* name;
 
-  mrb_get_args(mrb, "S", &arg_name);
-  if (mrb_nil_p(arg_name) || mrb_type(arg_name) != MRB_TT_STRING) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "invalid argument");
-  }
-  name = RSTRING_PTR(arg_name);
-
-  mrb_uv_check_error(mrb, uv_pipe_bind((uv_pipe_t*)&context->handle, name ? name : ""));
+  mrb_get_args(mrb, "z", &name);
+  mrb_uv_check_error(mrb, uv_pipe_bind((uv_pipe_t*)&context->handle, name));
   return self;
 }
 
@@ -1558,14 +1552,15 @@ mrb_uv_fs_poll_init(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_fs_poll_start(mrb_state *mrb, mrb_value self)
 {
-  mrb_value arg_path, b;
+  char const *arg_path;
+  mrb_value b;
   mrb_int arg_interval;
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
-  mrb_get_args(mrb, "&Si", &b, &arg_path, &arg_interval);
+  mrb_get_args(mrb, "&zi", &b, &arg_path, &arg_interval);
   set_handle_cb(context, b);
   return mrb_fixnum_value(uv_fs_poll_start(
-      (uv_fs_poll_t*)&context->handle, _uv_fs_poll_cb, RSTRING_PTR(arg_path), arg_interval));
+      (uv_fs_poll_t*)&context->handle, _uv_fs_poll_cb, arg_path, arg_interval));
 }
 
 static mrb_value
