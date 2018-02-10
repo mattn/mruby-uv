@@ -20,6 +20,8 @@
 #include <mruby/class.h>
 #include <mruby/variable.h>
 
+#include <mruby/uv.h>
+
 #ifndef MRUBY_VERSION
 #define mrb_module_get mrb_class_get
 #define mrb_uv_args_int int
@@ -66,18 +68,21 @@ mrb_value mrb_uv_gc_table_get(mrb_state *mrb);
 void mrb_uv_gc_table_clean(mrb_state *mrb, uv_loop_t *l);
 void mrb_uv_gc_protect(mrb_state *mrb, mrb_value v);
 
-mrb_value mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t, mrb_value proc);
-void mrb_uv_req_release(mrb_state *mrb, mrb_value v);
-
-typedef struct mrb_uv_req_t {
+struct mrb_uv_req_t {
   mrb_state *mrb;
   mrb_value instance, block;
-  uv_req_t req;
-} mrb_uv_req_t;
+  mrb_bool is_used:1;
+  union uv_any_req req;
+};
+
+void mrb_uv_req_clear(mrb_uv_req_t *req);
+mrb_uv_req_t *mrb_uv_req_current(mrb_state *mrb, mrb_value blk, mrb_value *result);
+void mrb_uv_req_yield(mrb_uv_req_t *req, mrb_int argc, mrb_value const *argv);
+void mrb_uv_req_set_buf(mrb_uv_req_t *req, uv_buf_t *buf, mrb_value str);
 
 typedef struct {
   mrb_state* mrb;
-  mrb_value instance;
+  mrb_value instance, block;
   uv_handle_t handle;
 } mrb_uv_handle;
 
@@ -109,5 +114,8 @@ uv_loop_t* mrb_uv_current_loop(mrb_state *mrb);
 mrb_value mrb_uv_current_loop_obj(mrb_state *mrb);
 
 void mrb_uv_close_handle_belongs_to_vm(uv_handle_t * h, void *arg);
+
+mrb_value mrb_uv_create_error(mrb_state *mrb, int err);
+mrb_value mrb_uv_create_status(mrb_state *mrb, int status);
 
 #endif

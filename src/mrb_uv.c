@@ -156,18 +156,20 @@ mrb_uv_passwd_gid(mrb_state *mrb, mrb_value self)
 static void
 mrb_uv_req_free(mrb_state *mrb, void *p)
 {
-  if (p) {
-    mrb_uv_req_t *req = (mrb_uv_req_t*)p;
-    if (req->req.type == UV_FS) {
-      uv_fs_req_cleanup((uv_fs_t*)&req->req);
-    }
-    mrb_free(mrb, p);
+  mrb_uv_req_t *req = (mrb_uv_req_t*)p;
+
+  if (!p) { return; }
+
+  if (req->req.req.type == UV_FS) {
+    uv_fs_req_cleanup((uv_fs_t*)&req->req);
   }
+  mrb_free(mrb, p);
 }
+
 static mrb_data_type const req_type = { "uv_req", mrb_uv_req_free };
 
-mrb_value
-mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t, mrb_value proc)
+static mrb_uv_req_t*
+mrb_uv_req_alloc(mrb_state *mrb)
 {
   mrb_uv_req_t *p;
   struct RClass *cls;
@@ -175,26 +177,111 @@ mrb_uv_req_alloc(mrb_state *mrb, uv_req_type t, mrb_value proc)
   int ai;
 
   ai = mrb_gc_arena_save(mrb);
-  cls = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), t == UV_FS? "FsReq" : "Req");
-  p = (mrb_uv_req_t*)mrb_malloc(mrb, sizeof(mrb_uv_req_t) - sizeof(uv_req_t) + uv_req_size(t));
+  cls = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "Req");
+  p = (mrb_uv_req_t*)mrb_malloc(mrb, sizeof(mrb_uv_req_t));
   ret = mrb_obj_value(mrb_data_object_alloc(mrb, cls, p, &req_type));
   p->mrb = mrb;
   p->instance = ret;
-  p->block = proc;
-  p->req.data = p;
-
-  mrb_assert(!mrb_nil_p(proc));
-  mrb_iv_set(mrb, ret, mrb_intern_lit(mrb, "uv_cb"), proc);
+  p->req.req.data = p;
+  p->is_used = FALSE;
 
   mrb_uv_gc_protect(mrb, ret);
   mrb_gc_arena_restore(mrb, ai);
+  return p;
+}
+
+mrb_uv_req_t*
+mrb_uv_req_current(mrb_state *mrb, mrb_value blk, mrb_value *result)
+{
+  mrb_value cur_loop = mrb_uv_current_loop_obj(mrb);
+  mrb_value cur_yarn = mrb_funcall(mrb, cur_loop, "current_yarn", 0);
+  mrb_sym const sym = mrb_intern_lit(mrb, "_req");
+  mrb_uv_req_t *ret;
+
+  mrb_assert(!mrb_nil_p(cur_loop));
+
+  if (!mrb_nil_p(blk)) { // block passed
+    ret = mrb_uv_req_alloc(mrb);
+    *result = ret->instance;
+  } else {
+    mrb_value req, target;
+    target = mrb_nil_p(cur_yarn)? cur_loop : cur_yarn;
+    req = mrb_iv_get(mrb, target, sym);
+
+    if (mrb_nil_p(req)) {
+      ret = mrb_uv_req_alloc(mrb);
+      mrb_iv_set(mrb, target, sym, ret->instance);
+    } else {
+      ret = ((mrb_uv_req_t*)DATA_PTR(req));
+    }
+
+    if (mrb_nil_p(cur_yarn)) {
+      *result = ret->instance;
+    } else {
+      *result = mrb_fiber_yield(mrb, 1, &req);
+      blk = mrb_funcall(mrb, cur_yarn, "to_proc", 0);
+    }
+  }
+
+  mrb_assert(!ret->is_used);
+
+  ret->is_used = TRUE;
+  mrb_iv_set(mrb, ret->instance, mrb_intern_lit(mrb, "uv_cb"), blk);
+  ret->block = blk;
+
   return ret;
+}
+
+void
+mrb_uv_req_check_error(mrb_state *mrb, mrb_uv_req_t *req, int err)
+{
+  if (mrb_nil_p(req->block) || err < 0) {
+    mrb_uv_req_clear(req);
+  }
+
+  mrb_uv_check_error(mrb, err);
+}
+
+void
+mrb_uv_req_clear(mrb_uv_req_t *req)
+{
+  mrb_state *mrb = req->mrb;
+
+  mrb_assert(req->is_used);
+
+  if (req->req.req.type == UV_FS) {
+    uv_fs_req_cleanup(&req->req.fs);
+    req->req.fs.result = 0;
+  }
+  req->req.req.type = UV_UNKNOWN_REQ;
+  req->is_used = FALSE;
+  req->block = mrb_nil_value();
+  mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "uv_cb"), mrb_nil_value());
+  mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "buf"), mrb_nil_value());
+}
+
+void
+mrb_uv_req_yield(mrb_uv_req_t *req, mrb_int argc, mrb_value const *argv)
+{
+  mrb_value const b = req->block;
+  mrb_gc_protect(req->mrb, b);
+  mrb_uv_req_clear(req);
+  mrb_yield_argv(req->mrb, b, argc, argv);
+}
+
+void
+mrb_uv_req_set_buf(mrb_uv_req_t *req, uv_buf_t *buf, mrb_value str)
+{
+  mrb_state *mrb = req->mrb;
+  mrb_str_modify(mrb, mrb_str_ptr(str));
+  *buf = uv_buf_init(RSTRING_PTR(str), RSTRING_LEN(str));
+  mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "buf"), str);
 }
 
 static mrb_value
 mrb_uv_cancel(mrb_state *mrb, mrb_value self)
 {
-  mrb_uv_check_error(mrb, uv_cancel(&((mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type))->req));
+  mrb_uv_check_error(mrb, uv_cancel(&((mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type))->req.req));
   return self;
 }
 
@@ -204,8 +291,8 @@ mrb_uv_req_type(mrb_state *mrb, mrb_value self)
   mrb_uv_req_t *req;
 
   req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
-  return mrb_fixnum_value(req->req.type);
-  switch(req->req.type) {
+  return mrb_fixnum_value(req->req.req.type);
+  switch(req->req.req.type) {
 #define XX(u, l) case UV_ ## u: return symbol_value_lit(mrb, #l);
       UV_REQ_TYPE_MAP(XX)
 #undef XX
@@ -213,7 +300,7 @@ mrb_uv_req_type(mrb_state *mrb, mrb_value self)
   case UV_UNKNOWN_REQ: return symbol_value_lit(mrb, "unknown");
 
   default:
-    mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_req_t type: %S", mrb_fixnum_value(req->req.type));
+    mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_req_t type: %S", mrb_fixnum_value(req->req.req.type));
     return self;
   }
 }
@@ -225,7 +312,7 @@ mrb_uv_req_type_name(mrb_state *mrb, mrb_value self)
 
   req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, self, &req_type);
 #if MRB_UV_CHECK_VERSION(1, 19, 0)
-  return mrb_symbol_value(mrb_intern_cstr(mrb, uv_req_type_name(uv_req_get_type(&req->req))));
+  return mrb_symbol_value(mrb_intern_cstr(mrb, uv_req_type_name(uv_req_get_type(&req->req.req))));
 #else
   switch(req->req.type) {
 #define XX(u, l) case UV_ ## u: return symbol_value_lit(mrb, #l);
@@ -239,17 +326,6 @@ mrb_uv_req_type_name(mrb_state *mrb, mrb_value self)
       return self;
   }
 #endif
-}
-
-void
-mrb_uv_req_release(mrb_state *mrb, mrb_value v)
-{
-  mrb_uv_req_t *req = (mrb_uv_req_t*)mrb_uv_get_ptr(mrb, v, &req_type);
-  if (req->req.type == UV_FS) {
-    uv_fs_req_cleanup((uv_fs_t*)&req->req);
-  }
-  mrb_free(mrb, req);
-  DATA_PTR(v) = NULL;
 }
 
 #if MRB_UV_CHECK_VERSION(1, 19, 0)
@@ -716,22 +792,22 @@ mrb_uv_if_indextoname(mrb_state *mrb, mrb_value self)
  * UV.getnameinfo
  */
 static void
-mrb_uv_getnameinfo_cb(uv_getnameinfo_t *req, int status, char const *host, char const* service)
+mrb_uv_getnameinfo_cb(uv_getnameinfo_t *uv_req, int status, char const *host, char const* service)
 {
-  mrb_uv_req_t *req_data = (mrb_uv_req_t*)req->data;
-  mrb_state *mrb = req_data->mrb;
-  mrb_value block = req_data->block;
-  mrb_value args[] = { mrb_str_new_cstr(mrb, host), mrb_str_new_cstr(mrb, service) };
-
-  mrb_uv_req_release(mrb, req_data->instance);
-  mrb_uv_check_error(mrb, status);
-  mrb_yield_argv(mrb, block, 2, args);
+  mrb_uv_req_t *req = (mrb_uv_req_t*)uv_req->data;
+  mrb_state *mrb = req->mrb;
+  mrb_value args[] = {
+    mrb_str_new_cstr(mrb, host),
+    mrb_str_new_cstr(mrb, service),
+    mrb_uv_create_status(mrb, status),
+  };
+  mrb_uv_req_yield(req, 3, args);
 }
 
 static mrb_value
 mrb_uv_getnameinfo(mrb_state *mrb, mrb_value self)
 {
-  mrb_value block, sock, req_val;
+  mrb_value block, sock, ret;
   mrb_int flags = 0;
   struct sockaddr* addr;
   mrb_uv_req_t *req;
@@ -747,12 +823,11 @@ mrb_uv_getnameinfo(mrb_state *mrb, mrb_value self)
     addr = (struct sockaddr*)mrb_data_check_get_ptr(mrb, sock, &mrb_uv_ip6addr_type);
   }
 
-  req_val = mrb_uv_req_alloc(mrb, UV_GETNAMEINFO, block);
-  req = (mrb_uv_req_t*)DATA_PTR(req_val);
-  mrb_uv_check_error(mrb, uv_getnameinfo(
-      mrb_uv_current_loop(mrb), (uv_getnameinfo_t*)&req->req,
+  req = mrb_uv_req_current(mrb, block, &ret);
+  mrb_uv_req_check_error(mrb, req, uv_getnameinfo(
+      mrb_uv_current_loop(mrb), &req->req.getnameinfo,
       mrb_uv_getnameinfo_cb, addr, flags));
-  return req_val;
+  return ret;
 }
 
 /*********************************************************
@@ -784,11 +859,11 @@ addrinfo_ptr(mrb_state *mrb, mrb_value v)
 }
 
 static void
-_uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
+_uv_getaddrinfo_cb(uv_getaddrinfo_t* uv_req, int status, struct addrinfo* res)
 {
   mrb_value args[2];
-  mrb_uv_req_t* addr = (mrb_uv_req_t*) req->data;
-  mrb_state* mrb = addr->mrb;
+  mrb_uv_req_t* req = (mrb_uv_req_t*) uv_req->data;
+  mrb_state* mrb = req->mrb;
 
   mrb_value c = mrb_nil_value();
   if (status == 0) {
@@ -799,16 +874,15 @@ _uv_getaddrinfo_cb(uv_getaddrinfo_t* req, int status, struct addrinfo* res)
     DATA_TYPE(c) = &uv_addrinfo_type;
   }
 
-  args[0] = mrb_fixnum_value(status);
+  args[0] = mrb_uv_create_status(mrb, status);
   args[1] = c;
-  mrb_yield_argv(mrb, addr->block, 2, args);
-  mrb_uv_req_release(mrb, addr->instance);
+  mrb_uv_req_yield(req, 2, args);
 }
 
 static mrb_value
 mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
 {
-  mrb_value node, service, b = mrb_nil_value(), req_val;
+  mrb_value node, service, b = mrb_nil_value(), ret;
   mrb_value mrb_hints = mrb_hash_new(mrb);
   mrb_uv_req_t* req;
   mrb_value value;
@@ -850,12 +924,11 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
     hints.ai_flags = mrb_int(mrb, value);
   }
 
-  req_val = mrb_uv_req_alloc(mrb, UV_GETADDRINFO, b);
-  req = (mrb_uv_req_t*)DATA_PTR(req_val);
-  mrb_uv_check_error(mrb, uv_getaddrinfo(
-      mrb_uv_current_loop(mrb), (uv_getaddrinfo_t*)&req->req, _uv_getaddrinfo_cb,
+  req = mrb_uv_req_current(mrb, b, &ret);
+  mrb_uv_req_check_error(mrb, req, uv_getaddrinfo(
+      mrb_uv_current_loop(mrb), &req->req.getaddrinfo, _uv_getaddrinfo_cb,
       RSTRING_PTR(node), RSTRING_PTR(service), &hints));
-  return req_val;
+  return ret;
 }
 
 static mrb_value
@@ -1023,19 +1096,32 @@ mrb_uv_get_ptr(mrb_state *mrb, mrb_value v, struct mrb_data_type const *t)
   return mrb_data_get_ptr(mrb, v, t);
 }
 
+mrb_value
+mrb_uv_create_error(mrb_state *mrb, int err)
+{
+  mrb_value argv[] = {
+    mrb_str_new_cstr(mrb, uv_strerror(err)),
+    mrb_symbol_value(mrb_intern_cstr(mrb, uv_err_name(err))),
+  };
+  mrb_assert(err < 0);
+  return mrb_obj_new(mrb, E_UV_ERROR, 2, argv);
+}
+
+mrb_value
+mrb_uv_create_status(mrb_state *mrb, int st)
+{
+  if (st < 0) { return mrb_uv_create_error(mrb, st); }
+
+  mrb_assert(st == 0);
+  return mrb_nil_value();
+}
+
 void
 mrb_uv_check_error(mrb_state *mrb, int err)
 {
-  mrb_value argv[2];
+  if (err >= 0) { return; }
 
-  if (err >= 0) {
-    return;
-  }
-
-  mrb_assert(err < 0);
-  argv[0] = mrb_str_new_cstr(mrb, uv_strerror(err));
-  argv[1] = mrb_symbol_value(mrb_intern_cstr(mrb, uv_err_name(err)));
-  mrb_exc_raise(mrb, mrb_obj_new(mrb, E_UV_ERROR, 2, argv));
+  mrb_exc_raise(mrb, mrb_uv_create_error(mrb, err));
 }
 
 static mrb_value
@@ -1284,18 +1370,17 @@ mrb_uv_after_work_cb(uv_work_t *uv_req, int err)
 {
   mrb_uv_req_t *req = (mrb_uv_req_t*)uv_req->data;
   mrb_state *mrb = req->mrb;
-  mrb_value p = mrb_iv_get(mrb, req->instance, mrb_intern_lit(mrb, "uv_cb"));
+  mrb_value arg = mrb_fixnum_value(err);
 
-  mrb_gc_protect(mrb, p);
-  mrb_yield_argv(mrb, p, 0, NULL);
-  mrb_uv_req_release(mrb, req->instance);
-  mrb_uv_check_error(mrb, err);
+  mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "cfunc_cb"), mrb_nil_value());
+  req->block = mrb_iv_get(mrb, req->instance, mrb_intern_lit(mrb, "uv_cb"));
+  mrb_uv_req_yield(req, 1, &arg);
 }
 
 static mrb_value
 mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
 {
-  mrb_value cfunc, blk, req_val;
+  mrb_value cfunc, blk, ret;
   mrb_uv_req_t *req;
 
   mrb_get_args(mrb, "o&", &cfunc, &blk);
@@ -1306,14 +1391,12 @@ mrb_uv_queue_work(mrb_state *mrb, mrb_value self)
     mrb_raise(mrb, E_ARGUMENT_ERROR, "expected block to UV.queue_work");
   }
 
-  req_val = mrb_uv_req_alloc(mrb, UV_WORK, blk);
-  req = (mrb_uv_req_t*)DATA_PTR(req_val);
-  mrb_iv_set(mrb, req_val, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
+  req = mrb_uv_req_current(mrb, blk, &ret);
+  mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "cfunc_cb"), cfunc);
   req->block = cfunc;
-  mrb_uv_check_error(mrb, uv_queue_work(
-      mrb_uv_current_loop(mrb), (uv_work_t*)&req->req, mrb_uv_work_cb, mrb_uv_after_work_cb));
-  mrb_uv_gc_protect(mrb, req_val);
-  return req_val;
+  mrb_uv_req_check_error(mrb, req, uv_queue_work(
+      mrb_uv_current_loop(mrb), &req->req.work, mrb_uv_work_cb, mrb_uv_after_work_cb));
+  return ret;
 }
 
 static mrb_value

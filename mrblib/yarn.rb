@@ -35,7 +35,7 @@ module UV
       @loop = loop
     end
 
-    attr_reader :loop, :error
+    attr_reader :loop, :error, :req
 
     def ended?; @fiber.nil? end
     def result
@@ -76,12 +76,12 @@ module UV
       ps.spawn do |x, sig|
         str = ''
         out.read_start do |b|
-          if b == :eof
-            y.resume(str)
-            out.close
-          else
+          if b.kind_of? String
             str.concat b
+            next
           end
+          y.resume(str)
+          out.close
         end
       end
       Fiber.yield ps, self
