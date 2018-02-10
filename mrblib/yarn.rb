@@ -99,7 +99,7 @@ module UV
       *ret = @fiber.resume(*args)
 
       if @fiber.alive?
-        raise "invalid yield" unless ALIVE_CLASSES.any?{|v| ret.first.kind_of? v }
+        raise "invalid yield #{ret.inspect}" unless ALIVE_CLASSES.any?{|v| ret.first.kind_of? v }
       else
         @fiber = nil
         @result = ret

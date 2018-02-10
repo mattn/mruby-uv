@@ -25,3 +25,18 @@ assert 'Yarn process' do
 
   assert_nil y.error
 end
+
+assert 'Yarn DNS' do
+  y = UV::Yarn.new do
+    host, service = UV.getnameinfo(UV::Ip4Addr.new('127.0.0.1', 80))
+    assert_kind_of String, host
+    assert_equal 'http', service
+
+    err, a = UV.getaddrinfo 'example.com', 'http'
+    assert_nil err
+    assert_equal 80, a.addr.sin_port
+  end
+  y.start
+  y.loop.run
+  assert_nil y.error
+end

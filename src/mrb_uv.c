@@ -819,16 +819,16 @@ mrb_uv_getnameinfo(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "&o|i", &block, &sock, &flags);
 
-  if (mrb_nil_p(block)) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "Expected callback in uv_getaddrinfo.");
-  }
-
   addr = (struct sockaddr*)mrb_data_check_get_ptr(mrb, sock, &mrb_uv_ip4addr_type);
   if (!addr) {
     addr = (struct sockaddr*)mrb_data_check_get_ptr(mrb, sock, &mrb_uv_ip6addr_type);
   }
 
   req = mrb_uv_req_current(mrb, block, &ret);
+  if (mrb_nil_p(req->block)) {
+    mrb_uv_req_clear(req);
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "Expected callback in uv_getaddrinfo.");
+  }
   mrb_uv_req_check_error(mrb, req, uv_getnameinfo(
       mrb_uv_current_loop(mrb), &req->req.getnameinfo,
       mrb_uv_getnameinfo_cb, addr, flags));
@@ -899,10 +899,6 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "SS|H&", &node, &service, &mrb_hints, &b);
 
-  if (mrb_nil_p(b)) {
-    mrb_raise(mrb, E_ARGUMENT_ERROR, "Expected callback in uv_getaddrinfo.");
-  }
-
   // parse hints
   value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_lit(mrb, "ai_family")));
   if (mrb_obj_equal(mrb, value, mrb_symbol_value(mrb_intern_lit(mrb, "ipv4")))) {
@@ -930,6 +926,10 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
   }
 
   req = mrb_uv_req_current(mrb, b, &ret);
+  if (mrb_nil_p(req->block)) {
+    mrb_uv_req_clear(req);
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "Expected callback in uv_getaddrinfo.");
+  }
   mrb_uv_req_check_error(mrb, req, uv_getaddrinfo(
       mrb_uv_current_loop(mrb), &req->req.getaddrinfo, _uv_getaddrinfo_cb,
       RSTRING_PTR(node), RSTRING_PTR(service), &hints));
