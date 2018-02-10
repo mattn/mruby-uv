@@ -449,6 +449,8 @@ assert_uv 'UV::FS::Event change' do
 
   UV::FS.mkdir 'foo-bar'
   f = UV::FS.open "foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+  f.write "test\n"
+  f.close
 
   ev = UV::FS::Event.new
   ev.start 'foo-bar/foo.txt', 0 do |change_path, change_ev|
@@ -461,9 +463,9 @@ assert_uv 'UV::FS::Event change' do
   assert_equal 'foo-bar/foo.txt', ev.path
 
   t = UV::Timer.new
-  t.start 10, 0 do
-    f.write "test\n"
-    f.sync
+  t.start UV_INTERVAL, 0 do
+    f = UV::FS.open "foo-bar/foo.txt", UV::FS::O_TRUNC|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+    f.write "test change\n"
     f.close
   end
 end
