@@ -32,7 +32,7 @@ assert 'Yarn DNS' do
     assert_kind_of String, host
     assert_equal 'http', service
 
-    err, a = UV.getaddrinfo 'example.com', 'http'
+    err, a = UV.getaddrinfo 'localhost', 'http'
     assert_nil err
     assert_equal 80, a.addr.sin_port
   end
