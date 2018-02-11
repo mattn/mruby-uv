@@ -1,8 +1,6 @@
 assert('UV.guess_handle') do
-  skip if UV.guess_handle(0) == :pipe
-  assert_equal :tty, UV.guess_handle(0)
-  assert_equal :tty, UV.guess_handle(1)
-  assert_equal :tty, UV.guess_handle(2)
+  h = UV.guess_handle(0)
+  assert_true h == :pipe || h == :tty || h == :unknown
 end
 
 assert('UV::TTY') do
@@ -104,7 +102,7 @@ assert('UV.queue_work') do
     c += 1
   }
   assert_kind_of UV::Req, req
-  assert_equal :work, req.type
+  assert_equal :work, req.type_name
   UV.run
   assert_equal 1, c
 end
@@ -137,8 +135,20 @@ assert 'UV::Loop#now' do
 end
 
 assert 'UV::Loop#configure' do
+  skip unless UV::default_loop.respond_to? :configure
   skip unless UV::Signal.const_defined? :SIGPROF
   UV.default_loop.configure block_signal: UV::Signal::SIGPROF
+end
+
+assert 'UV::Loop#make_current' do
+  assert_equal UV.default_loop, UV.current_loop
+
+  l = UV::Loop.new
+  l.make_current
+  assert_equal l, UV.current_loop
+
+  UV.default_loop.make_current
+  assert_equal UV.default_loop, UV.current_loop
 end
 
 assert 'UV::SOMAXCONN' do
@@ -158,8 +168,14 @@ assert 'UV.getaddrinfo ipv4' do
 end
 
 assert 'UV.getaddrinfo ipv6' do
-  UV::getaddrinfo('localhost', 'http', {:ai_family => :ipv6}) do |x, info|
-    assert_kind_of UV::Ip6Addr, info.addr
+  UV::getaddrinfo('example.com', 'http', {:ai_family => :ipv6}) do |x, info|
+    addr = info.addr
+    assert_kind_of UV::Ip6Addr, addr
+    assert_kind_of Integer, addr.scope_id
+    if addr.scope_id != 0 && addr.respond_to?(:if_indextoname)
+      assert_kind_of String, addr.if_indextoname
+      assert_kind_of String, addr.if_indextoiid
+    end
   end
   UV::run()
 end
@@ -191,21 +207,28 @@ assert 'UV::Addrinfo constants' do
 end
 
 assert 'UV::OS' do
-  assert_kind_of String, UV::OS.homedir
-  assert_kind_of String, UV::OS.tmpdir
+  assert_kind_of String, UV::OS.homedir if UV::OS.respond_to? :homedir
+  assert_kind_of String, UV::OS.tmpdir if UV::OS.respond_to? :tmpdir
 
-  assert_kind_of String, UV::OS.getenv('HOME')
-  assert_nil UV::OS.getenv('__gdsgdsgjsngjddsg')
+  if UV::OS.respond_to? :getenv
+    assert_kind_of String, UV::OS.getenv('HOME')
+    assert_nil UV::OS.getenv('__gdsgdsgjsngjddsg')
 
-  UV::OS.setenv "aaaaaaa", "bbb"
-  assert_equal "bbb", UV::OS.getenv("aaaaaaa")
-  UV::OS.unsetenv "aaaaaaa"
-  assert_nil UV::OS.getenv "aaaaaaa"
+    UV::OS.setenv "aaaaaaa", "bbb"
+    assert_equal "bbb", UV::OS.getenv("aaaaaaa")
+    UV::OS.unsetenv "aaaaaaa"
+    assert_nil UV::OS.getenv "aaaaaaa"
 
-  assert_kind_of String, UV::OS.hostname
+    assert_kind_of String, UV::OS.hostname
+  end
+
+  assert_kind_of Integer, UV::OS.getppid if UV::OS.respond_to? :getppid
+  assert_kind_of Integer, UV::OS.getpid if UV::OS.respond_to? :getpid
 end
 
 assert 'UV::OS::Passwd' do
+  skip unless UV::OS.const_defined? :Passwd
+
   p = UV::OS::Passwd.new
   assert_kind_of String, p.username
   p.shell

@@ -2,8 +2,10 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   spec.license = 'MIT'
   spec.authors = 'mattn'
   spec.summary = 'libuv mruby binding'
-  spec.add_dependency 'mruby-time',    core: 'mruby-time'
-  spec.add_dependency 'mruby-sprintf', core: 'mruby-sprintf'
+  spec.add_dependency 'mruby-time',       core: 'mruby-time'
+  spec.add_dependency 'mruby-sprintf',    core: 'mruby-sprintf'
+  spec.add_dependency 'mruby-fiber',      core: 'mruby-fiber'
+  spec.add_dependency 'mruby-string-ext', core: 'mruby-string-ext'
 
   def self.run_command(env, command)
     fail "#{command} failed" unless system(env, command)
@@ -14,7 +16,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   def self.bundle_uv
     visualcpp = ENV['VisualStudioVersion'] || ENV['VSINSTALLDIR']
 
-    version = '1.14.1'
+    version = '1.19.1'
     libuv_dir = "#{build_dir}/libuv-#{version}"
     libuv_lib = libfile "#{libuv_dir}/.libs/libuv"
     header = "#{libuv_dir}/include/uv.h"
@@ -46,7 +48,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
     file libuv_lib => header do |t|
       Dir.chdir(libuv_dir) do
         e = {
-          'CC'  => "#{build.cc.command} #{build.cc.flags.join(' ')}",
+          'CC'  => "#{build.cc.command} #{build.cc.flags.join(' ')} -DNDEBUG",
           'CXX' => "#{build.cxx.command} #{build.cxx.flags.join(' ')}",
           'LD'  => "#{build.linker.command} #{build.linker.flags.join(' ')}",
           'AR'  => build.archiver.command

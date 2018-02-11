@@ -1,4 +1,4 @@
-UV_INTERVAL = 2
+UV_INTERVAL = 5
 
 def remove_uv_test_tmpfile
   UV::FS.unlink(UV::IS_WINDOWS ? '\\\\.\\pipe\\mruby-uv' : '/tmp/mruby-uv') rescue nil
@@ -25,15 +25,16 @@ assert_uv 'UV::FS.access' do
   f.write 'helloworld'
   f.close
 
-  assert_true UV::FS.access 'foo-bar/foo.txt', UV::FS::F_OK
-  assert_false UV::FS.access 'foo-bar/f.txt', UV::FS::F_OK
+  assert_nil UV::FS.access 'foo-bar/foo.txt', UV::FS::F_OK
+  assert_kind_of UVError, UV::FS.access('foo-bar/f.txt', UV::FS::F_OK)
   UV::FS.access 'foo-bar/foo.txt', UV::FS::F_OK do |res, err|
-    assert_true res
+    assert_nil res
+    assert_nil err
     remove_uv_test_tmpfile
   end
-  UV::FS.access 'foo-bar/f.txt', UV::FS::F_OK do |res, err|
-    assert_false res
-    assert_equal :ENOENT, err
+  UV::FS.access 'foo-bar/f.txt', UV::FS::F_OK do |res|
+    assert_kind_of UVError, res
+    assert_equal :ENOENT, res.name
     remove_uv_test_tmpfile
   end
 end
@@ -49,7 +50,7 @@ assert_uv 'UV::FS' do
 
   f = UV::FS.open 'foo-bar/foo.txt', UV::FS::O_RDONLY, UV::FS::S_IREAD
   assert_equal 'hello', f.read(5)
-  assert_equal test_str, f.read()
+  assert_equal test_str, f.read
   f.close
 
   remove_uv_test_tmpfile
@@ -115,6 +116,8 @@ assert_uv 'UV::FS.readlink' do
 end
 
 assert_uv 'UV::FS.realpath' do
+  skip unless UV::FS.respond_to? :realpath
+
   # async version
   UV::FS.realpath '.' do |v|
     assert_kind_of String, v
@@ -125,6 +128,8 @@ assert_uv 'UV::FS.realpath' do
 end
 
 assert_uv 'UV::FS.copyfile' do
+  skip unless UV::FS.respond_to? :realpath
+
   remove_uv_test_tmpfile
   UV::FS.mkdir 'foo-bar'
 
@@ -175,10 +180,10 @@ assert_uv 'UV.getaddrinfo' do
     assert_equal 80, a.addr.sin_port
   }
   assert_kind_of UV::Req, req
-  assert_equal :getaddrinfo, req.type
+  assert_equal :getaddrinfo, req.type_name
 
   # getaddrinfo without callback
-  assert_raise(ArgumentError) { UV.getaddrinfo 'www.google.com', 'http' }
+  assert_raise(ArgumentError) { UV.getaddrinfo 'example.com', 'http' }
 end
 
 assert_uv 'UV.getnameinfo' do
@@ -187,7 +192,7 @@ assert_uv 'UV.getnameinfo' do
     assert_kind_of String, service
   }
   assert_kind_of UV::Req, req
-  assert_equal :getnameinfo, req.type
+  assert_equal :getnameinfo, req.type_name
 
   assert_raise(ArgumentError) { UV.getnameinfo UV::Ip4Addr.new('127.0.0.1', 80) }
 end
@@ -255,10 +260,10 @@ end
 
 assert_uv 'UV::Pipe' do
   path = UV::IS_WINDOWS ? '\\\\.\\pipe\\mruby-uv' : '/tmp/mruby-uv'
-  s = UV::Pipe.new 1
+  s = UV::Pipe.new true
   s.bind path
   s.listen 5 do |x|
-    return if x != 0
+    return unless x.nil?
     c = s.accept
     c.write "helloworld\r\n"
     c.close
@@ -275,10 +280,10 @@ assert_uv 'UV::Pipe' do
 
   assert_kind_of Fixnum, s.fileno
 
-  client = UV::Pipe.new(1)
+  client = UV::Pipe.new true
   client.connect path do |x|
-    if x == 0
-      assert_kind_of String, client.peername
+    if x.nil?
+      assert_kind_of String, client.peername if client.respond_to? :peername
       assert_kind_of String, client.sockname
 
       client.read_start do |b|
@@ -295,6 +300,8 @@ assert_uv 'UV::UDP server/client' do
   test_str = 'helloworld'
 
   r6 = UV::UDP.new
+  assert_kind_of Integer, r6.send_queue_count
+  assert_kind_of Integer, r6.send_queue_size
   r6.bind6 UV.ip6_addr('::1', 8888)
   assert_equal '::1:8888', r6.getsockname.to_s
   r6.recv_start do |data, addr, flags|
@@ -361,8 +368,9 @@ assert_uv 'UV::TCP IPv6 server/client' do
   t = UV::Timer.new
   t.start UV_INTERVAL, 0 do
     c = UV::TCP.new
+    assert_kind_of Integer, c.write_queue_size
     c.connect6 UV.ip6_addr('::1', 8888) do |connect_status|
-      assert_equal 0, connect_status
+      assert_nil connect_status
       c.read_start do |b|
         assert_equal test_str, b.to_s
         c.close
@@ -376,7 +384,7 @@ assert_uv 'UV::TCP IPv6 server/client' do
   s.bind6 UV.ip6_addr '::1', 8888
   assert_equal '::1:8888', s.getsockname.to_s
   s.listen 5 do |x|
-    return if x != 0
+    return unless x.nil?
     c = s.accept
     c.write test_str
     c.close
@@ -391,7 +399,7 @@ assert_uv 'UV::TCP IPv4 server/client' do
   t.start UV_INTERVAL, 0 do
     c = UV::TCP.new
     c.connect UV.ip4_addr('127.0.0.1', 8888) do |connect_status|
-      assert_equal 0, connect_status
+      assert_nil connect_status
       c.read_start do |b|
         assert_equal test_str, b
         c.close
@@ -404,7 +412,7 @@ assert_uv 'UV::TCP IPv4 server/client' do
   s.bind UV.ip4_addr '127.0.0.1', 8888
   assert_equal '127.0.0.1:8888', s.getsockname.to_s
   s.listen 5 do |x|
-    return if x != 0
+    return unless x.nil?
     c = s.accept
     assert_equal '127.0.0.1', c.getpeername.to_s[0, 9]
     c.write test_str
@@ -412,13 +420,12 @@ assert_uv 'UV::TCP IPv4 server/client' do
   end
 end
 
-=begin
 assert_uv 'UV::FS::Event rename' do
   remove_uv_test_tmpfile
 
   UV::FS::mkdir 'foo-bar'
   f = UV::FS::open "foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
-  f.write 'test\n'
+  f.write "test\n"
   f.close
 
   ev = UV::FS::Event.new
@@ -436,14 +443,14 @@ assert_uv 'UV::FS::Event rename' do
     UV::FS.rename 'foo-bar/foo.txt', 'foo-bar/bar.txt'
   end
 end
-=end
 
-=begin
 assert_uv 'UV::FS::Event change' do
   remove_uv_test_tmpfile
 
   UV::FS.mkdir 'foo-bar'
   f = UV::FS.open "foo-bar/foo.txt", UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+  f.write "test\n"
+  f.close
 
   ev = UV::FS::Event.new
   ev.start 'foo-bar/foo.txt', 0 do |change_path, change_ev|
@@ -456,13 +463,12 @@ assert_uv 'UV::FS::Event change' do
   assert_equal 'foo-bar/foo.txt', ev.path
 
   t = UV::Timer.new
-  t.start 10, 0 do
-    f.write "test\n"
-    UV::FS.fsync f.fd
+  t.start UV_INTERVAL, 0 do
+    f = UV::FS.open "foo-bar/foo.txt", UV::FS::O_TRUNC|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+    f.write "test change\n"
     f.close
   end
 end
-=end
 
 assert_uv 'Process' do
   remove_uv_test_tmpfile
@@ -471,16 +477,44 @@ assert_uv 'Process' do
   f.write "test\n"
   f.close
 
-  ps = UV::Process.new 'file' => 'grep', 'args' => %w[-r test foo-bar]
-  ps.stdout_pipe = UV::Pipe.new 0
+  out = UV::Pipe.new(false)
+  ps = UV::Process.new file: :grep, args: %w[-r test foo-bar], stdio: [nil, out, nil]
 
   ps.spawn do |x, sig|
-    assert_equal 0, x
+    assert_equal 0, x # exit should be success
+    assert_equal 0, sig # exit should be success
+
+    assert_equal UV.default_loop, ps.loop
+    assert_equal :process, ps.type_name
+    assert_kind_of Integer, ps.pid
+
     ps.close
     remove_uv_test_tmpfile
   end
-  ps.stdout_pipe.read_start do |b|
-    assert_equal "foo-bar/foo.txt:test\n", b
-    ps.stdout_pipe.close
+
+  str = ''
+  out.read_start do |b|
+    if b.kind_of? String
+      str << b
+      next
+    end
+    assert_equal "foo-bar/foo.txt:test\n", str
+    out.close
+  end
+
+  env_out = UV::Pipe.new(false)
+  UV::Process.new(file: :sh, args: ['-c', 'echo $a'], 'env' => { a: :test }, stdio: [nil, env_out, nil]).spawn do |x, sig|
+    assert_equal 0, x
+    assert_equal 0, sig
+  end
+
+  env_str = ''
+  env_out.read_start do |b|
+    if b.kind_of? String
+      env_str << b
+      next
+    end
+    assert_equal "test\n", env_str
+    env_out.close
   end
 end

@@ -12,7 +12,7 @@ else
     'args' => ['../..']
   })
 end
-ps.stdout_pipe = UV::Pipe.new(0)
+ps.stdout_pipe = UV::Pipe.new false
 
 ps.spawn do |sig|
   puts "exit #{sig}"

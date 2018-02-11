@@ -91,9 +91,8 @@ _uv_thread_proc(void *arg)
   proc = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "thread_proc"));
   thread_arg = mrb_iv_get(mrb, context->instance, mrb_intern_lit(mrb, "thread_arg"));
   if (!mrb_nil_p(proc)) {
-    mrb_value args[1];
-    args[0] = thread_arg;
-    mrb_yield_argv(mrb, proc, 1, args);
+    mrb_value const arg = thread_arg;
+    mrb_yield_argv(mrb, proc, 1, &arg);
   }
 }
 
