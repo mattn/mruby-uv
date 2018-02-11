@@ -83,7 +83,7 @@ mrb_uv_fs_free(mrb_state *mrb, void *p)
   if (ctx) {
     uv_fs_t req;
     req.data = ctx;
-    uv_fs_close(NULL, &req, ctx->fd, NULL);
+    uv_fs_close(uv_default_loop(), &req, ctx->fd, NULL);
     mrb_free(mrb, ctx);
   }
 }

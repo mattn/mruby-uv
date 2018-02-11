@@ -1937,7 +1937,7 @@ mrb_uv_fs_event_path(mrb_state *mrb, mrb_value self)
   mrb_uv_handle *ctx = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   mrb_uv_check_error(mrb, uv_fs_event_getpath((uv_fs_event_t*)&ctx->handle, ret, &len));
-  return mrb_str_new(mrb, ret, len);
+  return mrb_str_new_cstr(mrb, ret);
 }
 
 /*
