@@ -183,7 +183,39 @@ assert_uv 'UV.getaddrinfo' do
   assert_equal :getaddrinfo, req.type_name
 
   # getaddrinfo without callback
-  assert_raise(ArgumentError) { UV.getaddrinfo 'example.com', 'http' }
+  assert_raise(ArgumentError) { UV.getaddrinfo 'localhost', 'http' }
+end
+
+assert 'UV.getaddrinfo ipv4' do
+  UV::getaddrinfo('localhost', 'http', {:ai_family => :ipv4}) do |x, info|
+    assert_kind_of UV::Ip4Addr, info.addr
+  end
+  UV::run()
+end
+
+assert 'UV.getaddrinfo ipv6' do
+  UV::getaddrinfo('::1', 'http', {:ai_family => :ipv6}) do |x, info|
+    addr = info.addr
+    assert_kind_of UV::Ip6Addr, addr
+    assert_kind_of Integer, addr.scope_id
+    if addr.scope_id != 0 && addr.respond_to?(:if_indextoname)
+      assert_kind_of String, addr.if_indextoname
+      assert_kind_of String, addr.if_indextoiid
+    end
+  end
+  UV::run()
+end
+
+assert 'UV.getaddrinfo.next' do
+  UV::getaddrinfo('localhost', 'http') do |x, info|
+    while info
+      assert_kind_of UV::Addrinfo, info
+      info = info.next
+    end
+
+    assert_nil info
+  end
+  UV::run()
 end
 
 assert_uv 'UV.getnameinfo' do
