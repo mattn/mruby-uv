@@ -16,6 +16,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   def self.bundle_uv
     visualcpp = ENV['VisualStudioVersion'] || ENV['VSINSTALLDIR']
 
+    # version = '1.0.0'
     version = '1.19.1'
     libuv_dir = "#{build_dir}/libuv-#{version}"
     libuv_lib = libfile "#{libuv_dir}/.libs/libuv"

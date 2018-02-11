@@ -315,7 +315,7 @@ mrb_uv_req_type_name(mrb_state *mrb, mrb_value self)
 #if MRB_UV_CHECK_VERSION(1, 19, 0)
   return mrb_symbol_value(mrb_intern_cstr(mrb, uv_req_type_name(uv_req_get_type(&req->req.req))));
 #else
-  switch(req->req.type) {
+  switch(req->req.req.type) {
 #define XX(u, l) case UV_ ## u: return symbol_value_lit(mrb, #l);
       UV_REQ_TYPE_MAP(XX)
 #undef XX
@@ -323,7 +323,7 @@ mrb_uv_req_type_name(mrb_state *mrb, mrb_value self)
     case UV_UNKNOWN_REQ: return symbol_value_lit(mrb, "unknown");
 
     default:
-      mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_req_t type: %S", mrb_fixnum_value(req->req.type));
+      mrb_raisef(mrb, E_TYPE_ERROR, "Invalid uv_req_t type: %S", mrb_fixnum_value(req->req.req.type));
       return self;
   }
 #endif
