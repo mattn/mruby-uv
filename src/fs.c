@@ -1,7 +1,6 @@
 #include "mruby/uv.h"
 #include "mrb_uv.h"
 #include <fcntl.h>
-#include <stdlib.h>
 
 /*
  * UV::Stat
