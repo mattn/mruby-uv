@@ -194,7 +194,7 @@ assert 'UV.getaddrinfo ipv4' do
 end
 
 assert 'UV.getaddrinfo ipv6' do
-  UV::getaddrinfo('localhost', 'http', {:ai_family => :ipv6}) do |x, info|
+  UV::getaddrinfo('::1', 'http', {:ai_family => :ipv6}) do |x, info|
     addr = info.addr
     assert_kind_of UV::Ip6Addr, addr
     assert_kind_of Integer, addr.scope_id
