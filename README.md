@@ -1,6 +1,8 @@
 mruby-uv
 ========
 
+[![Build Status](https://travis-ci.org/mattn/mruby-uv.svg?branch=master)](https://travis-ci.org/mattn/mruby-uv)
+
 interface to libuv for mruby(experimental)
 
 License
