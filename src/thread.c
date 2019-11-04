@@ -538,6 +538,10 @@ mrb_uv_key_get(mrb_state *mrb, mrb_value self)
   return p? mrb_obj_value(p) : mrb_nil_value();
 }
 
+#ifndef mrb_immediate_p
+#define mrb_immediate_p(v) (mrb_type(v) < MRB_TT_HAS_BASIC)
+#endif
+
 static mrb_value
 mrb_uv_key_set(mrb_state *mrb, mrb_value self)
 {
@@ -548,7 +552,7 @@ mrb_uv_key_set(mrb_state *mrb, mrb_value self)
 
   mrb_get_args(mrb, "o", &new_val);
 
-  if (mrb_type(new_val) < MRB_TT_HAS_BASIC) {
+  if (mrb_immediate_p(new_val)) {
     mrb_raisef(mrb, E_TYPE_ERROR, "cannot store value without basic: %S", new_val);
   }
 

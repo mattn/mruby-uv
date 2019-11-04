@@ -137,7 +137,9 @@ end
 assert 'UV::Loop#configure' do
   skip unless UV::default_loop.respond_to? :configure
   skip unless UV::Signal.const_defined? :SIGPROF
-  UV.default_loop.configure block_signal: UV::Signal::SIGPROF
+  l = UV::Loop.new
+  l.configure block_signal: UV::Signal::SIGPROF
+  assert_false l.alive?
 end
 
 assert 'UV::Loop#make_current' do
