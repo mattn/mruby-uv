@@ -258,6 +258,7 @@ assert_uv 'UV::Timer' do
   t.start UV_INTERVAL, UV_INTERVAL do
     c -= 1
     t.close if c < 0
+    assert_true UV.default_loop.alive?
   end
 end
 
