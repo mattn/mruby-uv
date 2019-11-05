@@ -1660,11 +1660,11 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "hrtime", mrb_uv_hrtime, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "disable_stdio_inheritance", mrb_uv_disable_stdio_inheritance, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "process_title", mrb_uv_process_title, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, _class_uv, "process_title=", mrb_uv_process_title_set, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "process_title=", mrb_uv_process_title_set, MRB_ARGS_REQ(1));
   mrb_define_module_function(mrb, _class_uv, "rusage", mrb_uv_rusage, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "cpu_info", mrb_uv_cpu_info, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "interface_addresses", mrb_uv_interface_addresses, MRB_ARGS_NONE());
-  mrb_define_module_function(mrb, _class_uv, "queue_work", mrb_uv_queue_work, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "queue_work", mrb_uv_queue_work, MRB_ARGS_REQ(1) | MRB_ARGS_BLOCK());
   mrb_define_module_function(mrb, _class_uv, "resident_set_memory", mrb_uv_resident_set_memory, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "uptime", mrb_uv_uptime, MRB_ARGS_NONE());
   mrb_define_module_function(mrb, _class_uv, "get_error", mrb_uv_get_error, MRB_ARGS_REQ(1));

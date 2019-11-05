@@ -138,7 +138,7 @@ assert_uv 'UV::FS.copyfile' do
   f.close
 
   # async version
-  UV::FS.copyfile 'foo-bar/foo.txt', 'foo-bar/bar.txt' do |v|
+  UV::FS.copyfile('foo-bar/foo.txt', 'foo-bar/bar.txt') do |v|
     assert_equal "test\n", UV::FS.open('foo-bar/bar.txt', UV::FS::O_RDONLY, UV::FS::S_IREAD).read(5)
     remove_uv_test_tmpfile
   end
@@ -258,6 +258,7 @@ assert_uv 'UV::Timer' do
   t.start UV_INTERVAL, UV_INTERVAL do
     c -= 1
     t.close if c < 0
+    assert_true UV.default_loop.alive?
   end
 end
 

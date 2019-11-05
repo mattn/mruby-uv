@@ -1326,7 +1326,7 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
       mrb_value keys = mrb_hash_keys(mrb, arg_env);
       opt.env = mrb_malloc(mrb, sizeof(char*) * (RARRAY_LEN(keys) + 1));
       for (i = 0; i < RARRAY_LEN(keys); ++i) {
-        mrb_value str = mrb_str_to_str(mrb, RARRAY_PTR(keys)[i]);
+        mrb_value str = mrb_str_dup(mrb, mrb_str_to_str(mrb, RARRAY_PTR(keys)[i]));
         str = mrb_str_cat_lit(mrb, str, "=");
         mrb_str_concat(mrb, str, mrb_hash_get(mrb, arg_env, RARRAY_PTR(keys)[i]));
         opt.env[i] = mrb_str_to_cstr(mrb, str);
@@ -2156,7 +2156,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   _class_uv_timer = mrb_define_class_under(mrb, UV, "Timer", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_timer, MRB_TT_DATA);
   mrb_include_module(mrb, _class_uv_timer, _class_uv_handle);
-  mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_timer, "initialize", mrb_uv_timer_init, MRB_ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_timer, "again", mrb_uv_timer_again, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "repeat", mrb_uv_timer_repeat, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_timer, "repeat=", mrb_uv_timer_repeat_set, MRB_ARGS_REQ(1));

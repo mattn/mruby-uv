@@ -776,10 +776,18 @@ mrb_uv_fs_copyfile(mrb_state *mrb, mrb_value self)
   mrb_int flags = 0;
   mrb_value proc, ret;
   mrb_uv_req_t *req;
+  int res;
 
   mrb_get_args(mrb, "&zz|i", &proc, &old_path, &new_path, &flags);
   req = mrb_uv_req_current(mrb, proc, &ret);
-  mrb_uv_req_check_error(mrb, req, uv_fs_copyfile(mrb_uv_current_loop(mrb), &req->req.fs, old_path, new_path, flags, NULL));
+  res = uv_fs_copyfile(
+      mrb_uv_current_loop(mrb), &req->req.fs, old_path, new_path, flags,
+      mrb_nil_p(req->block)? NULL : _uv_fs_cb);
+  if (mrb_nil_p(req->block)) {
+    mrb_uv_req_clear(req);
+    return mrb_uv_create_status(mrb, res);
+  }
+  mrb_uv_req_check_error(mrb, req, res);
   return ret;
 }
 
