@@ -102,6 +102,53 @@ mrb_uv_to_fd(mrb_state *mrb, mrb_value v)
   return ((mrb_uv_file*)mrb_uv_get_ptr(mrb, v, &mrb_uv_file_type))->fd;
 }
 
+#if MRB_UV_CHECK_VERSION(1, 28, 0)
+
+static void
+mrb_uv_dir_free(mrb_state *mrb, void *p)
+{
+  uv_fs_t req;
+  uv_dir_t *dir = (uv_dir_t*)p;
+  if (!dir) {
+    return;
+  }
+  mrb_uv_check_error(mrb, uv_fs_closedir(uv_default_loop(), &req, dir, NULL));
+}
+
+static mrb_data_type const mrb_uv_dir_type = {
+  "UV::Dir", mrb_uv_dir_free,
+};
+
+static mrb_value
+dir_to_mrb(mrb_state *mrb, uv_dir_t *dir)
+{
+  struct RClass *dir_cls = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "Dir");
+  mrb_value ret = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, dir_cls));
+  DATA_PTR(ret) = dir;
+  DATA_TYPE(ret) = &mrb_uv_dir_type;
+  return ret;
+}
+
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 31, 0)
+
+static mrb_value
+statfs_to_mrb(mrb_state *mrb, const uv_statfs_t *stat)
+{
+  mrb_value ret = mrb_hash_new(mrb);
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "type")), mrb_uv_from_uint64(mrb, stat->f_type));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "bsize")), mrb_uv_from_uint64(mrb, stat->f_bsize));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "blocks")), mrb_uv_from_uint64(mrb, stat->f_blocks));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "bfree")), mrb_uv_from_uint64(mrb, stat->f_bfree));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "bavail")), mrb_uv_from_uint64(mrb, stat->f_bavail));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "files")), mrb_uv_from_uint64(mrb, stat->f_files));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "ffree")), mrb_uv_from_uint64(mrb, stat->f_ffree));
+  return ret;
+}
+
+#endif
+
 static mrb_value
 dirtype_to_sym(mrb_state *mrb, uv_dirent_type_t t)
 {
@@ -186,6 +233,20 @@ _uv_fs_cb(uv_fs_t* uv_req)
     mrb_value const res = mrb_uv_create_stat(mrb, &uv_req->statbuf);
     mrb_uv_req_yield(req, 1, &res);
   } break;
+
+#if MRB_UV_CHECK_VERSION(1, 28, 0)
+  case UV_FS_OPENDIR: {
+    mrb_value const dir = dir_to_mrb(mrb, (uv_dir_t*)uv_req->ptr);
+    mrb_uv_req_yield(req, 1, &dir);
+  } break;
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 31, 0)
+  case UV_FS_STATFS: {
+    mrb_value const stat = statfs_to_mrb(mrb, (uv_statfs_t*)uv_req->ptr);
+    mrb_uv_req_yield(req, 1, &stat);
+  } break;
+#endif
 
   default: {
       mrb_value const res = mrb_fixnum_value(uv_req->result);
@@ -793,10 +854,129 @@ mrb_uv_fs_copyfile(mrb_state *mrb, mrb_value self)
 
 #endif
 
+#if MRB_UV_CHECK_VERSION(1, 21, 0)
+
+static mrb_value
+mrb_uv_fs_lchown(mrb_state *mrb, mrb_value self)
+{
+  char const *path;
+  mrb_value b, ret;
+  mrb_uv_req_t *req;
+  int res, uid, gid;
+
+  mrb_get_args(mrb, "&zii", &b, &path, &uid, &gid);
+
+  req = mrb_uv_req_current(mrb, b, &ret);
+  res = uv_fs_lchown(mrb_uv_current_loop(mrb), &req->req.fs, path, uid, gid,
+                     mrb_nil_p(req->block)? NULL : _uv_fs_cb);
+
+  if (mrb_nil_p(req->block)) {
+    mrb_value const ret = mrb_str_new_cstr(mrb, req->req.fs.ptr);
+    mrb_uv_req_clear(req);
+    return ret;
+  }
+  mrb_uv_req_check_error(mrb, req, res);
+  return ret;
+}
+
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 28, 0)
+
+static mrb_value
+mrb_uv_fs_opendir(mrb_state* mrb, mrb_value self) {
+  const char *path;
+  mrb_value proc, ret;
+  mrb_uv_req_t *req;
+  int res;
+
+  mrb_get_args(mrb, "&z", &proc, &path);
+  req = mrb_uv_req_current(mrb, proc, &ret);
+  res = uv_fs_opendir(
+      mrb_uv_current_loop(mrb), &req->req.fs, path,
+      mrb_nil_p(req->block)? NULL : _uv_fs_cb);
+  if (mrb_nil_p(req->block)) {
+    mrb_uv_req_clear(req);
+    return mrb_uv_create_status(mrb, res);
+  }
+  mrb_uv_req_check_error(mrb, req, res);
+  return ret;
+}
+
+static mrb_value
+mrb_uv_dir_read(mrb_state* mrb, mrb_value self) {
+  mrb_value proc, ret;
+  mrb_uv_req_t *req;
+  int res;
+  uv_dir_t *dir = (uv_dir_t*)mrb_data_get_ptr(mrb, self, &mrb_uv_dir_type);
+
+  mrb_get_args(mrb, "&", &proc);
+  req = mrb_uv_req_current(mrb, proc, &ret);
+  res = uv_fs_readdir(
+      mrb_uv_current_loop(mrb), &req->req.fs, dir,
+      mrb_nil_p(req->block)? NULL : _uv_fs_cb);
+  if (mrb_nil_p(req->block)) {
+    mrb_uv_req_clear(req);
+    return mrb_uv_create_status(mrb, res);
+  }
+  mrb_uv_req_check_error(mrb, req, res);
+  return ret;
+}
+
+static mrb_value
+mrb_uv_dir_close(mrb_state* mrb, mrb_value self) {
+  mrb_value proc, ret;
+  mrb_uv_req_t *req;
+  int res;
+  uv_dir_t *dir = (uv_dir_t*)mrb_data_get_ptr(mrb, self, &mrb_uv_dir_type);
+
+  mrb_get_args(mrb, "&", &proc);
+  req = mrb_uv_req_current(mrb, proc, &ret);
+  res = uv_fs_closedir(
+      mrb_uv_current_loop(mrb), &req->req.fs, dir,
+      mrb_nil_p(req->block)? NULL : _uv_fs_cb);
+  if (mrb_nil_p(req->block)) {
+    mrb_uv_req_clear(req);
+    return mrb_uv_create_status(mrb, res);
+  }
+  mrb_uv_req_check_error(mrb, req, res);
+  return ret;
+}
+
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 31, 0)
+
+static mrb_value
+mrb_uv_fs_statfs(mrb_state *mrb, mrb_value self)
+{
+  char const *path;
+  mrb_value b, ret;
+  mrb_uv_req_t *req;
+  int res;
+
+  mrb_get_args(mrb, "&z", &b, &path);
+
+  req = mrb_uv_req_current(mrb, b, &ret);
+  res = uv_fs_statfs(mrb_uv_current_loop(mrb), &req->req.fs, path,
+                     mrb_nil_p(req->block)? NULL : _uv_fs_cb);
+
+  if (mrb_nil_p(req->block)) {
+    mrb_value const ret = statfs_to_mrb(mrb, (uv_statfs_t*)req->req.fs.ptr);
+    mrb_uv_req_clear(req);
+    return ret;
+  }
+  mrb_uv_req_check_error(mrb, req, res);
+  return ret;
+}
+
+#endif
+
 void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
 {
   struct RClass *_class_uv_fs;
   struct RClass *_class_uv_stat;
+  struct RClass *_class_uv_dir;
 
   _class_uv_fs = mrb_define_class_under(mrb, UV, "FS", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_fs, MRB_TT_DATA);
@@ -823,6 +1003,10 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_const(mrb, _class_uv_fs, "X_OK", mrb_fixnum_value(X_OK));
 #if MRB_UV_CHECK_VERSION(1, 14, 0)
   mrb_define_const(mrb, _class_uv_fs, "COPYFILE_EXCL", mrb_fixnum_value(UV_FS_COPYFILE_EXCL));
+#endif
+#if MRB_UV_CHECK_VERSION(1, 20, 0)
+  mrb_define_const(mrb, _class_uv_fs, "COPYFILE_FICLONE", mrb_fixnum_value(UV_FS_COPYFILE_FICLONE));
+  mrb_define_const(mrb, _class_uv_fs, "COPYFILE_FICLONE_FORCE", mrb_fixnum_value(UV_FS_COPYFILE_FICLONE_FORCE));
 #endif
   mrb_define_method(mrb, _class_uv_fs, "write", mrb_uv_fs_write, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(2));
   mrb_define_method(mrb, _class_uv_fs, "read", mrb_uv_fs_read, MRB_ARGS_REQ(0) | MRB_ARGS_OPT(2));
@@ -859,6 +1043,18 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
 #if MRB_UV_CHECK_VERSION(1, 8, 0)
   mrb_define_class_method(mrb, _class_uv_fs, "realpath", mrb_uv_fs_realpath, MRB_ARGS_REQ(1));
 #endif
+#if MRB_UV_CHECK_VERSION(1, 21, 0)
+  mrb_define_class_method(mrb, _class_uv_fs, "lchown", mrb_uv_fs_lchown, MRB_ARGS_REQ(3));
+#endif
+#if MRB_UV_CHECK_VERSION(1, 28, 0)
+  _class_uv_dir = mrb_define_class_under(mrb, UV, "Dir", mrb->object_class);
+  mrb_define_class_method(mrb, _class_uv_fs, "opendir", mrb_uv_fs_opendir, MRB_ARGS_REQ(1));
+  mrb_define_class_method(mrb, _class_uv_dir, "read", mrb_uv_dir_read, MRB_ARGS_REQ(1));
+  mrb_define_class_method(mrb, _class_uv_dir, "close", mrb_uv_dir_close, MRB_ARGS_BLOCK());
+#endif
+#if MRB_UV_CHECK_VERSION(1, 31, 0)
+  mrb_define_class_method(mrb, _class_uv_fs, "statfs", mrb_uv_fs_statfs, MRB_ARGS_REQ(1));
+#endif
 
   /* for compatibility */
   mrb_define_class_method(mrb, _class_uv_fs, "readdir", mrb_uv_fs_scandir, MRB_ARGS_REQ(2));
@@ -883,4 +1079,12 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_stat, "birthtim", mrb_uv_stat_birthtim, MRB_ARGS_NONE());
   /* cannot create from mruby side */
   mrb_undef_class_method(mrb, _class_uv_stat, "new");
+
+#if MRB_UV_CHECK_VERSION(1, 28, 0)
+  _class_uv_dir = mrb_define_class_under(mrb, UV, "Dir", mrb->object_class);
+  MRB_SET_INSTANCE_TT(_class_uv_dir, MRB_TT_DATA);
+  mrb_undef_class_method(mrb, _class_uv_dir, "new");
+  mrb_define_method(mrb, _class_uv_dir, "close", mrb_uv_dir_close, MRB_ARGS_OPT(1));
+  mrb_define_method(mrb, _class_uv_dir, "readdir", mrb_uv_dir_read, MRB_ARGS_OPT(1));
+#endif
 }

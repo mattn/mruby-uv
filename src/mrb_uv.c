@@ -835,6 +835,48 @@ mrb_uv_getnameinfo(mrb_state *mrb, mrb_value self)
   return ret;
 }
 
+#if MRB_UV_CHECK_VERSION(1, 33, 0)
+
+static void
+mrb_uv_random_cb(uv_random_t *uv_req, int status, void *buf, size_t len)
+{
+  mrb_uv_req_t *req = (mrb_uv_req_t*)uv_req->data;
+  mrb_state *mrb = req->mrb;
+  mrb_value str = mrb_str_new(mrb, buf, len);
+  mrb_free(mrb, buf);
+  mrb_uv_req_yield(req, 1, &str);
+}
+
+static mrb_value
+mrb_uv_random(mrb_state *mrb, mrb_value self)
+{
+  mrb_int len;
+  mrb_value b = mrb_nil_value(), l = mrb_nil_value(), opts = mrb_nil_value(), ret;
+  const unsigned flags = 0;
+  char *buf;
+  uv_random_cb cb = NULL;
+  mrb_uv_req_t *req = NULL;
+
+  // TODO(take-cheeze): opts to flags conversion
+  mrb_get_args(mrb, "&i|H", &b, &len, &opts);
+
+  buf = mrb_malloc(mrb, len);
+  if (mrb_nil_p(b)) {
+    cb = mrb_uv_random_cb;
+  }
+  req = mrb_uv_req_current(mrb, b, &ret);
+  mrb_uv_req_check_error(mrb, req, uv_random(
+      mrb_uv_current_loop(mrb), &req->req.random, buf, len, flags, cb));
+  if (mrb_nil_p(b)) {
+    ret = mrb_str_new(mrb, buf, len);
+    mrb_free(mrb, buf);
+    mrb_uv_req_clear(req);
+  }
+  return ret;
+}
+
+#endif
+
 /*********************************************************
  * UV::Addrinfo
  *********************************************************/
@@ -1170,6 +1212,16 @@ mrb_uv_total_memory(mrb_state *mrb, mrb_value self)
   return mrb_uv_from_uint64(mrb, uv_get_total_memory());
 }
 
+#if MRB_UV_CHECK_VERSION(1, 29, 0)
+
+static mrb_value
+mrb_uv_get_constrained_memory(mrb_state* mrb, mrb_value self)
+{
+  return mrb_uv_from_uint64(mrb, uv_get_constrained_memory());
+}
+
+#endif
+
 static mrb_value
 mrb_uv_hrtime(mrb_state *mrb, mrb_value self)
 {
@@ -1480,6 +1532,23 @@ mrb_uv_get_osfhandle(mrb_state *mrb, mrb_value self)
 
 #endif
 
+#if MRB_UV_CHECK_VERSION(1, 23, 0)
+
+static mrb_value
+mrb_uv_fs_open_osfandle(mrb_state *mrb, mrb_value self)
+{
+  mrb_value o;
+  mrb_get_args(mrb, "o", &o);
+
+  if (!mrb_cptr_p(o)) {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "Invalid object: %S", o);
+  }
+
+  return mrb_fixnum_value(uv_open_osfhandle(mrb_cptr(o));
+}
+
+#endif
+
 #if MRB_UV_CHECK_VERSION(1, 6, 0)
 
 static mrb_value
@@ -1616,6 +1685,78 @@ mrb_uv_os_getppid(mrb_state *mrb, mrb_value self)
 
 #endif
 
+#if MRB_UV_CHECK_VERSION(1, 25, 0)
+
+static mrb_value
+mrb_uv_os_uname(mrb_state *mrb, mrb_value self)
+{
+  mrb_value ret = mrb_hash_new_capa(mrb, );
+  uv_ustname_t uts;
+  mrb_uv_check_error(mrb, uv_is_uname(&uts));
+  mrb_hash_set(ret, mrb_intern_lit(mrb, "sysname"), mrb_str_new_cstr(mrb, uts.sysname));
+  mrb_hash_set(ret, mrb_intern_lit(mrb, "release"), mrb_str_new_cstr(mrb, uts.release));
+  mrb_hash_set(ret, mrb_intern_lit(mrb, "version"), mrb_str_new_cstr(mrb, uts.version));
+  mrb_hash_set(ret, mrb_intern_lit(mrb, "machine"), mrb_str_new_cstr(mrb, uts.machine));
+  return ret;
+}
+
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 31, 0)
+
+static mrb_value
+mrb_uv_os_environ(mrb_state *mrb, mrb_value self)
+{
+  mrb_value ret = mrb_hash_new(mrb);
+  uv_env_item_t *items;
+  int i, count;
+
+  mrb_uv_check_error(mrb, uv_os_environ(&items, &count));
+
+  for (i = 0; i < count; ++i) {
+    mrb_hash_set(mrb, mrb_str_new_cstr(mrb, items[i].name), mrb_str_new_cstr(mrb, items[i].value));
+  }
+  uv_os_free_environ(items, count);
+  return ret;
+}
+
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 28, 0)
+
+static mrb_value
+mrb_uv_gettimeofday(mrb_state *mrb, mrb_value self)
+{
+  uv_timeval64_t tv;
+  mrb_uv_check_error(mrb, uv_gettimeofday(&tv));
+  return mrb_funcall(mrb, mrb_obj_value(mrb_class_get(mrb, "Time")), "at", 2, \
+                     mrb_uv_from_uint64(mrb, tv.tv_sec),      \
+                     mrb_uv_from_uint64(mrb, tv.tv_usec)); \
+}
+
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 33, 0)
+
+static mrb_value
+mrb_uv_get_vterm_state(mrb_state *mrb, mrb_value self)
+{
+  uv_tty_vtermstate_t state;
+  mrb_uv_check_error(mrb, uv_tty_get_vterm_state(&state));
+  return mrb_fixnum_value(state);
+}
+
+static mrb_value
+mrb_uv_set_vterm_state(mrb_state *mrb, mrb_value self)
+{
+  mrb_int state;
+  mrb_get_args(mrb, "i", &state);
+  uv_tty_set_vterm_state(&state);
+  return self;
+}
+
+#endif
+
 /*********************************************************
  * register
  *********************************************************/
@@ -1673,6 +1814,12 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 #endif
 #if MRB_UV_CHECK_VERSION(1, 12, 0)
   mrb_define_module_function(mrb, _class_uv, "osfhandle", mrb_uv_get_osfhandle, MRB_ARGS_REQ(1));
+#endif
+#if MRB_UV_CHECK_VERSION(1, 23, 0)
+  mrb_define_class_method(mrb, _class_uv, "open_osfhandle", mrb_uv_fs_open_osfandle, MRB_ARGS_REQ(1));
+#endif
+#if MRB_UV_CHECK_VERSION(1, 33, 0)
+  mrb_define_module_function(mrb, _class_uv, "random", mrb_uv_random, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(1));
 #endif
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
@@ -1817,6 +1964,12 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 #if MRB_UV_CHECK_VERSION(1, 18, 0)
   mrb_define_module_function(mrb, _class_uv_os, "getpid", mrb_uv_os_getpid, MRB_ARGS_NONE());
 #endif
+#if MRB_UV_CHECK_VERSION(1, 25, 0)
+  mrb_define_module_function(mrb, _class_uv_os, "uname", mrb_uv_os_uname, MRB_ARGS_NONE());
+#endif
+#if MRB_UV_CHECK_VERSION(1, 31, 0)
+  mrb_define_module_function(mrb, _class_uv_os, "environ", mrb_uv_os_environ, MRB_ARGS_NONE());
+#endif
 
 #if MRB_UV_CHECK_VERSION(1, 9, 0)
   _class_uv_passwd = mrb_define_class_under(mrb, _class_uv_os, "Passwd", mrb->object_class);
@@ -1827,6 +1980,21 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_method(mrb, _class_uv_passwd, "homedir", mrb_uv_passwd_homedir, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_passwd, "uid", mrb_uv_passwd_uid, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_passwd, "gid", mrb_uv_passwd_gid, MRB_ARGS_NONE());
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 28, 0)
+  mrb_define_module_function(mrb, _class_uv, "timeofday", mrb_uv_gettimeofday, MRB_ARGS_NONE());
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 29, 0)
+  mrb_define_module_function(mrb, _class_uv, "constrained_memory", mrb_uv_get_constrained_memory, MRB_ARGS_NONE());
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 33, 0)
+  mrb_define_module_function(mrb, _class_uv, "vterm_state", mrb_uv_get_vterm_state, MRB_ARGS_NONE());
+  mrb_define_module_function(mrb, _class_uv, "vterm_state=", mrb_uv_set_vterm_state, MRB_ARGS_REQ(1));
+  mrb_define_const(mrb, _class_uv, "TTY_SUPPORTED", mrb_fixnum_value(UV_TTY_SUPPORTED));
+  mrb_define_const(mrb, _class_uv, "TTY_UNSUPPORTED", mrb_fixnum_value(UV_TTY_UNSUPPORTED));
 #endif
 
   mrb_mruby_uv_gem_init_fs(mrb, _class_uv);
