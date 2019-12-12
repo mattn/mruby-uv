@@ -99,7 +99,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   if build.cc.respond_to? :search_header_path
     next if build.cc.search_header_path 'uv.h'
   end
-  if ENV['OS'] == 'Windows_NT'
+  if ENV['OS'] == 'Windows_NT' || ENV['SKIP_UV_BUNDLE']
     next
   end
 
