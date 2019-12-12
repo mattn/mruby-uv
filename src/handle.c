@@ -629,6 +629,8 @@ sockaddr_to_mrb(mrb_state *mrb, struct sockaddr *addr)
       value_data = mrb_obj_value((void *) data);
       value_result = mrb_class_new_instance(mrb, 1, &value_data, class_uv_ipaddr);
       break;
+    default:
+      mrb_assert(FALSE);
   }
   return value_result;
 }
