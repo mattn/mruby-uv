@@ -7,7 +7,7 @@ MRuby::Build.new do |conf|
   gem :core => 'mruby-sprintf'
   gem :core => 'mruby-time'
   gem "#{MRUBY_ROOT}/.." do |c|
-    c.bundle_onigmo
+    c.bundle_uv
   end
 end
 
@@ -20,6 +20,6 @@ MRuby::Build.new('libuv-v1.0.0') do |conf|
   gem :core => 'mruby-sprintf'
   gem :core => 'mruby-time'
   gem "#{MRUBY_ROOT}/.." do |c|
-    c.bundle_onigmo '1.0.0'
+    c.bundle_uv '1.0.0'
   end
 end
