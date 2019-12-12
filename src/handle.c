@@ -609,30 +609,29 @@ sockaddr_to_mrb(mrb_state *mrb, struct sockaddr *addr)
 {
   struct RClass *class_uv, *class_uv_ipaddr;
   struct RData *data;
-  mrb_value value_data, value_result;
   switch (addr->sa_family) {
     case AF_INET:
     case AF_INET6:
       class_uv = mrb_module_get(mrb, "UV");
       if (addr->sa_family == AF_INET) {
+        struct sockaddr_in* ptr;
         class_uv_ipaddr = mrb_class_get_under(mrb, class_uv, "Ip4Addr");
-        data = Data_Wrap_Struct(
-            mrb, mrb->object_class,
-            &mrb_uv_ip4addr_nofree_type, (void *) &addr);
+        ptr = mrb_malloc(mrb, sizeof(struct sockaddr_in));
+        memcpy(ptr, addr, sizeof(struct sockaddr_in));
+        data = Data_Wrap_Struct(mrb, class_uv_ipaddr, &mrb_uv_ip4addr_type, (void *)ptr);
       }
       else {
+        struct sockaddr_in6* ptr;
         class_uv_ipaddr = mrb_class_get_under(mrb, class_uv, "Ip6Addr");
-        data = Data_Wrap_Struct(
-            mrb, mrb->object_class,
-            &mrb_uv_ip6addr_nofree_type, (void *) &addr);
+        ptr = mrb_malloc(mrb, sizeof(struct sockaddr_in6));
+        memcpy(ptr, addr, sizeof(struct sockaddr_in6));
+        data = Data_Wrap_Struct(mrb, class_uv_ipaddr, &mrb_uv_ip6addr_type, (void *)ptr);
       }
-      value_data = mrb_obj_value((void *) data);
-      value_result = mrb_class_new_instance(mrb, 1, &value_data, class_uv_ipaddr);
       break;
     default:
       mrb_assert(FALSE);
   }
-  return value_result;
+  return mrb_obj_value(data);
 }
 
 static mrb_value
