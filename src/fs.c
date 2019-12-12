@@ -262,6 +262,12 @@ mrb_uv_fs_fd(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(ctx->fd);
 }
 
+static mrb_value
+mrb_uv_fs_path(mrb_state *mrb, mrb_value self)
+{
+  return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "path"));
+}
+
 static void
 _uv_fs_open_cb(uv_fs_t* uv_req)
 {
@@ -275,6 +281,7 @@ _uv_fs_open_cb(uv_fs_t* uv_req)
   mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "fs_open"), mrb_nil_value());
   file = (mrb_uv_file*)DATA_PTR(args[0]);
   file->fd = uv_req->result;
+  mrb_iv_set(mrb, args[0], mrb_intern_lit(mrb, "path"), mrb_str_new_cstr(mrb, uv_req->path));
   mrb_uv_req_yield(req, 2, args);
 }
 
@@ -306,11 +313,51 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   mrb_uv_req_check_error(mrb, req, res);
   if (mrb_nil_p(req->block)) {
     context->fd = res;
+    mrb_iv_set(mrb, args[0], mrb_intern_lit(mrb, "path"), mrb_str_new_cstr(mrb, uv_req->path));
     return c;
   }
   mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "fs_open"), c);
   return ret;
 }
+
+#if MRB_UV_CHECK_VERSION(1, 34, 0)
+
+static mrb_value
+mrb_uv_fs_mkstemp(mrb_state *mrb, mrb_value self)
+{
+  char const *arg_filename;
+  mrb_value c, b, ret;
+  mrb_int arg_flags, arg_mode;
+  struct RClass* _class_uv_fs;
+  mrb_uv_file* context;
+  mrb_uv_req_t* req;
+  int res;
+
+  mrb_get_args(mrb, "&zii", &b, &arg_filename, &arg_flags, &arg_mode);
+
+  _class_uv_fs = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "FS");
+  c = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, _class_uv_fs));
+  context = (mrb_uv_file*)mrb_malloc(mrb, sizeof(mrb_uv_file));
+  context->mrb = mrb;
+  context->instance = c;
+  context->fd = -1;
+  DATA_PTR(c) = context;
+  DATA_TYPE(c) = &mrb_uv_file_type;
+
+  req = mrb_uv_req_current(mrb, b, &ret);
+  res = uv_fs_mkdtemp(mrb_uv_current_loop(mrb), &req->req.fs,
+                      arg_filename, arg_flags, arg_mode, mrb_nil_p(req->block)? NULL : _uv_fs_open_cb);
+  mrb_uv_req_check_error(mrb, req, res);
+  if (mrb_nil_p(req->block)) {
+    context->fd = res;
+    mrb_iv_set(mrb, args[0], mrb_intern_lit(mrb, "path"), mrb_str_new_cstr(mrb, uv_req->path));
+    return c;
+  }
+  mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "fs_open"), c);
+  return ret;
+}
+
+#endif
 
 static mrb_value
 mrb_uv_fs_close(mrb_state *mrb, mrb_value self)
@@ -1019,6 +1066,7 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_fs, "chown", mrb_uv_fs_fchown, MRB_ARGS_REQ(2));
   mrb_define_method(mrb, _class_uv_fs, "close", mrb_uv_fs_close, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_fs, "fd", mrb_uv_fs_fd, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_fs, "path", mrb_uv_fs_path, MRB_ARGS_NONE());
   mrb_define_class_method(mrb, _class_uv_fs, "open", mrb_uv_fs_open, MRB_ARGS_REQ(2));
   mrb_define_class_method(mrb, _class_uv_fs, "unlink", mrb_uv_fs_unlink, MRB_ARGS_REQ(1));
   mrb_define_class_method(mrb, _class_uv_fs, "mkdir", mrb_uv_fs_mkdir, MRB_ARGS_REQ(1));
@@ -1054,6 +1102,9 @@ void mrb_mruby_uv_gem_init_fs(mrb_state *mrb, struct RClass *UV)
 #endif
 #if MRB_UV_CHECK_VERSION(1, 31, 0)
   mrb_define_class_method(mrb, _class_uv_fs, "statfs", mrb_uv_fs_statfs, MRB_ARGS_REQ(1));
+#endif
+#if MRB_UV_CHECK_VERSION(1, 34, 0)
+  mrb_define_class_method(mrb, _class_uv_fs, "mkstemp", mrb_uv_fs_mkstemp, MRB_ARGS_REQ(1));
 #endif
 
   /* for compatibility */

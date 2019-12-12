@@ -13,7 +13,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
 
   def cross?; build.kind_of? MRuby::CrossBuild end
 
-  DEFAULT_UV_VERSION = '1.33.1'
+  DEFAULT_UV_VERSION = '1.34.0'
 
   def self.bundle_uv(version = DEFAULT_UV_VERSION)
     visualcpp = ENV['VisualStudioVersion'] || ENV['VSINSTALLDIR']
