@@ -103,7 +103,7 @@ mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
   mrb_value b = mrb_nil_value(), opts;
   mrb_uv_thread* context = NULL;
 
-  mrb_get_args(mrb, "&|oH", &b, &thread_arg, opts);
+  mrb_get_args(mrb, "&|oH", &b, &thread_arg, &opts);
 
   context = (mrb_uv_thread*)mrb_malloc(mrb, sizeof(mrb_uv_thread));
   context->mrb = mrb;
