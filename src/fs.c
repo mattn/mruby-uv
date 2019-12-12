@@ -277,7 +277,6 @@ _uv_fs_open_cb(uv_fs_t* uv_req)
   mrb_uv_file *file;
 
   args[0] = mrb_iv_get(mrb, req->instance, mrb_intern_lit(mrb, "fs_open"));
-  args[1] = mrb_uv_create_status(mrb, uv_req->result);
   mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "fs_open"), mrb_nil_value());
   file = (mrb_uv_file*)DATA_PTR(args[0]);
   file->fd = uv_req->result;
@@ -313,7 +312,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   mrb_uv_req_check_error(mrb, req, res);
   if (mrb_nil_p(req->block)) {
     context->fd = res;
-    mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "path"), mrb_str_new_cstr(mrb, req->req.fs.path));
+    mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "path"), mrb_str_new_cstr(mrb, arg_filename));
     return c;
   }
   mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "fs_open"), c);
