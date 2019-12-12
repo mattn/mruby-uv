@@ -313,7 +313,7 @@ mrb_uv_fs_open(mrb_state *mrb, mrb_value self)
   mrb_uv_req_check_error(mrb, req, res);
   if (mrb_nil_p(req->block)) {
     context->fd = res;
-    mrb_iv_set(mrb, args[0], mrb_intern_lit(mrb, "path"), mrb_str_new_cstr(mrb, uv_req->path));
+    mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "path"), mrb_str_new_cstr(mrb, req->req.fs.path));
     return c;
   }
   mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "fs_open"), c);
@@ -327,13 +327,12 @@ mrb_uv_fs_mkstemp(mrb_state *mrb, mrb_value self)
 {
   char const *arg_filename;
   mrb_value c, b, ret;
-  mrb_int arg_flags, arg_mode;
   struct RClass* _class_uv_fs;
   mrb_uv_file* context;
   mrb_uv_req_t* req;
   int res;
 
-  mrb_get_args(mrb, "&zii", &b, &arg_filename, &arg_flags, &arg_mode);
+  mrb_get_args(mrb, "&z", &b, &arg_filename);
 
   _class_uv_fs = mrb_class_get_under(mrb, mrb_module_get(mrb, "UV"), "FS");
   c = mrb_obj_value(mrb_obj_alloc(mrb, MRB_TT_DATA, _class_uv_fs));
@@ -346,11 +345,11 @@ mrb_uv_fs_mkstemp(mrb_state *mrb, mrb_value self)
 
   req = mrb_uv_req_current(mrb, b, &ret);
   res = uv_fs_mkdtemp(mrb_uv_current_loop(mrb), &req->req.fs,
-                      arg_filename, arg_flags, arg_mode, mrb_nil_p(req->block)? NULL : _uv_fs_open_cb);
+                      arg_filename, mrb_nil_p(req->block)? NULL : _uv_fs_open_cb);
   mrb_uv_req_check_error(mrb, req, res);
   if (mrb_nil_p(req->block)) {
     context->fd = res;
-    mrb_iv_set(mrb, args[0], mrb_intern_lit(mrb, "path"), mrb_str_new_cstr(mrb, uv_req->path));
+    mrb_iv_set(mrb, c, mrb_intern_lit(mrb, "path"), mrb_str_new_cstr(mrb, req->req.fs.path));
     return c;
   }
   mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "fs_open"), c);

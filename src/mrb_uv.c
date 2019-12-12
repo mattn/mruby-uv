@@ -851,7 +851,7 @@ static mrb_value
 mrb_uv_random(mrb_state *mrb, mrb_value self)
 {
   mrb_int len;
-  mrb_value b = mrb_nil_value(), l = mrb_nil_value(), opts = mrb_nil_value(), ret;
+  mrb_value b = mrb_nil_value(), opts = mrb_nil_value(), ret;
   const unsigned flags = 0;
   char *buf;
   uv_random_cb cb = NULL;
@@ -1544,7 +1544,7 @@ mrb_uv_fs_open_osfandle(mrb_state *mrb, mrb_value self)
     mrb_raisef(mrb, E_RUNTIME_ERROR, "Invalid object: %S", o);
   }
 
-  return mrb_fixnum_value(uv_open_osfhandle(mrb_cptr(o));
+  return mrb_fixnum_value(uv_open_osfhandle((uintptr_t)mrb_cptr(o)));
 }
 
 #endif
@@ -1685,18 +1685,43 @@ mrb_uv_os_getppid(mrb_state *mrb, mrb_value self)
 
 #endif
 
+#if MRB_UV_CHECK_VERSION(1, 23, 0)
+
+static mrb_value
+mrb_uv_get_priority(mrb_state *mrb, mrb_value self)
+{
+  int priority;
+  mrb_int pid;
+  mrb_get_args(mrb, "i", &pid);
+  mrb_uv_check_error(mrb, uv_os_getpriority(pid, &priority));
+  return mrb_fixnum_value(priority);
+}
+
+static mrb_value
+mrb_uv_set_priority(mrb_state *mrb, mrb_value self)
+{
+  mrb_int priority;
+  mrb_int pid;
+  mrb_get_args(mrb, "ii", &pid, &priority);
+
+  mrb_uv_check_error(mrb, uv_os_setpriority(pid, priority));
+  return mrb_fixnum_value(priority);
+}
+
+#endif
+
 #if MRB_UV_CHECK_VERSION(1, 25, 0)
 
 static mrb_value
 mrb_uv_os_uname(mrb_state *mrb, mrb_value self)
 {
-  mrb_value ret = mrb_hash_new_capa(mrb, );
-  uv_ustname_t uts;
-  mrb_uv_check_error(mrb, uv_is_uname(&uts));
-  mrb_hash_set(ret, mrb_intern_lit(mrb, "sysname"), mrb_str_new_cstr(mrb, uts.sysname));
-  mrb_hash_set(ret, mrb_intern_lit(mrb, "release"), mrb_str_new_cstr(mrb, uts.release));
-  mrb_hash_set(ret, mrb_intern_lit(mrb, "version"), mrb_str_new_cstr(mrb, uts.version));
-  mrb_hash_set(ret, mrb_intern_lit(mrb, "machine"), mrb_str_new_cstr(mrb, uts.machine));
+  mrb_value ret = mrb_hash_new_capa(mrb, 4);
+  uv_utsname_t uts;
+  mrb_uv_check_error(mrb, uv_os_uname(&uts));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "sysname")), mrb_str_new_cstr(mrb, uts.sysname));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "release")), mrb_str_new_cstr(mrb, uts.release));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "version")), mrb_str_new_cstr(mrb, uts.version));
+  mrb_hash_set(mrb, ret, mrb_symbol_value(mrb_intern_lit(mrb, "machine")), mrb_str_new_cstr(mrb, uts.machine));
   return ret;
 }
 
@@ -1707,14 +1732,15 @@ mrb_uv_os_uname(mrb_state *mrb, mrb_value self)
 static mrb_value
 mrb_uv_os_environ(mrb_state *mrb, mrb_value self)
 {
-  mrb_value ret = mrb_hash_new(mrb);
+  mrb_value ret;
   uv_env_item_t *items;
   int i, count;
 
   mrb_uv_check_error(mrb, uv_os_environ(&items, &count));
+  ret = mrb_hash_new_capa(mrb, count);
 
   for (i = 0; i < count; ++i) {
-    mrb_hash_set(mrb, mrb_str_new_cstr(mrb, items[i].name), mrb_str_new_cstr(mrb, items[i].value));
+    mrb_hash_set(mrb, ret, mrb_str_new_cstr(mrb, items[i].name), mrb_str_new_cstr(mrb, items[i].value));
   }
   uv_os_free_environ(items, count);
   return ret;
@@ -1751,7 +1777,7 @@ mrb_uv_set_vterm_state(mrb_state *mrb, mrb_value self)
 {
   mrb_int state;
   mrb_get_args(mrb, "i", &state);
-  uv_tty_set_vterm_state(&state);
+  uv_tty_set_vterm_state((uv_tty_vtermstate_t)state);
   return self;
 }
 
@@ -1829,6 +1855,16 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
 #endif
 #if MRB_UV_CHECK_VERSION(1, 23, 0)
   mrb_define_class_method(mrb, _class_uv, "open_osfhandle", mrb_uv_fs_open_osfandle, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv, "get_priority", mrb_uv_get_priority, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, _class_uv, "set_priority", mrb_uv_set_priority, MRB_ARGS_REQ(2));
+#define add_priority(name) mrb_define_const(mrb, _class_uv, "PRIORITY_" #name, mrb_fixnum_value(UV_PRIORITY_ ## name))
+  add_priority(LOW);
+  add_priority(BELOW_NORMAL);
+  add_priority(NORMAL);
+  add_priority(ABOVE_NORMAL);
+  add_priority(HIGH);
+  add_priority(HIGHEST);
+#undef add_priority
 #endif
 #if MRB_UV_CHECK_VERSION(1, 33, 0)
   mrb_define_module_function(mrb, _class_uv, "random", mrb_uv_random, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(1));

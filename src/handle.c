@@ -605,28 +605,29 @@ mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
-sockaddtr_to_mrb(mrb_state *mrb, struct sockaddr *addr)
+sockaddr_to_mrb(mrb_state *mrb, struct sockaddr *addr)
 {
-  struct RClass *class_uv, *_class_uv_ipaddr;
+  struct RClass *class_uv, *class_uv_ipaddr;
   struct RData *data;
   mrb_value value_data, value_result;
-  switch (addr.ss_family) {
+  switch (addr->sa_family) {
     case AF_INET:
     case AF_INET6:
-      _class_uv = mrb_module_get(mrb, "UV");
-      if (addr.ss_family == AF_INET) {
-        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
-        data = Data_Wrap_Struct(mrb, mrb->object_class,
+      class_uv = mrb_module_get(mrb, "UV");
+      if (addr->sa_family == AF_INET) {
+        class_uv_ipaddr = mrb_class_get_under(mrb, class_uv, "Ip4Addr");
+        data = Data_Wrap_Struct(
+            mrb, mrb->object_class,
             &mrb_uv_ip4addr_nofree_type, (void *) &addr);
       }
       else {
-        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
-        data = Data_Wrap_Struct(mrb, mrb->object_class,
+        class_uv_ipaddr = mrb_class_get_under(mrb, class_uv, "Ip6Addr");
+        data = Data_Wrap_Struct(
+            mrb, mrb->object_class,
             &mrb_uv_ip6addr_nofree_type, (void *) &addr);
       }
       value_data = mrb_obj_value((void *) data);
-      value_result = mrb_class_new_instance(mrb, 1, &value_data,
-          _class_uv_ipaddr);
+      value_result = mrb_class_new_instance(mrb, 1, &value_data, class_uv_ipaddr);
       break;
   }
   return value_result;
@@ -641,7 +642,7 @@ mrb_uv_tcp_getpeername(mrb_state *mrb, mrb_value self)
 
   len = sizeof(addr);
   mrb_uv_check_error(mrb, uv_tcp_getpeername((uv_tcp_t*)&context->handle, (struct sockaddr *)&addr, &len));
-  return sockaddtr_to_mrb(mrb, (struct sockaddr *)&addr);
+  return sockaddr_to_mrb(mrb, (struct sockaddr *)&addr);
 }
 
 static mrb_value
@@ -679,7 +680,7 @@ mrb_uv_tcp_close_reset(mrb_state *mrb, mrb_value self)
 
   mrb_iv_set(mrb, context->instance, mrb_intern_lit(mrb, "close_cb"), b);
   mrb_uv_check_error(mrb, uv_tcp_close_reset(
-      (uv_tcp_t*)&context->handle, (uv_connect_cb)_uv_close_cb));
+      (uv_tcp_t*)&context->handle, (uv_close_cb)_uv_close_cb));
   return mrb_nil_value();
 }
 
@@ -1513,7 +1514,7 @@ mrb_uv_process_stderr_pipe_set(mrb_state *mrb, mrb_value self)
   return self;
 }
 
-#define MRB_UV_CHECK_VERSION(1, 23, 0)
+#if MRB_UV_CHECK_VERSION(1, 23, 0)
 
 static mrb_value
 mrb_uv_process_get_priority(mrb_state *mrb, mrb_value self)
@@ -1533,27 +1534,6 @@ mrb_uv_process_set_priority(mrb_state *mrb, mrb_value self)
   int priority;
 
   mrb_get_args(mrb, "i", &priority);
-
-  mrb_uv_check_error(mrb, uv_os_setpriority(pid, priority));
-  return mrb_fixnum_value(priority);
-}
-
-static mrb_value
-mrb_uv_get_priority(mrb_state *mrb, mrb_value self)
-{
-  int priority;
-  mrb_int pid;
-  mrb_get_args(mrb, "i", &pid);
-  mrb_uv_check_error(mrb, uv_os_getpriority(pid, &priority));
-  return mrb_fixnum_value(priority);
-}
-
-static mrb_value
-mrb_uv_set_priority(mrb_state *mrb, mrb_value self)
-{
-  mrb_int priority;
-  mrb_int pid;
-  mrb_get_args(mrb, "ii", &pid, priority);
 
   mrb_uv_check_error(mrb, uv_os_setpriority(pid, priority));
   return mrb_fixnum_value(priority);
@@ -2231,19 +2211,9 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_process, "stderr_pipe", mrb_uv_process_stderr_pipe_get, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "kill", mrb_uv_process_kill, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "pid", mrb_uv_process_pid, MRB_ARGS_NONE());
-#define MRB_UV_CHECK_VERSION(1, 23, 0)
+#if MRB_UV_CHECK_VERSION(1, 23, 0)
   mrb_define_method(mrb, _class_uv_process, "priority", mrb_uv_process_get_priority, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "priority=", mrb_uv_process_set_priority, MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv, "get_priority", mrb_uv_get_priority, MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, _class_uv, "set_priority", mrb_uv_set_priority, MRB_ARGS_REQ(2));
-#define add_priority(name) mrb_define_const(mrb, _class_uv, "PRIORITY_" #name, mrb_fixnum_value(UV_PRIORITY_ ## name)))
-  add_priority(LOW);
-  add_priority(BELOW_NORMAL);
-  add_priority(NORMAL);
-  add_priority(ABOVE_NORMAL);
-  add_priority(HIGH);
-  add_priority(HIGHEST);
-#undef add_priority
 #endif
   mrb_gc_arena_restore(mrb, ai);
 
