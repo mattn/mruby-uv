@@ -277,6 +277,7 @@ _uv_fs_open_cb(uv_fs_t* uv_req)
   mrb_uv_file *file;
 
   args[0] = mrb_iv_get(mrb, req->instance, mrb_intern_lit(mrb, "fs_open"));
+  args[1] = mrb_uv_create_status(mrb, uv_req->result);
   mrb_iv_set(mrb, req->instance, mrb_intern_lit(mrb, "fs_open"), mrb_nil_value());
   file = (mrb_uv_file*)DATA_PTR(args[0]);
   file->fd = uv_req->result;

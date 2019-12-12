@@ -1159,7 +1159,6 @@ mrb_uv_create_status(mrb_state *mrb, int st)
 {
   if (st < 0) { return mrb_uv_create_error(mrb, st); }
 
-  mrb_assert(st == 0);
   return mrb_nil_value();
 }
 
