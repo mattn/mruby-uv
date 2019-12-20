@@ -1869,7 +1869,7 @@ mrb_mruby_uv_gem_init(mrb_state* mrb) {
   mrb_define_module_function(mrb, _class_uv, "random", mrb_uv_random, MRB_ARGS_REQ(1) | MRB_ARGS_OPT(1));
 #endif
 #if MRB_UV_CHECK_VERSION(1, 34, 0)
-  mrb_define_module_function(mrb, _class_uv, "sleep", mrb_uv_sleep, MRB_ARGS_REQ(1));
+  mrb_define_module_function(mrb, _class_uv, "sleep_milli", mrb_uv_sleep, MRB_ARGS_REQ(1));
 #endif
 
   mrb_define_const(mrb, _class_uv, "UV_RUN_DEFAULT", mrb_fixnum_value(UV_RUN_DEFAULT));
