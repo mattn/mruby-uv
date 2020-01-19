@@ -861,7 +861,7 @@ mrb_uv_random(mrb_state *mrb, mrb_value self)
   mrb_get_args(mrb, "&i|H", &b, &len, &opts);
 
   buf = mrb_malloc(mrb, len);
-  if (mrb_nil_p(b)) {
+  if (!mrb_nil_p(b)) {
     cb = mrb_uv_random_cb;
   }
   req = mrb_uv_req_current(mrb, b, &ret);
