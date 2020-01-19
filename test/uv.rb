@@ -206,3 +206,36 @@ assert 'UV::OS::Passwd' do
   assert_kind_of Fixnum, p.uid
   assert_kind_of Fixnum, p.gid
 end
+
+assert 'UV.constrained_memory' do
+  skip unless UV.respond_to? :constrained_memory
+  assert_kind_of Fixnum, UV.constrained_memory
+end
+
+assert 'UV.timeofday' do
+  skip unless UV.respond_to? :timeofday
+  assert_kind_of Time, UV.timeofday
+end
+
+assert 'UV.sleep_milli' do
+  skip unless UV.respond_to? :sleep_milli
+  skip unless UV.respond_to? :timeofday
+  t = UV.timeofday
+  UV.sleep_milli 1
+  assert_true (UV.timeofday - t) >= 0.001
+end
+
+assert 'UV::OS.environ' do
+  skip unless UV::OS.respond_to? :environ
+  assert_kind_of Hash, UV::OS.environ
+end
+
+assert 'UV::OS.uname' do
+  skip unless UV::OS.respond_to? :uname
+  u = UV::OS.uname
+  assert_kind_of Hash, u
+  assert_kind_of String, u[:sysname]
+  assert_kind_of String, u[:release]
+  assert_kind_of String, u[:version]
+  assert_kind_of String, u[:machine]
+end

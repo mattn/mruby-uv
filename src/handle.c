@@ -605,38 +605,45 @@ mrb_uv_tcp_nodelay_set(mrb_state *mrb, mrb_value self)
 }
 
 static mrb_value
+sockaddr_to_mrb(mrb_state *mrb, struct sockaddr *addr)
+{
+  struct RClass *class_uv, *class_uv_ipaddr;
+  struct RData *data;
+  switch (addr->sa_family) {
+    case AF_INET:
+    case AF_INET6:
+      class_uv = mrb_module_get(mrb, "UV");
+      if (addr->sa_family == AF_INET) {
+        struct sockaddr_in* ptr;
+        class_uv_ipaddr = mrb_class_get_under(mrb, class_uv, "Ip4Addr");
+        ptr = mrb_malloc(mrb, sizeof(struct sockaddr_in));
+        memcpy(ptr, addr, sizeof(struct sockaddr_in));
+        data = Data_Wrap_Struct(mrb, class_uv_ipaddr, &mrb_uv_ip4addr_type, (void *)ptr);
+      }
+      else {
+        struct sockaddr_in6* ptr;
+        class_uv_ipaddr = mrb_class_get_under(mrb, class_uv, "Ip6Addr");
+        ptr = mrb_malloc(mrb, sizeof(struct sockaddr_in6));
+        memcpy(ptr, addr, sizeof(struct sockaddr_in6));
+        data = Data_Wrap_Struct(mrb, class_uv_ipaddr, &mrb_uv_ip6addr_type, (void *)ptr);
+      }
+      break;
+    default:
+      mrb_assert(FALSE);
+  }
+  return mrb_obj_value(data);
+}
+
+static mrb_value
 mrb_uv_tcp_getpeername(mrb_state *mrb, mrb_value self)
 {
   int len;
   struct sockaddr_storage addr;
-  struct RClass* _class_uv;
-  struct RClass* _class_uv_ipaddr;
-  struct RData *data;
-  mrb_value value_data, value_result = mrb_nil_value();
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   len = sizeof(addr);
   mrb_uv_check_error(mrb, uv_tcp_getpeername((uv_tcp_t*)&context->handle, (struct sockaddr *)&addr, &len));
-  switch (addr.ss_family) {
-    case AF_INET:
-    case AF_INET6:
-      _class_uv = mrb_module_get(mrb, "UV");
-      if (addr.ss_family == AF_INET) {
-        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
-        data = Data_Wrap_Struct(mrb, mrb->object_class,
-            &mrb_uv_ip4addr_nofree_type, (void *) &addr);
-      }
-      else {
-        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
-        data = Data_Wrap_Struct(mrb, mrb->object_class,
-            &mrb_uv_ip6addr_nofree_type, (void *) &addr);
-      }
-      value_data = mrb_obj_value((void *) data);
-      value_result = mrb_class_new_instance(mrb, 1, &value_data,
-          _class_uv_ipaddr);
-      break;
-  }
-  return value_result;
+  return sockaddr_to_mrb(mrb, (struct sockaddr *)&addr);
 }
 
 static mrb_value
@@ -644,10 +651,6 @@ mrb_uv_getsockname(mrb_state *mrb, mrb_value self, int tcp)
 {
   int len;
   struct sockaddr_storage addr;
-  struct RClass* _class_uv;
-  struct RClass* _class_uv_ipaddr;
-  struct RData *data;
-  mrb_value value_data, value_result = mrb_nil_value();
   mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
 
   len = sizeof(addr);
@@ -657,26 +660,7 @@ mrb_uv_getsockname(mrb_state *mrb, mrb_value self, int tcp)
   else {
     mrb_uv_check_error(mrb, uv_udp_getsockname((uv_udp_t*)&context->handle, (struct sockaddr *)&addr, &len));
   }
-  switch (addr.ss_family) {
-    case AF_INET:
-    case AF_INET6:
-      _class_uv = mrb_module_get(mrb, "UV");
-      if (addr.ss_family == AF_INET) {
-        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip4Addr");
-        data = Data_Wrap_Struct(mrb, mrb->object_class,
-            &mrb_uv_ip4addr_nofree_type, (void *) &addr);
-      }
-      else {
-        _class_uv_ipaddr = mrb_class_get_under(mrb, _class_uv, "Ip6Addr");
-        data = Data_Wrap_Struct(mrb, mrb->object_class,
-            &mrb_uv_ip6addr_nofree_type, (void *) &addr);
-      }
-      value_data = mrb_obj_value((void *) data);
-      value_result = mrb_class_new_instance(mrb, 1, &value_data,
-          _class_uv_ipaddr);
-      break;
-  }
-  return value_result;
+  return sockaddr_to_mrb(mrb, (struct sockaddr*)&addr);
 }
 
 static mrb_value
@@ -684,6 +668,24 @@ mrb_uv_tcp_getsockname(mrb_state *mrb, mrb_value self)
 {
   return mrb_uv_getsockname(mrb, self, 1);
 }
+
+#if MRB_UV_CHECK_VERSION(1, 32, 0)
+
+static mrb_value
+mrb_uv_tcp_close_reset(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  mrb_value b = mrb_nil_value();
+
+  mrb_get_args(mrb, "&", &b);
+
+  mrb_iv_set(mrb, context->instance, mrb_intern_lit(mrb, "close_cb"), b);
+  mrb_uv_check_error(mrb, uv_tcp_close_reset(
+      (uv_tcp_t*)&context->handle, (uv_close_cb)_uv_close_cb));
+  return mrb_nil_value();
+}
+
+#endif
 
 /*********************************************************
  * UV::UDP
@@ -1000,6 +1002,64 @@ mrb_uv_udp_send_queue_size(mrb_state *mrb, mrb_value self)
   return mrb_fixnum_value(uv_udp_get_send_queue_size((uv_udp_t*)&ctx->handle));
 }
 
+#if MRB_UV_CHECK_VERSION(1, 27, 0)
+
+static mrb_value
+mrb_uv_udp_get_peername(mrb_state *mrb, mrb_value self)
+{
+  int len;
+  struct sockaddr_storage addr;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+
+  len = sizeof(addr);
+  mrb_uv_check_error(mrb, uv_udp_getpeername((uv_udp_t*)&context->handle, (struct sockaddr *)&addr, &len));
+  return sockaddr_to_mrb(mrb, (struct sockaddr *)&addr);
+}
+
+static mrb_value
+mrb_uv_udp_connect(mrb_state *mrb, mrb_value self)
+{
+  struct sockaddr* addr;
+  mrb_value addr_obj;
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+
+  mrb_get_args(mrb, "o", &addr_obj);
+  if (mrb_type(addr_obj) != MRB_TT_DATA) {
+    mrb_raisef(mrb, E_ARGUMENT_ERROR, "Invalid sockaddr: %S", addr_obj);
+  }
+  addr =
+      DATA_PTR(addr_obj) == &mrb_uv_ip4addr_type? (struct sockaddr*)DATA_PTR(addr_obj):
+      DATA_PTR(addr_obj) == &mrb_uv_ip4addr_nofree_type? (struct sockaddr*)DATA_PTR(addr_obj):
+      DATA_PTR(addr_obj) == &mrb_uv_ip6addr_type? (struct sockaddr*)DATA_PTR(addr_obj):
+      DATA_PTR(addr_obj) == &mrb_uv_ip6addr_nofree_type? (struct sockaddr*)DATA_PTR(addr_obj):
+      NULL;
+  if (!addr) {
+    mrb_raisef(mrb, E_ARGUMENT_ERROR, "Invalid sockaddr: %S", addr_obj);
+  }
+
+  mrb_uv_check_error(mrb, uv_udp_connect((uv_udp_t*)&context->handle, addr));
+  return self;
+}
+
+#endif
+
+#if MRB_UV_CHECK_VERSION(1, 32, 0)
+
+static mrb_value
+mrb_uv_udp_set_source_membership(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  const char *mc, *inf, *src;
+  mrb_int mem;
+
+  mrb_get_args(mrb, "zzzi", &mc, &inf, &src, &mem);
+
+  mrb_uv_check_error(mrb, uv_udp_set_source_membership((uv_udp_t*)&context->handle, mc, inf, src, mem));
+  return self;
+}
+
+#endif
+
 /*********************************************************
  * UV::Prepare
  *********************************************************/
@@ -1208,8 +1268,8 @@ _uv_exit_cb(uv_process_t* process, int64_t exit_status, int term_signal)
   yield_handle_cb((mrb_uv_handle*)process->data, 2, args);
 }
 
-static mrb_value
-get_hash_opt(mrb_state *mrb, mrb_value h, const char *str)
+mrb_value
+mrb_uv_get_hash_opt(mrb_state *mrb, mrb_value h, const char *str)
 {
   mrb_value ret = mrb_hash_get(mrb, h, mrb_symbol_value(mrb_intern_cstr(mrb, str)));
   if (mrb_nil_p(ret)) {
@@ -1242,6 +1302,9 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   mrb_value
       arg_file, arg_args, arg_env, arg_cwd, arg_uid, arg_gid, arg_detached,
       arg_windows_hide, arg_windows_verbatim_arguments, arg_stdio;
+#if MRB_UV_CHECK_VERSION(1, 24, 0)
+  mrb_value arg_windows_hide_console, arg_windows_hide_gui;
+#endif
   mrb_value stdio_pipe[3];
   char cwd[PATH_MAX];
   size_t cwd_size = sizeof(cwd);
@@ -1253,16 +1316,20 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   uv_loop_t *loop;
 
   options = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "options"));
-  arg_file = get_hash_opt(mrb, options, "file");
-  arg_args = get_hash_opt(mrb, options, "args");
-  arg_env = get_hash_opt(mrb, options, "env");
-  arg_cwd = get_hash_opt(mrb, options, "cwd");
-  arg_uid = get_hash_opt(mrb, options, "uid");
-  arg_gid = get_hash_opt(mrb, options, "gid");
-  arg_detached = get_hash_opt(mrb, options, "detached");
-  arg_windows_verbatim_arguments = get_hash_opt(mrb, options, "windows_verbatim_arguments");
-  arg_windows_hide = get_hash_opt(mrb, options, "windows_hide");
-  arg_stdio = get_hash_opt(mrb, options, "stdio");
+  arg_file = mrb_uv_get_hash_opt(mrb, options, "file");
+  arg_args = mrb_uv_get_hash_opt(mrb, options, "args");
+  arg_env = mrb_uv_get_hash_opt(mrb, options, "env");
+  arg_cwd = mrb_uv_get_hash_opt(mrb, options, "cwd");
+  arg_uid = mrb_uv_get_hash_opt(mrb, options, "uid");
+  arg_gid = mrb_uv_get_hash_opt(mrb, options, "gid");
+  arg_detached = mrb_uv_get_hash_opt(mrb, options, "detached");
+  arg_windows_verbatim_arguments = mrb_uv_get_hash_opt(mrb, options, "windows_verbatim_arguments");
+  arg_windows_hide = mrb_uv_get_hash_opt(mrb, options, "windows_hide");
+#if MRB_UV_CHECK_VERSION(1, 24, 0)
+  arg_windows_hide_console = mrb_uv_get_hash_opt(mrb, options, "windows_hide_console");
+  arg_windows_hide_gui = mrb_uv_get_hash_opt(mrb, options, "windows_hide_gui");
+#endif
+  arg_stdio = mrb_uv_get_hash_opt(mrb, options, "stdio");
   stdio_pipe[0] = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stdin_pipe"));
   stdio_pipe[1] = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stdout_pipe"));
   stdio_pipe[2] = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "stderr_pipe"));
@@ -1363,6 +1430,10 @@ mrb_uv_process_spawn(mrb_state *mrb, mrb_value self)
   }
   if (mrb_bool(arg_detached)) { opt.flags |= UV_PROCESS_DETACHED; }
   if (mrb_bool(arg_windows_hide)) { opt.flags |= UV_PROCESS_WINDOWS_HIDE; }
+#if MRB_UV_CHECK_VERSION(1, 24, 0)
+  if (mrb_bool(arg_windows_hide_console)) { opt.flags |= UV_PROCESS_WINDOWS_HIDE_CONSOLE; }
+  if (mrb_bool(arg_windows_hide_gui)) { opt.flags |= UV_PROCESS_WINDOWS_HIDE_GUI; }
+#endif
   if (mrb_bool(arg_windows_verbatim_arguments)) { opt.flags |= UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS; }
 
   opt.exit_cb = _uv_exit_cb;
@@ -1443,6 +1514,33 @@ mrb_uv_process_stderr_pipe_set(mrb_state *mrb, mrb_value self)
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "stderr_pipe"), arg);
   return self;
 }
+
+#if MRB_UV_CHECK_VERSION(1, 23, 0)
+
+static mrb_value
+mrb_uv_process_get_priority(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  uv_pid_t pid = uv_process_get_pid((uv_process_t*)&context->handle);
+  int priority;
+  mrb_uv_check_error(mrb, uv_os_getpriority(pid, &priority));
+  return mrb_fixnum_value(priority);
+}
+
+static mrb_value
+mrb_uv_process_set_priority(mrb_state *mrb, mrb_value self)
+{
+  mrb_uv_handle* context = (mrb_uv_handle*)mrb_uv_get_ptr(mrb, self, &mrb_uv_handle_type);
+  uv_pid_t pid = uv_process_get_pid((uv_process_t*)&context->handle);
+  int priority;
+
+  mrb_get_args(mrb, "i", &priority);
+
+  mrb_uv_check_error(mrb, uv_os_setpriority(pid, priority));
+  return mrb_fixnum_value(priority);
+}
+
+#endif
 
 /*********************************************************
  * UV::Timer
@@ -2092,6 +2190,13 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_udp, "send_queue_size", mrb_uv_udp_send_queue_size, MRB_ARGS_NONE());
   mrb_define_const(mrb, _class_uv_udp, "LEAVE_GROUP", mrb_fixnum_value(UV_LEAVE_GROUP));
   mrb_define_const(mrb, _class_uv_udp, "JOIN_GROUP", mrb_fixnum_value(UV_JOIN_GROUP));
+#if MRB_UV_CHECK_VERSION(1, 27, 0)
+  mrb_define_method(mrb, _class_uv_udp, "peername", mrb_uv_udp_get_peername, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_udp, "connect", mrb_uv_udp_connect, MRB_ARGS_REQ(1));
+#endif
+#if MRB_UV_CHECK_VERSION(1, 32, 0)
+  mrb_define_method(mrb, _class_uv_udp, "set_source_membership", mrb_uv_udp_set_source_membership, MRB_ARGS_REQ(3));
+#endif
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_process = mrb_define_class_under(mrb, UV, "Process", mrb->object_class);
@@ -2107,6 +2212,10 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_process, "stderr_pipe", mrb_uv_process_stderr_pipe_get, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "kill", mrb_uv_process_kill, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_process, "pid", mrb_uv_process_pid, MRB_ARGS_NONE());
+#if MRB_UV_CHECK_VERSION(1, 23, 0)
+  mrb_define_method(mrb, _class_uv_process, "priority", mrb_uv_process_get_priority, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_process, "priority=", mrb_uv_process_set_priority, MRB_ARGS_REQ(1));
+#endif
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_signal = mrb_define_class_under(mrb, UV, "Signal", mrb->object_class);
@@ -2207,6 +2316,9 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
   mrb_define_method(mrb, _class_uv_tcp, "getsockname", mrb_uv_tcp_getsockname, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "peername", mrb_uv_tcp_getpeername, MRB_ARGS_NONE());
   mrb_define_method(mrb, _class_uv_tcp, "sockname", mrb_uv_tcp_getsockname, MRB_ARGS_NONE());
+#if MRB_UV_CHECK_VERSION(1, 32, 0)
+  mrb_define_method(mrb, _class_uv_tcp, "close_reset", mrb_uv_tcp_close_reset, MRB_ARGS_BLOCK());
+#endif
   mrb_gc_arena_restore(mrb, ai);
 
   _class_uv_pipe = mrb_define_class_under(mrb, UV, "Pipe", mrb->object_class);
@@ -2264,4 +2376,7 @@ mrb_mruby_uv_gem_init_handle(mrb_state *mrb, struct RClass *UV)
 
   mrb_define_const(mrb, UV, "READABLE", mrb_fixnum_value(UV_READABLE));
   mrb_define_const(mrb, UV, "WRITABLE", mrb_fixnum_value(UV_WRITABLE));
+#if MRB_UV_CHECK_VERSION(1, 21, 0)
+  mrb_define_const(mrb, UV, "OVERLAPPED_PIPE", mrb_fixnum_value(UV_OVERLAPPED_PIPE));
+#endif
 }

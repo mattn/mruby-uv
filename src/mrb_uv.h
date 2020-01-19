@@ -118,4 +118,6 @@ void mrb_uv_close_handle_belongs_to_vm(uv_handle_t * h, void *arg);
 mrb_value mrb_uv_create_error(mrb_state *mrb, int err);
 mrb_value mrb_uv_create_status(mrb_state *mrb, int status);
 
+mrb_value mrb_uv_get_hash_opt(mrb_state *mrb, mrb_value h, const char *str);
+
 #endif

@@ -45,13 +45,16 @@ assert_uv 'UV::FS' do
   test_str = 'helloworld'
   UV::FS.mkdir 'foo-bar'
   f = UV::FS.open 'foo-bar/foo.txt', UV::FS::O_CREAT|UV::FS::O_WRONLY, UV::FS::S_IWRITE | UV::FS::S_IREAD
+  assert_equal 'foo-bar/foo.txt', f.path
   f.write test_str
   f.close
 
-  f = UV::FS.open 'foo-bar/foo.txt', UV::FS::O_RDONLY, UV::FS::S_IREAD
-  assert_equal 'hello', f.read(5)
-  assert_equal test_str, f.read
-  f.close
+  UV::FS.open 'foo-bar/foo.txt', UV::FS::O_RDONLY, UV::FS::S_IREAD do |r|
+    assert_equal 'foo-bar/foo.txt', r.path
+    assert_equal 'hello', r.read(5)
+    assert_equal test_str, r.read
+    r.close
+  end
 
   remove_uv_test_tmpfile
 end
