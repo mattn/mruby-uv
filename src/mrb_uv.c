@@ -921,7 +921,7 @@ mrb_uv_getaddrinfo(mrb_state *mrb, mrb_value self)
     hints.ai_protocol = IPPROTO_TCP;
   }
   value = mrb_hash_get(mrb, mrb_hints, mrb_symbol_value(mrb_intern_lit(mrb, "flags")));
-  if (mrb_obj_is_kind_of(mrb, value, mrb->fixnum_class)) {
+  if (mrb_obj_is_kind_of(mrb, value, mrb->integer_class)) {
     hints.ai_flags = mrb_int(mrb, value);
   }
 
