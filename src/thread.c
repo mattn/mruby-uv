@@ -100,10 +100,10 @@ static mrb_value
 mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
 {
   mrb_value thread_arg = mrb_nil_value();
-  mrb_value b = mrb_nil_value();
+  mrb_value b = mrb_nil_value(), opts;
   mrb_uv_thread* context = NULL;
 
-  mrb_get_args(mrb, "&|o", &b, &thread_arg);
+  mrb_get_args(mrb, "&|oH", &b, &thread_arg, &opts);
 
   context = (mrb_uv_thread*)mrb_malloc(mrb, sizeof(mrb_uv_thread));
   context->mrb = mrb;
@@ -114,7 +114,21 @@ mrb_uv_thread_init(mrb_state *mrb, mrb_value self)
   DATA_PTR(self) = context;
   DATA_TYPE(self) = &mrb_uv_thread_type;
 
-  mrb_uv_check_error(mrb, uv_thread_create(&context->thread, _uv_thread_proc, context));
+  if (mrb_nil_p(opts)) {
+    mrb_uv_check_error(mrb, uv_thread_create(&context->thread, _uv_thread_proc, context));
+  } else {
+#if MRB_UV_CHECK_VERSION(1, 26, 0)
+    uv_thread_options_t o = { UV_THREAD_NO_FLAGS };
+    mrb_value stack_size = mrb_uv_get_hash_opt(mrb, opts, "stack_size");
+    if (!mrb_nil_p(stack_size)) {
+      o.flags |= UV_THREAD_HAS_STACK_SIZE;
+      o.stack_size = mrb_int(mrb, stack_size);
+    }
+    mrb_uv_check_error(mrb, uv_thread_create_ex(&context->thread, &o, _uv_thread_proc, context));
+#else
+    mrb_raisef(mrb, E_ARGUMENT_ERROR, "Invalid option: %S", opts);
+#endif
+  }
   return self;
 }
 
@@ -596,7 +610,7 @@ void mrb_mruby_uv_gem_init_thread(mrb_state *mrb, struct RClass *UV)
 
   _class_uv_thread = mrb_define_class_under(mrb, UV, "Thread", mrb->object_class);
   MRB_SET_INSTANCE_TT(_class_uv_thread, MRB_TT_DATA);
-  mrb_define_method(mrb, _class_uv_thread, "initialize", mrb_uv_thread_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, _class_uv_thread, "initialize", mrb_uv_thread_init, MRB_ARGS_OPT(1));
   mrb_define_method(mrb, _class_uv_thread, "join", mrb_uv_thread_join, MRB_ARGS_NONE());
   mrb_define_method(mrb, UV, "==", mrb_uv_thread_eq, MRB_ARGS_REQ(1));
   mrb_gc_arena_restore(mrb, ai);

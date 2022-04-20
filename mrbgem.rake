@@ -13,11 +13,11 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
 
   def cross?; build.kind_of? MRuby::CrossBuild end
 
-  def self.bundle_uv
+  DEFAULT_UV_VERSION = '1.34.0'
+
+  def self.bundle_uv(version = DEFAULT_UV_VERSION)
     visualcpp = ENV['VisualStudioVersion'] || ENV['VSINSTALLDIR']
 
-    # version = '1.0.0'
-    version = '1.19.1'
     libuv_dir = "#{build_dir}/libuv-#{version}"
     libuv_lib = libfile "#{libuv_dir}/.libs/libuv"
     header = "#{libuv_dir}/include/uv.h"
@@ -99,7 +99,7 @@ MRuby::Gem::Specification.new('mruby-uv') do |spec|
   if build.cc.respond_to? :search_header_path
     next if build.cc.search_header_path 'uv.h'
   end
-  if ENV['OS'] == 'Windows_NT'
+  if ENV['OS'] == 'Windows_NT' || ENV['SKIP_UV_BUNDLE']
     next
   end
 

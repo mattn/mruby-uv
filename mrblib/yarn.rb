@@ -1,6 +1,10 @@
 module UV
   def self.sleep sec
-    current_yarn.sleep sec
+    if UV.current_loop.current_yarn
+      current_yarn.sleep sec
+    else
+      UV.sleep_milli sec * 1000
+    end
   end
 
   def self.quote cmd
